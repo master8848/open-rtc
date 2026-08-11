@@ -112,9 +112,16 @@ export abstract class BaseSignalingTransport implements SignalingTransport {
     if (this.currentRoom !== null) {
       throw new Error(`${this.name}: already in room ${this.currentRoom}; leave() first`);
     }
-    await this.hooks.doJoin(roomId, self);
+    // set state BEFORE the hook so hooks can read currentRoom/self
     this.currentRoom = roomId;
     this.self = self;
+    try {
+      await this.hooks.doJoin(roomId, self);
+    } catch (err) {
+      this.currentRoom = null;
+      this.self = null;
+      throw err;
+    }
     this.heartbeat?.start();
     if (this.sweeper) {
       this.sweepTimer = setInterval(() => {
@@ -235,6 +242,9 @@ export abstract class BaseSignalingTransport implements SignalingTransport {
       return;
     }
     if (envelope === undefined) return;
+    // ignore echoes of our own frames (broadcast/mirror backends deliver
+    // the sender's own writes back through the same channel)
+    if (this.self !== null && envelope.senderId === this.self.id) return;
     for (const e of this.reorder.push(envelope)) {
       for (const cb of [...this.messageCbs]) cb(e);
     }
