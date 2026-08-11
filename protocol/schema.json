@@ -1,0 +1,533 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/vidcall/protocol/schema.json",
+  "title": "vidcall signaling protocol v1",
+  "description": "Single wire protocol shared by JS/Kotlin/Swift/Dart clients. JSON envelope carried over any pluggable backend pub/sub (Supabase/Convex/Firebase/Appwrite/Postgres/SQLite/custom). Engine owns ordering/idempotency/glare; backends stay dumb.",
+  "type": "object",
+  "required": [
+    "v",
+    "type",
+    "roomId",
+    "senderId",
+    "sessionId",
+    "ts",
+    "seq"
+  ],
+  "properties": {
+    "v": {
+      "const": 1,
+      "description": "protocol version"
+    },
+    "type": {
+      "enum": [
+        "join",
+        "leave",
+        "offer",
+        "answer",
+        "ice",
+        "presence",
+        "reaction",
+        "chat",
+        "screen-share",
+        "quality-warning",
+        "sfu",
+        "error",
+        "ping",
+        "pong"
+      ]
+    },
+    "roomId": {
+      "type": "string"
+    },
+    "senderId": {
+      "type": "string"
+    },
+    "sessionId": {
+      "type": "string"
+    },
+    "ts": {
+      "type": "integer",
+      "description": "epoch milliseconds"
+    },
+    "seq": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "monotonic per sender; engine dedupes/reorders"
+    },
+    "payload": {
+      "type": "object"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "join"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/definitions/JoinPayload"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "leave"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/definitions/LeavePayload"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "offer"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/definitions/OfferPayload"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "answer"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/definitions/OfferPayload"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "ice"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/definitions/IcePayload"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "presence"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/definitions/PresencePayload"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "reaction"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/definitions/ReactionPayload"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "chat"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/definitions/ChatPayload"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "screen-share"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/definitions/ScreenSharePayload"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "quality-warning"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/definitions/QualityWarningPayload"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "sfu"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/definitions/SfuPayload"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "error"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/definitions/ErrorPayload"
+          }
+        }
+      }
+    }
+  ],
+  "definitions": {
+    "DeviceProfile": {
+      "type": "object",
+      "required": [
+        "hardwareConcurrency",
+        "mobile"
+      ],
+      "properties": {
+        "hardwareConcurrency": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "deviceMemory": {
+          "type": "number",
+          "minimum": 0,
+          "description": "GB; Chrome-only"
+        },
+        "mobile": {
+          "type": "boolean"
+        },
+        "screenWidth": {
+          "type": "integer"
+        },
+        "screenHeight": {
+          "type": "integer"
+        },
+        "platform": {
+          "type": "string",
+          "enum": [
+            "browser",
+            "node",
+            "kotlin",
+            "swift",
+            "dart"
+          ]
+        }
+      }
+    },
+    "JoinPayload": {
+      "type": "object",
+      "properties": {
+        "displayName": {
+          "type": "string"
+        },
+        "metadata": {
+          "type": "object"
+        },
+        "deviceProfile": {
+          "$ref": "#/definitions/DeviceProfile"
+        },
+        "capabilities": {
+          "type": "object",
+          "properties": {
+            "simulcast": {
+              "type": "boolean"
+            },
+            "svc": {
+              "type": "boolean"
+            },
+            "codecs": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "LeavePayload": {
+      "type": "object",
+      "properties": {
+        "reason": {
+          "type": "string"
+        }
+      }
+    },
+    "OfferPayload": {
+      "type": "object",
+      "required": [
+        "sdp"
+      ],
+      "properties": {
+        "sdp": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        }
+      }
+    },
+    "IcePayload": {
+      "type": "object",
+      "required": [
+        "candidate"
+      ],
+      "properties": {
+        "candidate": {
+          "type": "string"
+        },
+        "sdpMid": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sdpMLineIndex": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      }
+    },
+    "PresencePayload": {
+      "type": "object",
+      "required": [
+        "state"
+      ],
+      "properties": {
+        "state": {
+          "type": "string",
+          "enum": [
+            "online",
+            "away",
+            "busy",
+            "offline"
+          ]
+        },
+        "metadata": {
+          "type": "object"
+        }
+      }
+    },
+    "ReactionPayload": {
+      "type": "object",
+      "required": [
+        "emoji"
+      ],
+      "properties": {
+        "emoji": {
+          "type": "string"
+        },
+        "targetSenderId": {
+          "type": "string"
+        },
+        "ts": {
+          "type": "integer"
+        }
+      }
+    },
+    "ChatPayload": {
+      "type": "object",
+      "required": [
+        "text"
+      ],
+      "properties": {
+        "text": {
+          "type": "string",
+          "maxLength": 4000
+        },
+        "replyTo": {
+          "type": "object",
+          "properties": {
+            "senderId": {
+              "type": "string"
+            },
+            "seq": {
+              "type": "integer"
+            }
+          }
+        }
+      }
+    },
+    "ScreenSharePayload": {
+      "type": "object",
+      "required": [
+        "action"
+      ],
+      "properties": {
+        "action": {
+          "type": "string",
+          "enum": [
+            "start",
+            "stop"
+          ]
+        },
+        "label": {
+          "type": "string"
+        }
+      }
+    },
+    "QualityWarningPayload": {
+      "type": "object",
+      "required": [
+        "from",
+        "to",
+        "reason",
+        "direction"
+      ],
+      "properties": {
+        "from": {
+          "type": "string",
+          "description": "quality tier, e.g. 720p@30"
+        },
+        "to": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string",
+          "enum": [
+            "network",
+            "cpu",
+            "device",
+            "manual",
+            "recovery"
+          ]
+        },
+        "direction": {
+          "type": "string",
+          "enum": [
+            "send",
+            "receive"
+          ]
+        }
+      }
+    },
+    "SfuPayload": {
+      "type": "object",
+      "required": [
+        "action"
+      ],
+      "properties": {
+        "action": {
+          "type": "string",
+          "enum": [
+            "publish",
+            "subscribe",
+            "layer-change",
+            "keyframe-request",
+            "leave"
+          ]
+        },
+        "trackId": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "audio",
+            "video",
+            "screen"
+          ]
+        },
+        "senderId": {
+          "type": "string"
+        },
+        "layer": {
+          "type": "string"
+        }
+      }
+    },
+    "ErrorPayload": {
+      "type": "object",
+      "required": [
+        "code",
+        "message"
+      ],
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}
