@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  vidcall-android: WebRTC wiring for the vidcall Kotlin binding.
+  stream-webrtc-android needs INTERNET + ACCESS_NETWORK_STATE; merge rules
+  combine this manifest with the consumer app's.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+</manifest>

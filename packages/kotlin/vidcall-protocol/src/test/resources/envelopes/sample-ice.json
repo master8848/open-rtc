@@ -1,0 +1,14 @@
+{
+  "v": 1,
+  "type": "ice",
+  "roomId": "room-42",
+  "senderId": "user-ada",
+  "sessionId": "sess-abc-0001",
+  "ts": 1786000001500,
+  "seq": 3,
+  "payload": {
+    "candidate": "candidate:842163049 1 udp 1677729535 192.168.1.10 53520 typ srflx raddr 0.0.0.0 rport 0 generation 0",
+    "sdpMid": "0",
+    "sdpMLineIndex": 0
+  }
+}
