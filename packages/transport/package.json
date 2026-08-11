@@ -9,14 +9,17 @@
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
+      "development": "./src/index.ts",
       "default": "./dist/index.js"
     },
     "./internal": {
       "types": "./dist/internal/index.d.ts",
+      "development": "./src/internal/index.ts",
       "default": "./dist/internal/index.js"
     },
     "./shared-tests": {
       "types": "./dist/shared-tests.d.ts",
+      "development": "./src/shared-tests.ts",
       "default": "./dist/shared-tests.js"
     }
   },
