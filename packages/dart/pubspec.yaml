@@ -1,0 +1,22 @@
+name: vidcall
+description: >-
+  Dart/Flutter binding for vidcall: WebRTC video calling with a shared JSON
+  signaling protocol (see protocol/schema.json). Backend-agnostic signaling
+  client over dart:io WebSocket plus a flutter_webrtc peer session wired to
+  offer/answer/ICE.
+version: 0.1.0
+publish_to: none
+environment:
+  sdk: '>=3.4.0 <4.0.0'
+  flutter: '>=3.22.0'
+
+# Supply-chain policy (CONTRIBUTING.md): exact pins, every dependency published
+# >= 14 days before adoption. Audit trail in README.md.
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_webrtc: 1.5.2 # published 2026-06-19 (eligible vs 2026-07-28 cutoff)
+
+dev_dependencies:
+  lints: 4.0.0 # published 2024-05-09
+  test: 1.25.2 # published 2024-01-24 (test_api 0.7.0, meta ^1.3.0 < flutter-pinned 1.12.0)

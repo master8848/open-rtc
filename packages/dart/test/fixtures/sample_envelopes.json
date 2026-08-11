@@ -1,0 +1,69 @@
+[
+  {
+    "name": "join",
+    "envelope": {
+      "v": 1,
+      "type": "join",
+      "roomId": "room-abc",
+      "senderId": "user-42",
+      "sessionId": "sess-1",
+      "ts": 1780000000000,
+      "seq": 0,
+      "payload": {
+        "displayName": "Ada",
+        "metadata": {
+          "avatar": "https://example.com/ada.png"
+        },
+        "deviceProfile": {
+          "hardwareConcurrency": 8,
+          "deviceMemory": 8,
+          "mobile": false,
+          "screenWidth": 1440,
+          "screenHeight": 900,
+          "platform": "dart"
+        },
+        "capabilities": {
+          "simulcast": true,
+          "svc": false,
+          "codecs": [
+            "VP8",
+            "H264"
+          ]
+        }
+      }
+    }
+  },
+  {
+    "name": "offer",
+    "envelope": {
+      "v": 1,
+      "type": "offer",
+      "roomId": "room-abc",
+      "senderId": "user-42",
+      "sessionId": "sess-1",
+      "ts": 1780000001000,
+      "seq": 1,
+      "payload": {
+        "sdp": "v=0\r\no=- 4611731404681463026 2 IN IP4 127.0.0.1\r\ns=-\r\nt=0 0\r\na=group:BUNDLE 0\r\na=msid-semantic: WMS stream1\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\nc=IN IP4 0.0.0.0\r\n",
+        "label": "main"
+      }
+    }
+  },
+  {
+    "name": "ice",
+    "envelope": {
+      "v": 1,
+      "type": "ice",
+      "roomId": "room-abc",
+      "senderId": "user-42",
+      "sessionId": "sess-1",
+      "ts": 1780000002000,
+      "seq": 2,
+      "payload": {
+        "candidate": "candidate:842163049 1 udp 1677729535 192.168.1.10 54231 typ srflx raddr 0.0.0.0 rport 0 generation 0 ufrag xyz",
+        "sdpMid": "0",
+        "sdpMLineIndex": 0
+      }
+    }
+  }
+]
