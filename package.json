@@ -1,0 +1,31 @@
+{
+  "name": "vidcall",
+  "version": "0.1.0",
+  "private": true,
+  "description": "JS/TS video-calling library: mesh WebRTC engine, adaptive quality, pluggable signaling backends, shared wire protocol.",
+  "license": "MIT",
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "protocol"
+  ],
+  "scripts": {
+    "build": "tsc -b",
+    "clean": "tsc -b --clean",
+    "test": "node --conditions=development --test \"packages/core/test/*.test.ts\" \"packages/quality/test/*.test.ts\" \"packages/test-utils/test/*.test.ts\"",
+    "typecheck": "tsc -p tsconfig.test.json",
+    "lint": "eslint protocol packages/core packages/quality packages/test-utils && prettier --check protocol packages/core packages/quality packages/test-utils package.json tsconfig.base.json tsconfig.json tsconfig.test.json eslint.config.mjs .prettierrc.json",
+    "format": "prettier --write protocol packages/core packages/quality packages/test-utils"
+  },
+  "engines": {
+    "node": ">=18.18"
+  },
+  "devDependencies": {
+    "@eslint/js": "9.39.2",
+    "@types/node": "22.19.1",
+    "eslint": "9.39.2",
+    "prettier": "3.9.6",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.39.1"
+  }
+}
