@@ -150,6 +150,11 @@ export class FirebaseBackend extends BaseSignalingTransport {
     if (this.presenceRef) off(this.presenceRef);
     this.disconnectHook?.cancel().catch(() => undefined);
     this.disconnectHook = null;
+    // graceful dispose: drop our presence row so peers see us offline
+    // immediately (crashes are handled by the native onDisconnect hook)
+    if (this.selfPresenceRef) {
+      await remove(this.selfPresenceRef).catch(() => undefined);
+    }
   }
 
   // --------------------------------------------------------------- listeners
