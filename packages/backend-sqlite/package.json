@@ -1,0 +1,37 @@
+{
+  "name": "@vidcall/backend-sqlite",
+  "version": "0.1.0",
+  "description": "vidcall signaling backend adapter for SQLite/libSQL \u2014 same-device BroadcastChannel mode (dev/test) with a local-first durable signal log.",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=18.18"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "tsc -b --clean",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@libsql/client": "0.17.4",
+    "@vidcall/transport": "0.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "22.19.1",
+    "typescript": "5.9.3",
+    "vitest": "4.1.10"
+  }
+}
