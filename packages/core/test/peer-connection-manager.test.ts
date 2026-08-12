@@ -1,10 +1,6 @@
 import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import {
-  createPeerPair,
-  resetFakeRTC,
-  FakeRTCPeerConnection,
-} from '../../test-utils/src/index.ts';
+import { createPeerPair, resetFakeRTC, FakeRTCPeerConnection } from '../../test-utils/src/index.ts';
 import { waitFor } from '../../test-utils/src/fixtures.ts';
 import { PeerConnectionManager } from '../src/peer-connection-manager.ts';
 import type { PeerSignal } from '../src/peer-connection-manager.ts';

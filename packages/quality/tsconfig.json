@@ -9,7 +9,5 @@
       "path": "../../protocol"
     }
   ],
-  "include": [
-    "src"
-  ]
+  "include": ["src"]
 }
