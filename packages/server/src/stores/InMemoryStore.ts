@@ -68,7 +68,11 @@ export class InMemoryStore implements Store {
   }
 
   // ---- signals -----------------------------------------------------------
-  async putSignal(signal: { roomId: string; envelope: Envelope; receivedAt: number }): Promise<StoredSignal> {
+  async putSignal(signal: {
+    roomId: string;
+    envelope: Envelope;
+    receivedAt: number;
+  }): Promise<StoredSignal> {
     const seq = (this.signalSeqs.get(signal.roomId) ?? 0) + 1;
     this.signalSeqs.set(signal.roomId, seq);
     const stored: StoredSignal = {

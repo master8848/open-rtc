@@ -75,7 +75,10 @@ export class PostgresStore implements Store {
 
   // ---- rooms -------------------------------------------------------------
   async getRoom(roomId: string): Promise<Room | null> {
-    const { rows } = await this.pool.query('SELECT room_json FROM vidcall_rooms WHERE room_id = $1', [roomId]);
+    const { rows } = await this.pool.query(
+      'SELECT room_json FROM vidcall_rooms WHERE room_id = $1',
+      [roomId],
+    );
     return rows[0] ? (rows[0].room_json as Room) : null;
   }
 
@@ -129,7 +132,11 @@ export class PostgresStore implements Store {
   }
 
   // ---- signals -----------------------------------------------------------
-  async putSignal(signal: { roomId: string; envelope: Envelope; receivedAt: number }): Promise<StoredSignal> {
+  async putSignal(signal: {
+    roomId: string;
+    envelope: Envelope;
+    receivedAt: number;
+  }): Promise<StoredSignal> {
     const { rows } = await this.pool.query(
       `INSERT INTO vidcall_signals (room_id, envelope_json, received_at) VALUES ($1, $2, $3)
        RETURNING seq`,

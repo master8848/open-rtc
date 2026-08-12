@@ -52,7 +52,10 @@ test('http: full REST flow (create/join/state/signal/recordings)', async () => {
       body: JSON.stringify({ roomId: 'demo' }),
     });
     assert.equal(dup.status, 409);
-    assert.equal(((await dup.json()) as { error: { code: string } }).error.code, 'room_already_exists');
+    assert.equal(
+      ((await dup.json()) as { error: { code: string } }).error.code,
+      'room_already_exists',
+    );
 
     // join two participants
     const joinA = await fetch(`${base}/rooms/demo/join`, {
@@ -67,7 +70,10 @@ test('http: full REST flow (create/join/state/signal/recordings)', async () => {
       body: JSON.stringify({ participant: { participantId: 'bob', sessionId: 's-b' } }),
     });
     const joinBJson = (await joinB.json()) as { participants: { participantId: string }[] };
-    assert.deepEqual(joinBJson.participants.map((p) => p.participantId), ['alice', 'bob']);
+    assert.deepEqual(
+      joinBJson.participants.map((p) => p.participantId),
+      ['alice', 'bob'],
+    );
 
     // signal relay: offer from alice → relayedTo excludes alice
     const signal = await fetch(`${base}/rooms/demo/signal`, {
@@ -92,7 +98,11 @@ test('http: full REST flow (create/join/state/signal/recordings)', async () => {
     // state
     const state = await fetch(`${base}/rooms/demo/state`);
     assert.equal(state.status, 200);
-    const stateJson = (await state.json()) as { room: { roomId: string }; participants: unknown[]; signalCount: number };
+    const stateJson = (await state.json()) as {
+      room: { roomId: string };
+      participants: unknown[];
+      signalCount: number;
+    };
     assert.equal(stateJson.room.roomId, 'demo');
     assert.equal(stateJson.participants.length, 2);
     assert.ok(stateJson.signalCount >= 1);
@@ -105,7 +115,10 @@ test('http: full REST flow (create/join/state/signal/recordings)', async () => {
     });
     assert.equal(leave.status, 200);
     const leaveJson = (await leave.json()) as { participants: { participantId: string }[] };
-    assert.deepEqual(leaveJson.participants.map((p) => p.participantId), ['bob']);
+    assert.deepEqual(
+      leaveJson.participants.map((p) => p.participantId),
+      ['bob'],
+    );
 
     // recordings: empty list
     const recordings = await fetch(`${base}/rooms/demo/recordings`);
@@ -132,7 +145,10 @@ test('http: full REST flow (create/join/state/signal/recordings)', async () => {
       body: '{}',
     });
     assert.equal(finalize.status, 200);
-    const finalizeJson = (await finalize.json()) as { recording: { status: string }; storage: { chunks: number; bytes: number } };
+    const finalizeJson = (await finalize.json()) as {
+      recording: { status: string };
+      storage: { chunks: number; bytes: number };
+    };
     assert.equal(finalizeJson.recording.status, 'finalized');
     assert.deepEqual(finalizeJson.storage, { chunks: 1, bytes: chunk.length });
 
@@ -151,7 +167,10 @@ test('http: error mapping (404 room, 400 bad JSON, chunk to unknown session)', a
   await withServer(services, async (base) => {
     const missing = await fetch(`${base}/rooms/nope/state`);
     assert.equal(missing.status, 404);
-    assert.equal(((await missing.json()) as { error: { code: string } }).error.code, 'room_not_found');
+    assert.equal(
+      ((await missing.json()) as { error: { code: string } }).error.code,
+      'room_not_found',
+    );
 
     const badJson = await fetch(`${base}/rooms`, {
       method: 'POST',
@@ -159,7 +178,10 @@ test('http: error mapping (404 room, 400 bad JSON, chunk to unknown session)', a
       body: '{not json',
     });
     assert.equal(badJson.status, 400);
-    assert.equal(((await badJson.json()) as { error: { code: string } }).error.code, 'invalid_request');
+    assert.equal(
+      ((await badJson.json()) as { error: { code: string } }).error.code,
+      'invalid_request',
+    );
 
     const unknownRoute = await fetch(`${base}/rooms/demo/state`, { method: 'DELETE' });
     assert.equal(unknownRoute.status, 404);
@@ -173,10 +195,18 @@ test('http: error mapping (404 room, 400 bad JSON, chunk to unknown session)', a
       body: Buffer.from('x'),
     });
     assert.equal(upload.status, 500);
-    assert.equal(((await upload.json()) as { error: { code: string } }).error.code, 'recording_storage_error');
+    assert.equal(
+      ((await upload.json()) as { error: { code: string } }).error.code,
+      'recording_storage_error',
+    );
 
     // chunk upload to unknown session → 404
-    const recStore = createServices({ store: new InMemoryStore(), recordingStorage: new DiskRecordingStorage({ dir: await mkdtemp(path.join(tmpdir(), 'vidcall-rec2-')) }) });
+    const recStore = createServices({
+      store: new InMemoryStore(),
+      recordingStorage: new DiskRecordingStorage({
+        dir: await mkdtemp(path.join(tmpdir(), 'vidcall-rec2-')),
+      }),
+    });
     await withServer(recStore, async (base2) => {
       const upload2 = await fetch(`${base2}/recordings/unknown/chunks`, {
         method: 'POST',
@@ -184,7 +214,10 @@ test('http: error mapping (404 room, 400 bad JSON, chunk to unknown session)', a
         body: Buffer.from('x'),
       });
       assert.equal(upload2.status, 404);
-      assert.equal(((await upload2.json()) as { error: { code: string } }).error.code, 'recording_not_found');
+      assert.equal(
+        ((await upload2.json()) as { error: { code: string } }).error.code,
+        'recording_not_found',
+      );
     });
   });
 });
@@ -210,6 +243,9 @@ test('http: signal from a non-member is rejected', async () => {
       }),
     });
     assert.equal(res.status, 404);
-    assert.equal(((await res.json()) as { error: { code: string } }).error.code, 'participant_not_found');
+    assert.equal(
+      ((await res.json()) as { error: { code: string } }).error.code,
+      'participant_not_found',
+    );
   });
 });

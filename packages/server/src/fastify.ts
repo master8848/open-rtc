@@ -23,9 +23,13 @@ import type { Services } from './services.ts';
 
 export function createFastifyPlugin(services: Services): FastifyPluginCallback {
   return async (app: FastifyInstance) => {
-    app.addContentTypeParser('application/octet-stream', { parseAs: 'buffer' }, (_req, body, done) => {
-      done(null, body);
-    });
+    app.addContentTypeParser(
+      'application/octet-stream',
+      { parseAs: 'buffer' },
+      (_req, body, done) => {
+        done(null, body);
+      },
+    );
 
     app.post('/rooms', async (req, reply) => {
       const result = await dispatch(services, fastifyContext(req));

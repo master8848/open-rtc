@@ -68,7 +68,9 @@ export class MysqlStore implements Store {
 
   // ---- rooms -------------------------------------------------------------
   async getRoom(roomId: string): Promise<Room | null> {
-    const [rows] = await this.pool.query('SELECT room_json FROM vidcall_rooms WHERE room_id = ?', [roomId]);
+    const [rows] = await this.pool.query('SELECT room_json FROM vidcall_rooms WHERE room_id = ?', [
+      roomId,
+    ]);
     const row = firstRow(rows);
     return row ? (row.room_json as Room) : null;
   }
@@ -124,7 +126,11 @@ export class MysqlStore implements Store {
   }
 
   // ---- signals -----------------------------------------------------------
-  async putSignal(signal: { roomId: string; envelope: Envelope; receivedAt: number }): Promise<StoredSignal> {
+  async putSignal(signal: {
+    roomId: string;
+    envelope: Envelope;
+    receivedAt: number;
+  }): Promise<StoredSignal> {
     const [result] = await this.pool.query(
       'INSERT INTO vidcall_signals (room_id, envelope_json, received_at) VALUES (?, ?, ?)',
       [signal.roomId, JSON.stringify(signal.envelope), signal.receivedAt],

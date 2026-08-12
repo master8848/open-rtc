@@ -11,7 +11,10 @@ import { InMemoryStore } from '../src/stores/InMemoryStore.ts';
 
 function nextMessage(ws: WebSocket, timeoutMs = 3000): Promise<Envelope | Record<string, unknown>> {
   return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error('timed out waiting for WS message')), timeoutMs);
+    const timer = setTimeout(
+      () => reject(new Error('timed out waiting for WS message')),
+      timeoutMs,
+    );
     ws.once('message', (data) => {
       clearTimeout(timer);
       resolve(JSON.parse(data.toString()) as Envelope | Record<string, unknown>);
@@ -59,7 +62,12 @@ async function createRoom(srv: TestServer, roomId: string): Promise<void> {
   assert.equal(res.status, 201);
 }
 
-async function connectAndJoin(srv: TestServer, roomId: string, senderId: string, displayName?: string): Promise<WebSocket> {
+async function connectAndJoin(
+  srv: TestServer,
+  roomId: string,
+  senderId: string,
+  displayName?: string,
+): Promise<WebSocket> {
   const ws = new WebSocket(srv.wsUrl(roomId));
   await new Promise<void>((resolve, reject) => {
     ws.once('open', resolve);
@@ -88,7 +96,7 @@ test('ws: join ack, offer relay to the other member only, answer back', async ()
     const b = await connectAndJoin(srv, 'room1', 'bob');
 
     // alice sends an offer; bob receives it; alice does not.
-    let bobGot: Promise<unknown> = nextMessage(b);
+    const bobGot: Promise<unknown> = nextMessage(b);
     a.send(
       JSON.stringify(
         createEnvelope('offer', {
@@ -105,7 +113,7 @@ test('ws: join ack, offer relay to the other member only, answer back', async ()
     assert.equal(((offer as Envelope).payload as { sdp: string }).sdp, 'v=0 offer');
 
     // bob answers; alice receives.
-    let aliceGot: Promise<unknown> = nextMessage(a);
+    const aliceGot: Promise<unknown> = nextMessage(a);
     b.send(
       JSON.stringify(
         createEnvelope('answer', {
@@ -121,7 +129,7 @@ test('ws: join ack, offer relay to the other member only, answer back', async ()
     assert.equal((answer as Envelope).senderId, 'bob');
 
     // presence broadcast reaches everyone including the sender.
-    let bobPresence: Promise<unknown> = nextMessage(b);
+    const bobPresence: Promise<unknown> = nextMessage(b);
     a.send(
       JSON.stringify(
         createEnvelope('presence', {
@@ -149,9 +157,13 @@ test('ws: leave envelope is relayed; disconnected sockets auto-leave with reason
     const c = await connectAndJoin(srv, 'room2', 'carol');
 
     // bob leaves explicitly; alice and carol hear about it.
-    let aliceGot: Promise<unknown> = nextMessage(a);
-    let carolGotBob: Promise<unknown> = nextMessage(c);
-    b.send(JSON.stringify(createEnvelope('leave', { roomId: 'room2', senderId: 'bob', sessionId: 's-bob' })));
+    const aliceGot: Promise<unknown> = nextMessage(a);
+    const carolGotBob: Promise<unknown> = nextMessage(c);
+    b.send(
+      JSON.stringify(
+        createEnvelope('leave', { roomId: 'room2', senderId: 'bob', sessionId: 's-bob' }),
+      ),
+    );
     const leave = await aliceGot;
     assert.equal((leave as Envelope).type, 'leave');
     assert.equal((leave as Envelope).senderId, 'bob');
@@ -160,7 +172,7 @@ test('ws: leave envelope is relayed; disconnected sockets auto-leave with reason
     b.close();
 
     // alice drops the connection; carol hears a leave with reason 'disconnect'.
-    let carolGot: Promise<unknown> = nextMessage(c);
+    const carolGot: Promise<unknown> = nextMessage(c);
     a.close();
     const autoLeave = await carolGot;
     assert.equal((autoLeave as Envelope).type, 'leave');
@@ -178,7 +190,16 @@ test('ws: validation errors (must_join, invalid envelope, unknown room)', async 
       raw.once('open', resolve);
       raw.once('error', reject);
     });
-    raw.send(JSON.stringify(createEnvelope('chat', { roomId: 'room3', senderId: 'x', sessionId: 'sx', payload: { text: 'hi' } })));
+    raw.send(
+      JSON.stringify(
+        createEnvelope('chat', {
+          roomId: 'room3',
+          senderId: 'x',
+          sessionId: 'sx',
+          payload: { text: 'hi' },
+        }),
+      ),
+    );
     const err1 = (await nextMessage(raw)) as Envelope;
     assert.equal(err1.type, 'error');
     assert.equal((err1.payload as { code: string }).code, 'must_join');
@@ -190,7 +211,11 @@ test('ws: validation errors (must_join, invalid envelope, unknown room)', async 
       ws.once('open', resolve);
       ws.once('error', reject);
     });
-    ws.send(JSON.stringify(createEnvelope('join', { roomId: 'room3', senderId: 'alice', sessionId: 'sa' })));
+    ws.send(
+      JSON.stringify(
+        createEnvelope('join', { roomId: 'room3', senderId: 'alice', sessionId: 'sa' }),
+      ),
+    );
     const err2 = (await nextMessage(ws)) as Envelope;
     assert.equal(err2.type, 'error');
     assert.equal((err2.payload as { code: string }).code, 'room_not_found');

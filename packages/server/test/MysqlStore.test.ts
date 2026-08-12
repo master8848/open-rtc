@@ -32,7 +32,7 @@ if (!url) {
 
   runStoreTestSuite({
     name: 'mysql',
-    roomPrefix: 'my',
+    roomPrefix: `my-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
     createStore: async () => {
       const store = new MysqlStore(url);
       await store.bootstrap();

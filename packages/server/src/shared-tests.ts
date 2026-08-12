@@ -80,8 +80,10 @@ export function runStoreTestSuite(h: StoreHarness): void {
     it('rejects a duplicate room id', async () => {
       const id = roomId();
       await createRoom(store, { roomId: id });
-      await assert.rejects(createRoom(store, { roomId: id }), (err: unknown) =>
-        (err as { code?: string }).code === 'room_already_exists');
+      await assert.rejects(
+        createRoom(store, { roomId: id }),
+        (err: unknown) => (err as { code?: string }).code === 'room_already_exists',
+      );
     });
 
     it('join adds a participant and listParticipants reflects the roster', async () => {
@@ -92,7 +94,10 @@ export function runStoreTestSuite(h: StoreHarness): void {
       assert.equal(a.participants.length, 1);
       assert.equal(b.participants.length, 2);
       const roster = await store.listParticipants(id);
-      assert.deepEqual(roster.map((p) => p.participantId), ['alice', 'bob']);
+      assert.deepEqual(
+        roster.map((p) => p.participantId),
+        ['alice', 'bob'],
+      );
       const alice = await store.getParticipant(id, 'alice');
       assert.equal(alice?.displayName, 'User alice');
       assert.equal(alice?.sessionId, 'session-alice');
@@ -100,16 +105,20 @@ export function runStoreTestSuite(h: StoreHarness): void {
     });
 
     it('join on an unknown room fails with room_not_found', async () => {
-      await assert.rejects(joinRoom(store, roomId(), participant('alice')), (err: unknown) =>
-        (err as { code?: string }).code === 'room_not_found');
+      await assert.rejects(
+        joinRoom(store, roomId(), participant('alice')),
+        (err: unknown) => (err as { code?: string }).code === 'room_not_found',
+      );
     });
 
     it('double-join of the same participant fails unless upsert', async () => {
       const id = roomId();
       await createRoom(store, { roomId: id });
       await joinRoom(store, id, participant('alice'));
-      await assert.rejects(joinRoom(store, id, participant('alice')), (err: unknown) =>
-        (err as { code?: string }).code === 'participant_already_joined');
+      await assert.rejects(
+        joinRoom(store, id, participant('alice')),
+        (err: unknown) => (err as { code?: string }).code === 'participant_already_joined',
+      );
       const result = await joinRoom(store, id, participant('alice'), { upsert: true });
       assert.equal(result.participants.length, 1);
     });
@@ -118,8 +127,10 @@ export function runStoreTestSuite(h: StoreHarness): void {
       const id = roomId();
       await createRoom(store, { roomId: id, maxParticipants: 1 });
       await joinRoom(store, id, participant('alice'));
-      await assert.rejects(joinRoom(store, id, participant('bob')), (err: unknown) =>
-        (err as { code?: string }).code === 'room_full');
+      await assert.rejects(
+        joinRoom(store, id, participant('bob')),
+        (err: unknown) => (err as { code?: string }).code === 'room_full',
+      );
     });
 
     it('closeRoom rejects joins but keeps existing members signaling', async () => {
@@ -128,8 +139,10 @@ export function runStoreTestSuite(h: StoreHarness): void {
       await joinRoom(store, id, participant('alice'));
       const closed = await closeRoom(store, id);
       assert.equal(closed.state, 'closed');
-      await assert.rejects(joinRoom(store, id, participant('bob')), (err: unknown) =>
-        (err as { code?: string }).code === 'room_closed');
+      await assert.rejects(
+        joinRoom(store, id, participant('bob')),
+        (err: unknown) => (err as { code?: string }).code === 'room_closed',
+      );
       const delivery = await handleSignal(
         store,
         createEnvelope('chat', {
@@ -148,10 +161,15 @@ export function runStoreTestSuite(h: StoreHarness): void {
       await joinRoom(store, id, participant('alice'));
       await joinRoom(store, id, participant('bob'));
       const result = await leaveRoom(store, id, 'alice');
-      assert.deepEqual(result.participants.map((p) => p.participantId), ['bob']);
+      assert.deepEqual(
+        result.participants.map((p) => p.participantId),
+        ['bob'],
+      );
       assert.equal(await store.getParticipant(id, 'alice'), null);
-      await assert.rejects(leaveRoom(store, id, 'alice'), (err: unknown) =>
-        (err as { code?: string }).code === 'participant_not_found');
+      await assert.rejects(
+        leaveRoom(store, id, 'alice'),
+        (err: unknown) => (err as { code?: string }).code === 'participant_not_found',
+      );
     });
 
     it('putSignal assigns strictly increasing per-room seq; listSignals(since) filters', async () => {
@@ -160,22 +178,40 @@ export function runStoreTestSuite(h: StoreHarness): void {
       await joinRoom(store, id, participant('alice'));
       const s1 = await store.putSignal({
         roomId: id,
-        envelope: createEnvelope('chat', { roomId: id, senderId: 'alice', sessionId: 's', payload: { text: 'one' } }),
+        envelope: createEnvelope('chat', {
+          roomId: id,
+          senderId: 'alice',
+          sessionId: 's',
+          payload: { text: 'one' },
+        }),
         receivedAt: 1,
       });
       const s2 = await store.putSignal({
         roomId: id,
-        envelope: createEnvelope('chat', { roomId: id, senderId: 'alice', sessionId: 's', payload: { text: 'two' } }),
+        envelope: createEnvelope('chat', {
+          roomId: id,
+          senderId: 'alice',
+          sessionId: 's',
+          payload: { text: 'two' },
+        }),
         receivedAt: 2,
       });
       const s3 = await store.putSignal({
         roomId: id,
-        envelope: createEnvelope('chat', { roomId: id, senderId: 'alice', sessionId: 's', payload: { text: 'three' } }),
+        envelope: createEnvelope('chat', {
+          roomId: id,
+          senderId: 'alice',
+          sessionId: 's',
+          payload: { text: 'three' },
+        }),
         receivedAt: 3,
       });
       assert.ok(s1.seq < s2.seq && s2.seq < s3.seq);
       const after = await store.listSignals(id, s2.seq);
-      assert.deepEqual(after.map((s) => s.seq), [s3.seq]);
+      assert.deepEqual(
+        after.map((s) => s.seq),
+        [s3.seq],
+      );
       const all = await store.listSignals(id, 0);
       assert.equal(all.length, 3);
       // Envelope JSON round-trips verbatim through the store.
@@ -199,7 +235,10 @@ export function runStoreTestSuite(h: StoreHarness): void {
           payload: { sdp: 'v=0\r\n' },
         }),
       );
-      assert.deepEqual(offer.recipients.map((p) => p.participantId), ['carol']);
+      assert.deepEqual(
+        offer.recipients.map((p) => p.participantId),
+        ['carol'],
+      );
 
       const broadcast = await handleSignal(
         store,
@@ -210,7 +249,11 @@ export function runStoreTestSuite(h: StoreHarness): void {
           payload: { state: 'online' },
         }),
       );
-      assert.deepEqual(broadcast.recipients.map((p) => p.participantId).sort(), ['alice', 'bob', 'carol']);
+      assert.deepEqual(broadcast.recipients.map((p) => p.participantId).sort(), [
+        'alice',
+        'bob',
+        'carol',
+      ]);
     });
 
     it('rejects signals from participants who are not in the room', async () => {
@@ -220,7 +263,12 @@ export function runStoreTestSuite(h: StoreHarness): void {
       await assert.rejects(
         handleSignal(
           store,
-          createEnvelope('chat', { roomId: id, senderId: 'eve', sessionId: 'session-eve', payload: { text: 'hi' } }),
+          createEnvelope('chat', {
+            roomId: id,
+            senderId: 'eve',
+            sessionId: 'session-eve',
+            payload: { text: 'hi' },
+          }),
         ),
         (err: unknown) => (err as { code?: string }).code === 'participant_not_found',
       );
@@ -229,8 +277,10 @@ export function runStoreTestSuite(h: StoreHarness): void {
     it('rejects malformed envelopes', async () => {
       const id = roomId();
       await createRoom(store, { roomId: id });
-      await assert.rejects(handleSignal(store, { not: 'an envelope' }), (err: unknown) =>
-        (err as { code?: string }).code === 'invalid_envelope');
+      await assert.rejects(
+        handleSignal(store, { not: 'an envelope' }),
+        (err: unknown) => (err as { code?: string }).code === 'invalid_envelope',
+      );
     });
 
     it('touches lastSeenAt on activity', async () => {
@@ -239,7 +289,12 @@ export function runStoreTestSuite(h: StoreHarness): void {
       const { participant: alice } = await joinRoom(store, id, participant('alice'));
       await handleSignal(
         store,
-        createEnvelope('reaction', { roomId: id, senderId: 'alice', sessionId: 'session-alice', payload: { emoji: '👋' } }),
+        createEnvelope('reaction', {
+          roomId: id,
+          senderId: 'alice',
+          sessionId: 'session-alice',
+          payload: { emoji: '👋' },
+        }),
       );
       const updated = await store.getParticipant(id, 'alice');
       assert.ok(updated!.lastSeenAt >= alice.lastSeenAt);
@@ -261,8 +316,10 @@ export function runStoreTestSuite(h: StoreHarness): void {
       assert.ok(stopped.stoppedAt! >= stopped.startedAt);
       const byId = await store.getRecording(rec.sessionId);
       assert.equal(byId?.status, 'finalized');
-      await assert.rejects(stopRecording(store, 'missing'), (err: unknown) =>
-        (err as { code?: string }).code === 'recording_not_found');
+      await assert.rejects(
+        stopRecording(store, 'missing'),
+        (err: unknown) => (err as { code?: string }).code === 'recording_not_found',
+      );
     });
 
     it('getRoomState returns room + roster + signal count', async () => {
@@ -271,7 +328,12 @@ export function runStoreTestSuite(h: StoreHarness): void {
       await joinRoom(store, id, participant('alice'));
       await handleSignal(
         store,
-        createEnvelope('chat', { roomId: id, senderId: 'alice', sessionId: 'session-alice', payload: { text: 'x' } }),
+        createEnvelope('chat', {
+          roomId: id,
+          senderId: 'alice',
+          sessionId: 'session-alice',
+          payload: { text: 'x' },
+        }),
       );
       const state = await getRoomState(store, id);
       assert.equal(state.room.roomId, id);
@@ -286,7 +348,12 @@ export function runStoreTestSuite(h: StoreHarness): void {
       const rec = await startRecording(store, id);
       await store.putSignal({
         roomId: id,
-        envelope: createEnvelope('chat', { roomId: id, senderId: 'alice', sessionId: 'session-alice', payload: { text: 'x' } }),
+        envelope: createEnvelope('chat', {
+          roomId: id,
+          senderId: 'alice',
+          sessionId: 'session-alice',
+          payload: { text: 'x' },
+        }),
         receivedAt: 1,
       });
       if (!store.deleteRoom) return;

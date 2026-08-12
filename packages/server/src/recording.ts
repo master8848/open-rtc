@@ -104,12 +104,13 @@ export class DiskRecordingStorage implements RecordingStorage {
         return createReadStream(p);
       }),
     );
-    return Readable.from((async function* () {
-      for (const s of streams) {
-        // eslint-disable-next-line no-await-in-loop
-        yield* s;
-      }
-    })());
+    return Readable.from(
+      (async function* () {
+        for (const s of streams) {
+          yield* s;
+        }
+      })(),
+    );
   }
 
   async delete(sessionId: string): Promise<void> {
@@ -151,7 +152,12 @@ export interface S3RecordingStorageOptions {
 
 /** S3-compatible object storage via a minimal SigV4 `fetch` client. */
 export class S3RecordingStorage implements RecordingStorage {
-  private readonly opts: Required<Pick<S3RecordingStorageOptions, 'endpoint' | 'bucket' | 'region' | 'accessKeyId' | 'secretAccessKey'>> &
+  private readonly opts: Required<
+    Pick<
+      S3RecordingStorageOptions,
+      'endpoint' | 'bucket' | 'region' | 'accessKeyId' | 'secretAccessKey'
+    >
+  > &
     Pick<S3RecordingStorageOptions, 'prefix' | 'forcePathStyle' | 'fetchImpl'>;
 
   constructor(opts: S3RecordingStorageOptions) {
@@ -170,7 +176,9 @@ export class S3RecordingStorage implements RecordingStorage {
   /** Object key for a chunk / manifest. */
   keyFor(sessionId: string, kind: 'chunk' | 'manifest', index?: number): string {
     const base = [this.opts.prefix, safeSegment(sessionId)].filter(Boolean).join('/');
-    return kind === 'manifest' ? `${base}/manifest.json` : `${base}/chunk-${String(index).padStart(6, '0')}`;
+    return kind === 'manifest'
+      ? `${base}/manifest.json`
+      : `${base}/chunk-${String(index).padStart(6, '0')}`;
   }
 
   private objectUrl(key: string): string {
@@ -198,7 +206,10 @@ export class S3RecordingStorage implements RecordingStorage {
       body: new Uint8Array(chunk),
     });
     if (!res.ok) {
-      throw errors.recordingStorageError(`S3 put failed (${res.status}) for ${key}`, await res.text());
+      throw errors.recordingStorageError(
+        `S3 put failed (${res.status}) for ${key}`,
+        await res.text(),
+      );
     }
   }
 
@@ -235,7 +246,10 @@ export class S3RecordingStorage implements RecordingStorage {
       body: JSON.stringify(manifest),
     });
     if (!res.ok) {
-      throw errors.recordingStorageError(`S3 manifest put failed (${res.status})`, await res.text());
+      throw errors.recordingStorageError(
+        `S3 manifest put failed (${res.status})`,
+        await res.text(),
+      );
     }
     return { chunks, bytes };
   }
@@ -255,19 +269,25 @@ export class S3RecordingStorage implements RecordingStorage {
   async getStream(sessionId: string): Promise<Readable> {
     const key = this.keyFor(sessionId, 'manifest');
     const res = await this.get(key);
-    if (!res.ok) throw errors.recordingStorageError(`S3 manifest missing (${res.status}) for ${sessionId}`);
+    if (!res.ok)
+      throw errors.recordingStorageError(`S3 manifest missing (${res.status}) for ${sessionId}`);
     const manifest = (await res.json()) as FinalizeManifest;
-    const self = this;
-    return Readable.from((async function* () {
-      for (let i = 0; i < manifest.chunks; i++) {
-        const chunkRes = await self.get(self.keyFor(sessionId, 'chunk', i));
-        if (!chunkRes.ok) {
-          throw errors.recordingStorageError(`S3 chunk ${i} missing (${chunkRes.status}) for ${sessionId}`);
-        }
-        const buf = Buffer.from(await chunkRes.arrayBuffer());
-        yield buf;
+    return Readable.from(this.chunkStream(sessionId, manifest));
+  }
+
+  private async *chunkStream(
+    sessionId: string,
+    manifest: FinalizeManifest,
+  ): AsyncGenerator<Buffer> {
+    for (let i = 0; i < manifest.chunks; i++) {
+      const chunkRes = await this.get(this.keyFor(sessionId, 'chunk', i));
+      if (!chunkRes.ok) {
+        throw errors.recordingStorageError(
+          `S3 chunk ${i} missing (${chunkRes.status}) for ${sessionId}`,
+        );
       }
-    })());
+      yield Buffer.from(await chunkRes.arrayBuffer());
+    }
   }
 
   private async get(key: string): Promise<Response> {

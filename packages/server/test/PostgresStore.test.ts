@@ -31,7 +31,7 @@ if (!url) {
 
   runStoreTestSuite({
     name: 'postgres',
-    roomPrefix: 'pg',
+    roomPrefix: `pg-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
     createStore: async () => {
       const store = new PostgresStore(url);
       await store.bootstrap();

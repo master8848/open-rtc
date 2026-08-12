@@ -51,7 +51,10 @@ export class VidcallError extends Error {
 
 /** True when `err` is a `VidcallError` (works across realm copies). */
 export function isVidcallError(err: unknown): err is VidcallError {
-  return err instanceof VidcallError || (isRecord(err) && err.name === 'VidcallError' && typeof err.code === 'string');
+  return (
+    err instanceof VidcallError ||
+    (isRecord(err) && err.name === 'VidcallError' && typeof err.code === 'string')
+  );
 }
 
 function isRecord(v: unknown): v is Record<string, unknown> {
@@ -87,7 +90,11 @@ export const errors = {
     );
   },
   recordingNotFound(sessionId: string): VidcallError {
-    return new VidcallError('recording_not_found', `Recording session not found: ${sessionId}`, 404);
+    return new VidcallError(
+      'recording_not_found',
+      `Recording session not found: ${sessionId}`,
+      404,
+    );
   },
   invalidEnvelope(message: string): VidcallError {
     return new VidcallError('invalid_envelope', message, 400);

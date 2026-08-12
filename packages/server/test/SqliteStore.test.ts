@@ -9,7 +9,12 @@ test('SqliteStore: bootstrap is idempotent', async () => {
   const store = new SqliteStore(db);
   await store.bootstrap();
   await store.bootstrap();
-  assert.equal(db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='vidcall_rooms'").get() !== undefined, true);
+  assert.equal(
+    db
+      .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='vidcall_rooms'")
+      .get() !== undefined,
+    true,
+  );
   db.close();
 });
 

@@ -27,7 +27,6 @@ import {
   handleSignal,
   joinRoom,
   leaveRoom,
-  startRecording,
   stopRecording,
 } from './core.ts';
 import { errors, isVidcallError } from './errors.ts';
@@ -65,20 +64,6 @@ export interface Route {
 // Handlers
 // ---------------------------------------------------------------------------
 
-interface JoinBody {
-  participantId?: string;
-  sessionId?: string;
-  displayName?: string;
-  metadata?: Record<string, unknown>;
-  /** Alternative nested shape: `{ participant: { participantId, ... } }`. */
-  participant?: {
-    participantId: string;
-    sessionId: string;
-    displayName?: string;
-    metadata?: Record<string, unknown>;
-  };
-}
-
 function asRecord(v: unknown): Record<string, unknown> | undefined {
   return typeof v === 'object' && v !== null ? (v as Record<string, unknown>) : undefined;
 }
@@ -113,16 +98,23 @@ async function joinHandler(services: Services, ctx: RouteContext): Promise<Route
   const sessionId = requireString(nested.sessionId ?? body.sessionId, 'sessionId');
   const displayName = asString(nested.displayName ?? body.displayName);
   const metadata = (asRecord(nested.metadata) ?? asRecord(body.metadata)) as
-    | Record<string, unknown>
-    | undefined;
+    Record<string, unknown> | undefined;
 
-  const result = await joinRoom(services.store, roomId, { participantId, sessionId, displayName, metadata });
+  const result = await joinRoom(services.store, roomId, {
+    participantId,
+    sessionId,
+    displayName,
+    metadata,
+  });
   // Broadcast the join so WS peers learn about the newcomer.
   services.relay?.broadcast(
     roomId,
     buildJoinEnvelope(roomId, { participantId, sessionId, displayName, metadata }),
   );
-  return { status: 200, body: { room: result.room, participant: result.participant, participants: result.participants } };
+  return {
+    status: 200,
+    body: { room: result.room, participant: result.participant, participants: result.participants },
+  };
 }
 
 async function leaveHandler(services: Services, ctx: RouteContext): Promise<RouteResult> {
@@ -142,10 +134,15 @@ async function leaveHandler(services: Services, ctx: RouteContext): Promise<Rout
 async function signalHandler(services: Services, ctx: RouteContext): Promise<RouteResult> {
   const roomId = ctx.params['id']!;
   const delivery = await handleSignal(services.store, ctx.body);
-  services.relay?.broadcast(roomId, delivery.envelope, { exceptSenderId: delivery.envelope.senderId });
+  services.relay?.broadcast(roomId, delivery.envelope, {
+    exceptSenderId: delivery.envelope.senderId,
+  });
   return {
     status: 200,
-    body: { seq: (delivery.envelope as { seq: number }).seq, relayedTo: delivery.recipients.map((r) => r.participantId) },
+    body: {
+      seq: (delivery.envelope as { seq: number }).seq,
+      relayedTo: delivery.recipients.map((r) => r.participantId),
+    },
   };
 }
 
@@ -169,10 +166,12 @@ async function chunksHandler(services: Services, ctx: RouteContext): Promise<Rou
   const recording = await services.store.getRecording(sessionId);
   if (!recording) throw errors.recordingNotFound(sessionId);
   const raw = ctx.rawBody ?? (typeof ctx.body === 'string' ? Buffer.from(ctx.body) : undefined);
-  if (!raw || raw.length === 0) throw errors.invalidRequest('Request body must be the raw chunk bytes');
+  if (!raw || raw.length === 0)
+    throw errors.invalidRequest('Request body must be the raw chunk bytes');
   const indexParam = ctx.query.get('index') ?? ctx.header('x-chunk-index');
   const index = indexParam ? Number(indexParam) : 0;
-  if (!Number.isInteger(index) || index < 0) throw errors.invalidRequest('chunk index must be a non-negative integer');
+  if (!Number.isInteger(index) || index < 0)
+    throw errors.invalidRequest('chunk index must be a non-negative integer');
   await services.recordingStorage.saveChunk(sessionId, raw, index);
   return { status: 201, body: { sessionId, index, bytes: raw.length } };
 }
@@ -203,7 +202,10 @@ export const routes: readonly Route[] = [
 ];
 
 /** Match a request to a route; returns params or null. */
-export function matchRoute(method: string, path: string): { route: Route; params: Record<string, string> } | null {
+export function matchRoute(
+  method: string,
+  path: string,
+): { route: Route; params: Record<string, string> } | null {
   for (const route of routes) {
     if (route.method !== method) continue;
     const params = matchPattern(route.pattern, path);
@@ -232,14 +234,24 @@ export function matchPattern(pattern: string, path: string): Record<string, stri
 export async function dispatch(services: Services, ctx: RouteContext): Promise<RouteResult> {
   try {
     const matched = matchRoute(ctx.method, ctx.path);
-    if (!matched) return { status: 404, body: { error: { code: 'not_found', message: `No route for ${ctx.method} ${ctx.path}` } } };
+    if (!matched)
+      return {
+        status: 404,
+        body: { error: { code: 'not_found', message: `No route for ${ctx.method} ${ctx.path}` } },
+      };
     return await matched.route.handler(services, { ...ctx, params: matched.params });
   } catch (err) {
     if (isVidcallError(err)) return { status: err.status, body: err.toJSON() };
-    if (err instanceof SyntaxError) return { status: 400, body: { error: { code: 'invalid_request', message: 'Malformed JSON body' } } };
-    // eslint-disable-next-line no-console
+    if (err instanceof SyntaxError)
+      return {
+        status: 400,
+        body: { error: { code: 'invalid_request', message: 'Malformed JSON body' } },
+      };
     console.error('[vidcall:server] unhandled error', err);
-    return { status: 500, body: { error: { code: 'internal_error', message: 'Internal server error' } } };
+    return {
+      status: 500,
+      body: { error: { code: 'internal_error', message: 'Internal server error' } },
+    };
   }
 }
 

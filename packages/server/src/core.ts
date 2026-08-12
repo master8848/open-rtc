@@ -104,10 +104,7 @@ async function requireRoom(store: Store, roomId: string): Promise<Room> {
 /**
  * Create a room. Fails with `room_already_exists` when the id is taken.
  */
-export async function createRoom(
-  store: Store,
-  opts: CreateRoomOptions = {},
-): Promise<Room> {
+export async function createRoom(store: Store, opts: CreateRoomOptions = {}): Promise<Room> {
   const roomId = opts.roomId ?? (opts.roomIdFactory ?? randomId)();
   const existing = await store.getRoom(roomId);
   if (existing) throw errors.roomAlreadyExists(roomId);
@@ -273,7 +270,7 @@ export async function handleSignal(store: Store, envelope: unknown): Promise<Sig
   if (!isEnvelope(envelope)) {
     throw errors.invalidEnvelope('Envelope failed protocol validation (see protocol/schema.json)');
   }
-  const room = await requireRoom(store, envelope.roomId);
+  await requireRoom(store, envelope.roomId);
   const t = Date.now();
 
   if (envelope.type !== 'join') {
@@ -363,10 +360,7 @@ export async function getRecordings(store: Store, roomId: string): Promise<Recor
 }
 
 /** Build the protocol `join` envelope for a participant (relay helper). */
-export function buildJoinEnvelope(
-  roomId: string,
-  participant: ParticipantInput,
-): Envelope {
+export function buildJoinEnvelope(roomId: string, participant: ParticipantInput): Envelope {
   return createEnvelope('join', {
     roomId,
     senderId: participant.participantId,

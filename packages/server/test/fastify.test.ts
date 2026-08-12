@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import Fastify, { type FastifyInstance } from 'fastify';
+import Fastify from 'fastify';
 import { createFastifyPlugin } from '../src/fastify.ts';
 import { createServices } from '../src/services.ts';
 import { InMemoryStore } from '../src/stores/InMemoryStore.ts';
@@ -14,7 +14,11 @@ async function withFastifyApp(fn: (base: string) => Promise<void>): Promise<void
   const store = new InMemoryStore();
   const dir = await mkdtemp(path.join(tmpdir(), 'vidcall-fastify-'));
   const app = Fastify();
-  await app.register(createFastifyPlugin(createServices({ store, recordingStorage: new DiskRecordingStorage({ dir }) })));
+  await app.register(
+    createFastifyPlugin(
+      createServices({ store, recordingStorage: new DiskRecordingStorage({ dir }) }),
+    ),
+  );
   await app.listen({ port: 0, host: '127.0.0.1' });
   const address = app.server.address();
   const port = typeof address === 'object' && address ? address.port : 0;
@@ -33,7 +37,10 @@ test('fastify: plugin serves the REST API', async () => {
       body: JSON.stringify({ roomId: 'fast-room', maxParticipants: 3 }),
     });
     assert.equal(created.status, 201);
-    assert.equal(((await created.json()) as { room: { maxParticipants?: number } }).room.maxParticipants, 3);
+    assert.equal(
+      ((await created.json()) as { room: { maxParticipants?: number } }).room.maxParticipants,
+      3,
+    );
 
     const join = await fetch(`${base}/rooms/fast-room/join`, {
       method: 'POST',
@@ -50,8 +57,10 @@ test('fastify: plugin serves the REST API', async () => {
     // unknown room → 404 with the vidcall error shape
     const missing = await fetch(`${base}/rooms/nope/state`);
     assert.equal(missing.status, 404);
-    assert.equal(((await missing.json()) as { error: { code: string } }).error.code, 'room_not_found');
-
+    assert.equal(
+      ((await missing.json()) as { error: { code: string } }).error.code,
+      'room_not_found',
+    );
   });
 });
 
@@ -59,7 +68,11 @@ test('fastify: recording chunk upload + finalize', async () => {
   const store = new InMemoryStore();
   const dir = await mkdtemp(path.join(tmpdir(), 'vidcall-fastify2-'));
   const app = Fastify();
-  await app.register(createFastifyPlugin(createServices({ store, recordingStorage: new DiskRecordingStorage({ dir }) })));
+  await app.register(
+    createFastifyPlugin(
+      createServices({ store, recordingStorage: new DiskRecordingStorage({ dir }) }),
+    ),
+  );
   await app.listen({ port: 0, host: '127.0.0.1' });
   const address = app.server.address();
   const port = typeof address === 'object' && address ? address.port : 0;
@@ -79,7 +92,10 @@ test('fastify: recording chunk upload + finalize', async () => {
       body: '{}',
     });
     assert.equal(finalize.status, 200);
-    assert.equal(((await finalize.json()) as { recording: { status: string } }).recording.status, 'finalized');
+    assert.equal(
+      ((await finalize.json()) as { recording: { status: string } }).recording.status,
+      'finalized',
+    );
   } finally {
     await app.close();
   }

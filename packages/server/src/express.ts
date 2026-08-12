@@ -65,10 +65,14 @@ export function createExpressRouter(services: Services): express.Router {
     },
   );
 
-  router.post('/recordings/:sessionId/finalize', express.json({ limit: '1mb' }), async (req, res) => {
-    const result = await dispatch(services, expressContext(req));
-    res.status(result.status).json(result.body);
-  });
+  router.post(
+    '/recordings/:sessionId/finalize',
+    express.json({ limit: '1mb' }),
+    async (req, res) => {
+      const result = await dispatch(services, expressContext(req));
+      res.status(result.status).json(result.body);
+    },
+  );
 
   return router;
 }

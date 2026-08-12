@@ -101,12 +101,7 @@ export function signV4(opts: SignV4Options): SignedRequest {
   ].join('\n');
 
   const scope = `${dateStamp}/${opts.region}/${opts.service}/aws4_request`;
-  const stringToSign = [
-    'AWS4-HMAC-SHA256',
-    amzDate,
-    scope,
-    sha256Hex(canonicalRequest),
-  ].join('\n');
+  const stringToSign = ['AWS4-HMAC-SHA256', amzDate, scope, sha256Hex(canonicalRequest)].join('\n');
 
   const kDate = hmac(Buffer.from(`AWS4${opts.secretAccessKey}`, 'utf8'), dateStamp);
   const kRegion = hmac(kDate, opts.region);

@@ -75,11 +75,7 @@ export class RoomHub implements Relay {
     return this.meta.get(socket);
   }
 
-  broadcast(
-    roomId: string,
-    envelope: Envelope,
-    opts?: { exceptSenderId?: string },
-  ): void {
+  broadcast(roomId: string, envelope: Envelope, opts?: { exceptSenderId?: string }): void {
     const set = this.rooms.get(roomId);
     if (!set) return;
     const payload = JSON.stringify(envelope);
@@ -198,10 +194,16 @@ async function handleMessage(
     return;
   }
   if (!isEnvelope(envelope)) {
-    const roomId = typeof envelope === 'object' && envelope !== null && typeof (envelope as { roomId?: unknown }).roomId === 'string'
-      ? (envelope as { roomId: string }).roomId
-      : 'unknown';
-    sendJson(socket, errorEnvelope(roomId, 'invalid_envelope', 'Envelope failed protocol validation'));
+    const roomId =
+      typeof envelope === 'object' &&
+      envelope !== null &&
+      typeof (envelope as { roomId?: unknown }).roomId === 'string'
+        ? (envelope as { roomId: string }).roomId
+        : 'unknown';
+    sendJson(
+      socket,
+      errorEnvelope(roomId, 'invalid_envelope', 'Envelope failed protocol validation'),
+    );
     return;
   }
 
@@ -227,7 +229,9 @@ async function handleMessage(
 
   try {
     if (envelope.type === 'leave') {
-      const result = await leaveRoom(services.store, envelope.roomId, envelope.senderId, { envelope });
+      const result = await leaveRoom(services.store, envelope.roomId, envelope.senderId, {
+        envelope,
+      });
       hub.detach(envelope.roomId, socket);
       if (result.delivery) {
         hub.broadcast(envelope.roomId, result.delivery.envelope, {
@@ -256,7 +260,10 @@ async function handleJoin(
   const input: ParticipantInput = {
     participantId: envelope.senderId,
     sessionId: envelope.sessionId,
-    ...(payload && typeof payload === 'object' && 'displayName' in payload && typeof payload.displayName === 'string'
+    ...(payload &&
+    typeof payload === 'object' &&
+    'displayName' in payload &&
+    typeof payload.displayName === 'string'
       ? { displayName: payload.displayName }
       : {}),
     ...(payload && typeof payload === 'object' && 'metadata' in payload && payload.metadata
@@ -270,7 +277,12 @@ async function handleJoin(
     hub.attach(roomId, socket, envelope.senderId, envelope.sessionId);
     // Peers learn about the newcomer; the joiner gets the `joined` ack below.
     hub.broadcast(roomId, delivery.envelope, { exceptSenderId: envelope.senderId });
-    const joined: JoinedMessage = { type: 'joined', roomId, room: result.room, participants: result.participants };
+    const joined: JoinedMessage = {
+      type: 'joined',
+      roomId,
+      room: result.room,
+      participants: result.participants,
+    };
     sendJson(socket, joined);
   } catch (err) {
     sendJson(socket, errorEnvelope(roomId, errCode(err), errMessage(err)));
@@ -299,7 +311,12 @@ async function handleClose(services: Services, hub: RoomHub, socket: WebSocket):
 }
 
 function errCode(err: unknown): string {
-  if (err && typeof err === 'object' && 'code' in err && typeof (err as { code: unknown }).code === 'string') {
+  if (
+    err &&
+    typeof err === 'object' &&
+    'code' in err &&
+    typeof (err as { code: unknown }).code === 'string'
+  ) {
     return (err as { code: string }).code;
   }
   return 'internal_error';

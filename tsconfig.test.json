@@ -12,6 +12,8 @@
     "packages/quality/src/**/*.ts",
     "packages/quality/test/**/*.ts",
     "packages/test-utils/src/**/*.ts",
-    "packages/test-utils/test/**/*.ts"
+    "packages/test-utils/test/**/*.ts",
+    "packages/server/src/**/*.ts",
+    "packages/server/test/**/*.ts"
   ]
 }

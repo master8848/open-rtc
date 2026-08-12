@@ -68,9 +68,9 @@ export class SqliteStore implements Store {
   // ---- rooms -------------------------------------------------------------
   async getRoom(roomId: string): Promise<Room | null> {
     this.ensure();
-    const row = this.db.prepare('SELECT room_json FROM vidcall_rooms WHERE room_id = ?').get(roomId) as
-      | { room_json: string }
-      | undefined;
+    const row = this.db
+      .prepare('SELECT room_json FROM vidcall_rooms WHERE room_id = ?')
+      .get(roomId) as { room_json: string } | undefined;
     return row ? (JSON.parse(row.room_json) as Room) : null;
   }
 
@@ -133,7 +133,11 @@ export class SqliteStore implements Store {
   }
 
   // ---- signals -----------------------------------------------------------
-  async putSignal(signal: { roomId: string; envelope: Envelope; receivedAt: number }): Promise<StoredSignal> {
+  async putSignal(signal: {
+    roomId: string;
+    envelope: Envelope;
+    receivedAt: number;
+  }): Promise<StoredSignal> {
     this.ensure();
     return this.db.transaction(() => {
       const row = this.db
@@ -141,7 +145,9 @@ export class SqliteStore implements Store {
         .get(signal.roomId) as { next: number };
       const seq = row.next;
       this.db
-        .prepare('INSERT INTO vidcall_signals (room_id, seq, envelope_json, received_at) VALUES (?, ?, ?, ?)')
+        .prepare(
+          'INSERT INTO vidcall_signals (room_id, seq, envelope_json, received_at) VALUES (?, ?, ?, ?)',
+        )
         .run(signal.roomId, seq, JSON.stringify(signal.envelope), signal.receivedAt);
       return {
         roomId: signal.roomId,

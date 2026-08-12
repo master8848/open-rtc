@@ -40,8 +40,10 @@ test('recording: getStream before finalize errors', async () => {
   const dir = await mkdtemp(path.join(tmpdir(), 'vidcall-disk2-'));
   const storage = new DiskRecordingStorage({ dir });
   await storage.saveChunk('rec-2', Buffer.from('x'), 0);
-  await assert.rejects(storage.getStream('rec-2'), (err: unknown) =>
-    (err as { code?: string }).code === 'recording_storage_error');
+  await assert.rejects(
+    storage.getStream('rec-2'),
+    (err: unknown) => (err as { code?: string }).code === 'recording_storage_error',
+  );
 });
 
 test('sigv4: deterministic signature with the expected Authorization shape', () => {
@@ -70,7 +72,10 @@ test('sigv4: deterministic signature with the expected Authorization shape', () 
   // Deterministic for identical inputs.
   assert.equal(req1.headers.Authorization, req2.headers.Authorization);
   const auth = req1.headers.Authorization!;
-  assert.match(auth, /^AWS4-HMAC-SHA256 Credential=AKIDEXAMPLE\/20260812\/us-east-1\/s3\/aws4_request, SignedHeaders=/, );
+  assert.match(
+    auth,
+    /^AWS4-HMAC-SHA256 Credential=AKIDEXAMPLE\/20260812\/us-east-1\/s3\/aws4_request, SignedHeaders=/,
+  );
   assert.match(auth, /Signature=[0-9a-f]{64}$/);
   assert.equal(req1.headers['x-amz-date'], '20260812T000000Z');
   assert.equal(req1.headers['x-amz-content-sha256']!.length, 64);
@@ -99,7 +104,11 @@ test('sigv4: uriEncode follows RFC 3986 (space → %20, reserved chars percent-e
 });
 
 /** Minimal S3-compatible server for the fetch-based client. */
-async function mockS3Server(): Promise<{ base: string; close(): Promise<void>; objects: Map<string, Buffer> }> {
+async function mockS3Server(): Promise<{
+  base: string;
+  close(): Promise<void>;
+  objects: Map<string, Buffer>;
+}> {
   const objects = new Map<string, Buffer>();
   const server = http.createServer((req, res) => {
     const url = new URL(req.url ?? '/', 'http://localhost');
@@ -119,7 +128,10 @@ async function mockS3Server(): Promise<{ base: string; close(): Promise<void>; o
           res.end('NoSuchKey');
           return;
         }
-        res.writeHead(200, { 'content-length': String(value.length), 'content-type': 'application/octet-stream' });
+        res.writeHead(200, {
+          'content-length': String(value.length),
+          'content-type': 'application/octet-stream',
+        });
         res.end(value);
       } else if (req.method === 'HEAD') {
         const value = objects.get(key);
@@ -204,8 +216,10 @@ test('s3: missing chunks error on finalize', async () => {
     fetchImpl: fetch,
   });
   try {
-    await assert.rejects(storage.finalize('rec-empty'), (err: unknown) =>
-      (err as { code?: string }).code === 'recording_storage_error');
+    await assert.rejects(
+      storage.finalize('rec-empty'),
+      (err: unknown) => (err as { code?: string }).code === 'recording_storage_error',
+    );
   } finally {
     await s3.close();
   }

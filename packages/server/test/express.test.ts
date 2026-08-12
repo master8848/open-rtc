@@ -11,26 +11,16 @@ import { tmpdir } from 'node:os';
 import { mkdtemp } from 'node:fs/promises';
 import path from 'node:path';
 
-async function withExpressApp(fn: (base: string) => Promise<void>): Promise<void> {
-  const store = new InMemoryStore();
-  const dir = await mkdtemp(path.join(tmpdir(), 'vidcall-expr-'));
-  const app = express();
-  app.use('/vidcall', createExpressRouter(createServices({ store, recordingStorage: new DiskRecordingStorage({ dir }) })));
-  const server = app.listen(0, '127.0.0.1');
-  await new Promise<void>((resolve) => server.once('listening', resolve));
-  const { port } = server.address() as AddressInfo;
-  try {
-    await fn(`http://127.0.0.1:${port}/vidcall`);
-  } finally {
-    await new Promise<void>((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
-  }
-}
-
 test('express: router mounts and serves the REST API under a prefix', async () => {
   const store = new InMemoryStore();
   const dir = await mkdtemp(path.join(tmpdir(), 'vidcall-expr-'));
   const app = express();
-  app.use('/vidcall', createExpressRouter(createServices({ store, recordingStorage: new DiskRecordingStorage({ dir }) })));
+  app.use(
+    '/vidcall',
+    createExpressRouter(
+      createServices({ store, recordingStorage: new DiskRecordingStorage({ dir }) }),
+    ),
+  );
   const server = app.listen(0, '127.0.0.1');
   await new Promise<void>((resolve) => server.once('listening', resolve));
   const { port } = server.address() as AddressInfo;
@@ -60,7 +50,9 @@ test('express: router mounts and serves the REST API under a prefix', async () =
     const missing = await fetch(`${base}/rooms/nope/state`);
     assert.equal(missing.status, 404);
   } finally {
-    await new Promise<void>((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
+    await new Promise<void>((resolve, reject) =>
+      server.close((err) => (err ? reject(err) : resolve())),
+    );
   }
 });
 
@@ -68,7 +60,12 @@ test('express: recording chunk upload + finalize through the router', async () =
   const store = new InMemoryStore();
   const dir = await mkdtemp(path.join(tmpdir(), 'vidcall-expr2-'));
   const app = express();
-  app.use('/vidcall', createExpressRouter(createServices({ store, recordingStorage: new DiskRecordingStorage({ dir }) })));
+  app.use(
+    '/vidcall',
+    createExpressRouter(
+      createServices({ store, recordingStorage: new DiskRecordingStorage({ dir }) }),
+    ),
+  );
   const server = app.listen(0, '127.0.0.1');
   await new Promise<void>((resolve) => server.once('listening', resolve));
   const { port } = server.address() as AddressInfo;
@@ -88,8 +85,13 @@ test('express: recording chunk upload + finalize through the router', async () =
       body: '{}',
     });
     assert.equal(finalize.status, 200);
-    assert.equal(((await finalize.json()) as { recording: { status: string } }).recording.status, 'finalized');
+    assert.equal(
+      ((await finalize.json()) as { recording: { status: string } }).recording.status,
+      'finalized',
+    );
   } finally {
-    await new Promise<void>((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
+    await new Promise<void>((resolve, reject) =>
+      server.close((err) => (err ? reject(err) : resolve())),
+    );
   }
 });
