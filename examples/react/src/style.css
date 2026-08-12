@@ -1,0 +1,11 @@
+:root {
+  color-scheme: light dark;
+}
+body {
+  margin: 0;
+  background: #fafafa;
+}
+button {
+  padding: 0.4rem 0.8rem;
+  margin-right: 0.4rem;
+}

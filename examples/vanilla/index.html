@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>vidcall — vanilla example (two tabs = a call)</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+      }
+      body {
+        font-family: system-ui, sans-serif;
+        max-width: 60rem;
+        margin: 2rem auto;
+        padding: 0 1rem;
+      }
+      h1 {
+        font-size: 1.4rem;
+      }
+      button {
+        padding: 0.4rem 0.8rem;
+        margin-right: 0.5rem;
+      }
+      video {
+        width: 100%;
+        max-width: 24rem;
+        background: #000;
+        border-radius: 0.5rem;
+      }
+      #grid {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1rem;
+        margin: 1rem 0;
+      }
+      .tile {
+        position: relative;
+      }
+      .tile span {
+        position: absolute;
+        bottom: 0.25rem;
+        left: 0.5rem;
+        color: #fff;
+        font-size: 0.8rem;
+        text-shadow: 0 1px 2px #000;
+      }
+      #log {
+        font-family: ui-monospace, monospace;
+        font-size: 0.8rem;
+        white-space: pre-wrap;
+        background: rgba(128, 128, 128, 0.1);
+        border-radius: 0.5rem;
+        padding: 0.75rem;
+        height: 14rem;
+        overflow-y: auto;
+      }
+      #status {
+        font-size: 0.9rem;
+        margin: 0.5rem 0;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>vidcall · vanilla example</h1>
+    <p>
+      A no-framework browser app: <code>Room</code> + the sqlite BroadcastChannel backend. Open this
+      page in <strong>two tabs</strong> of the same browser, join both, and turn the camera on in
+      each — you get a 1:1 mesh call with no server at all. Room: <code id="room-name"></code>.
+    </p>
+    <div id="status">Not joined.</div>
+    <div>
+      <button id="join" disabled>Join room</button>
+      <button id="camera" disabled>Camera on</button>
+      <button id="mic" disabled>Mic muted</button>
+      <button id="record" disabled>Start recording</button>
+      <button id="leave" disabled>Leave</button>
+    </div>
+    <div id="grid">
+      <div class="tile"><video id="self" autoplay playsinline muted></video><span>you</span></div>
+    </div>
+    <h2>Event log</h2>
+    <div id="log"></div>
+    <script type="module" src="./dist/main.js"></script>
+  </body>
+</html>
