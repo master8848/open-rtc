@@ -1,0 +1,28 @@
+{
+  "name": "@vidcall/protocol",
+  "version": "0.1.0",
+  "description": "vidcall wire protocol types (TS mirror of protocol/schema.json \u2014 the single source of truth).",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/types.js",
+  "types": "./types.ts",
+  "exports": {
+    ".": {
+      "types": "./types.ts",
+      "development": "./types.ts",
+      "default": "./dist/types.js"
+    }
+  },
+  "files": [
+    "dist",
+    "types.ts"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=18.18"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "tsc -b --clean"
+  }
+}

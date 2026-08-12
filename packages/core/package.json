@@ -1,0 +1,34 @@
+{
+  "name": "@vidcall/core",
+  "version": "0.1.0",
+  "description": "vidcall mesh engine: Room, PeerConnectionManager (perfect negotiation, trickle ICE, renegotiation, ICE restart), SignalingTransport interface, DataChannelBus. Zero runtime dependencies.",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "development": "./src/index.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=18.18"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "tsc -b --clean"
+  },
+  "dependencies": {
+    "@vidcall/protocol": "0.1.0"
+  },
+  "devDependencies": {
+    "@vidcall/test-utils": "0.1.0"
+  }
+}

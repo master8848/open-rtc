@@ -1,0 +1,17 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "composite": false,
+    "noEmit": true,
+    "allowImportingTsExtensions": true
+  },
+  "include": [
+    "protocol/types.ts",
+    "packages/core/src/**/*.ts",
+    "packages/core/test/**/*.ts",
+    "packages/quality/src/**/*.ts",
+    "packages/quality/test/**/*.ts",
+    "packages/test-utils/src/**/*.ts",
+    "packages/test-utils/test/**/*.ts"
+  ]
+}

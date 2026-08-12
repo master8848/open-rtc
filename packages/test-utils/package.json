@@ -1,0 +1,28 @@
+{
+  "name": "@vidcall/test-utils",
+  "version": "0.1.0",
+  "description": "vidcall test utilities: fake RTCPeerConnection / tracks / data channels and envelope fixtures for engine and policy tests. Zero runtime dependencies.",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "development": "./src/index.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=18.18"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "tsc -b --clean"
+  }
+}

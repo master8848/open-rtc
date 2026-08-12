@@ -4,15 +4,7 @@
   "title": "vidcall signaling protocol v1",
   "description": "Single wire protocol shared by JS/Kotlin/Swift/Dart clients. JSON envelope carried over any pluggable backend pub/sub (Supabase/Convex/Firebase/Appwrite/Postgres/SQLite/custom). Engine owns ordering/idempotency/glare; backends stay dumb.",
   "type": "object",
-  "required": [
-    "v",
-    "type",
-    "roomId",
-    "senderId",
-    "sessionId",
-    "ts",
-    "seq"
-  ],
+  "required": ["v", "type", "roomId", "senderId", "sessionId", "ts", "seq"],
   "properties": {
     "v": {
       "const": 1,
@@ -255,10 +247,7 @@
   "definitions": {
     "DeviceProfile": {
       "type": "object",
-      "required": [
-        "hardwareConcurrency",
-        "mobile"
-      ],
+      "required": ["hardwareConcurrency", "mobile"],
       "properties": {
         "hardwareConcurrency": {
           "type": "integer",
@@ -280,13 +269,7 @@
         },
         "platform": {
           "type": "string",
-          "enum": [
-            "browser",
-            "node",
-            "kotlin",
-            "swift",
-            "dart"
-          ]
+          "enum": ["browser", "node", "kotlin", "swift", "dart"]
         }
       }
     },
@@ -331,9 +314,7 @@
     },
     "OfferPayload": {
       "type": "object",
-      "required": [
-        "sdp"
-      ],
+      "required": ["sdp"],
       "properties": {
         "sdp": {
           "type": "string"
@@ -345,41 +326,26 @@
     },
     "IcePayload": {
       "type": "object",
-      "required": [
-        "candidate"
-      ],
+      "required": ["candidate"],
       "properties": {
         "candidate": {
           "type": "string"
         },
         "sdpMid": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         },
         "sdpMLineIndex": {
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": ["integer", "null"]
         }
       }
     },
     "PresencePayload": {
       "type": "object",
-      "required": [
-        "state"
-      ],
+      "required": ["state"],
       "properties": {
         "state": {
           "type": "string",
-          "enum": [
-            "online",
-            "away",
-            "busy",
-            "offline"
-          ]
+          "enum": ["online", "away", "busy", "offline"]
         },
         "metadata": {
           "type": "object"
@@ -388,9 +354,7 @@
     },
     "ReactionPayload": {
       "type": "object",
-      "required": [
-        "emoji"
-      ],
+      "required": ["emoji"],
       "properties": {
         "emoji": {
           "type": "string"
@@ -405,9 +369,7 @@
     },
     "ChatPayload": {
       "type": "object",
-      "required": [
-        "text"
-      ],
+      "required": ["text"],
       "properties": {
         "text": {
           "type": "string",
@@ -428,16 +390,11 @@
     },
     "ScreenSharePayload": {
       "type": "object",
-      "required": [
-        "action"
-      ],
+      "required": ["action"],
       "properties": {
         "action": {
           "type": "string",
-          "enum": [
-            "start",
-            "stop"
-          ]
+          "enum": ["start", "stop"]
         },
         "label": {
           "type": "string"
@@ -446,12 +403,7 @@
     },
     "QualityWarningPayload": {
       "type": "object",
-      "required": [
-        "from",
-        "to",
-        "reason",
-        "direction"
-      ],
+      "required": ["from", "to", "reason", "direction"],
       "properties": {
         "from": {
           "type": "string",
@@ -462,49 +414,28 @@
         },
         "reason": {
           "type": "string",
-          "enum": [
-            "network",
-            "cpu",
-            "device",
-            "manual",
-            "recovery"
-          ]
+          "enum": ["network", "cpu", "device", "manual", "recovery"]
         },
         "direction": {
           "type": "string",
-          "enum": [
-            "send",
-            "receive"
-          ]
+          "enum": ["send", "receive"]
         }
       }
     },
     "SfuPayload": {
       "type": "object",
-      "required": [
-        "action"
-      ],
+      "required": ["action"],
       "properties": {
         "action": {
           "type": "string",
-          "enum": [
-            "publish",
-            "subscribe",
-            "layer-change",
-            "keyframe-request",
-            "leave"
-          ]
+          "enum": ["publish", "subscribe", "layer-change", "keyframe-request", "leave"]
         },
         "trackId": {
           "type": "string"
         },
         "kind": {
           "type": "string",
-          "enum": [
-            "audio",
-            "video",
-            "screen"
-          ]
+          "enum": ["audio", "video", "screen"]
         },
         "senderId": {
           "type": "string"
@@ -516,10 +447,7 @@
     },
     "ErrorPayload": {
       "type": "object",
-      "required": [
-        "code",
-        "message"
-      ],
+      "required": ["code", "message"],
       "properties": {
         "code": {
           "type": "string"
