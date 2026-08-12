@@ -239,6 +239,23 @@ class VidcallClient {
   /// Sends a `pong` envelope.
   Future<void> sendPong() => _send(MessageType.pong, null);
 
+  /// Sends an arbitrary envelope with an optional unicast [targetSenderId].
+  ///
+  /// Advanced escape hatch used by [`RtcMeshSession`] for per-peer signaling:
+  /// offer/answer/ICE/join/pong envelopes are addressed to exactly one remote
+  /// participant (`targetSenderId` = their `senderId`), per the schema's
+  /// unicast rule. When [targetSenderId] is null the envelope is a room
+  /// broadcast. Receivers MUST filter on `targetSenderId` (the mesh does).
+  ///
+  /// The payload map is carried verbatim as `envelope.payload`.
+  Future<void> sendMessage(
+    MessageType type,
+    Map<String, dynamic>? payload, {
+    String? targetSenderId,
+  }) {
+    return _send(type, payload, targetSenderId: targetSenderId);
+  }
+
   /// Closes the WebSocket and releases the client. Idempotent.
   Future<void> close() async {
     if (_closed) {
@@ -256,7 +273,11 @@ class VidcallClient {
     _setState(VidcallState.closed);
   }
 
-  Future<void> _send(MessageType type, Map<String, dynamic>? payload) async {
+  Future<void> _send(
+    MessageType type,
+    Map<String, dynamic>? payload, {
+    String? targetSenderId,
+  }) async {
     final socket = _socket;
     if (socket == null || !isConnected) {
       throw StateError('VidcallClient is not connected (state: $_state)');
@@ -268,6 +289,7 @@ class VidcallClient {
       sessionId: sessionId,
       ts: DateTime.now().millisecondsSinceEpoch,
       seq: _seq++,
+      targetSenderId: targetSenderId,
       payload: payload,
     );
     socket.add(envelope.encode());

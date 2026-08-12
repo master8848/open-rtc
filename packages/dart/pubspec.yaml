@@ -16,6 +16,7 @@ dependencies:
   flutter:
     sdk: flutter
   flutter_webrtc: 1.5.2 # published 2026-06-19 (eligible vs 2026-07-28 cutoff)
+  webrtc_interface: 1.5.1 # published 2026-03-16; pure-Dart types shared with flutter_webrtc (RtcMeshSession stays dart-testable)
 
 dev_dependencies:
   lints: 4.0.0 # published 2024-05-09
