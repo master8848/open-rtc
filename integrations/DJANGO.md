@@ -89,18 +89,59 @@ consumer that forwards to the sidecar).
 
 ## 3. Auth in Django
 
-Enforce room authorization at the proxy layer with your normal Django
-middleware: check `request.user` / session, then forward:
+Run the sidecar with token auth enabled (a shared HMAC secret + an
+`adminToken` that only your backend knows):
+
+```js
+// sidecar.mjs
+const services = createServices({
+  store,
+  auth: {
+    secret: process.env.VIDCALL_SECRET,
+    adminToken: process.env.VIDCALL_ADMIN_TOKEN,
+  },
+});
+const server = createNodeServer(services);
+attachWebSocketRelay(server, services);
+server.listen(8787);
+```
+
+Room routes now require `Authorization: Bearer <token>` (REST) or
+`?token=<token>` (WS). Django mints a room-scoped participant token per user
+in a view — the `adminToken` header is the server-to-server credential:
+
+```python
+# views.py
+import httpx
+from django.conf import settings
+from django.http import JsonResponse
+
+def vidcall_token(request):
+    """Mint a room-scoped participant token for request.user."""
+    room_id = request.POST.get("room_id")
+    if not request.user.is_authenticated:
+        return JsonResponse({"error": {"code": "unauthorized"}}, status=401)
+    if not request.user.rooms.filter(room_id=room_id).exists():  # your check
+        return JsonResponse({"error": {"code": "forbidden"}}, status=403)
+    resp = httpx.post(
+        f"{settings.VIDCALL_SIDECAR}/auth/token",
+        headers={"adminToken": settings.VIDCALL_ADMIN_TOKEN},
+        json={"roomId": room_id, "participantId": str(request.user.id)},
+    )
+    return JsonResponse(resp.json(), status=resp.status_code)  # { token, ... }
+```
+
+The browser gets `{ token }` from that view and uses it for `/vidcall/...`
+calls (`Authorization: Bearer ...`) and the `/ws?roomId=...&token=...`
+connection. Keep your Django middleware as a first line of defense (session
+check, room membership) — the sidecar tokens are room-scoped and
+identity-bound on top of it:
 
 ```python
 @csrf_exempt
 def vidcall_proxy(request, path):
     if not request.user.is_authenticated:
         return HttpResponse('{"error":{"code":"unauthorized"}}', status=401)
-    if path.startswith("rooms/"):
-        room_id = path.split("/")[1]
-        if not request.user.rooms.filter(room_id=room_id).exists():
-            return HttpResponse('{"error":{"code":"forbidden"}}', status=403)
     # ... forward as above ...
 ```
 

@@ -70,9 +70,52 @@ Route::any('vidcall/{path}', function (Request $request, string $path) {
 
 ## 3. Auth in Laravel
 
-Gate access at the proxy route with your normal middleware (`auth:sanctum`,
-policies, room membership checks) before forwarding — the sidecar itself
-stays auth-agnostic (it trusts the host).
+Run the sidecar with token auth enabled (a shared HMAC secret + an
+`adminToken` that only your backend knows):
+
+```js
+// sidecar.mjs
+const services = createServices({
+  store,
+  auth: {
+    secret: process.env.VIDCALL_SECRET,
+    adminToken: process.env.VIDCALL_ADMIN_TOKEN,
+  },
+});
+const server = createNodeServer(services);
+attachWebSocketRelay(server, services);
+server.listen(8787);
+```
+
+Room routes now require `Authorization: Bearer <token>` (REST) or
+`?token=<token>` (WS). Laravel mints a room-scoped participant token per user
+in a controller — the `adminToken` header is the server-to-server credential:
+
+```php
+// app/Http/Controllers/VidcallTokenController.php
+use Illuminate\Support\Facades\Http;
+
+public function __invoke(Request $request)
+{
+    $roomId = $request->input('room_id');
+    $user = $request->user();                       // auth:sanctum etc.
+    abort_unless($user && $user->rooms->contains('id', $roomId), 403);
+
+    $resp = Http::withHeaders([
+        'adminToken' => config('vidcall.admin_token'),
+    ])->post(config('vidcall.sidecar') . '/auth/token', [
+        'roomId' => $roomId,
+        'participantId' => (string) $user->id,
+    ]);
+    return response()->json($resp->json(), $resp->status()); // { token, ... }
+}
+```
+
+Register the route (`Route::post('/vidcall-token', ...)->middleware('auth:sanctum')`),
+give the token to the browser, and the client uses `Authorization: Bearer ...`
+for `/vidcall/...` and `?token=...` on `/ws?roomId=...`. Keep your policies
+and room-membership checks as the first line of defense — the sidecar tokens
+are room-scoped and identity-bound on top of them.
 
 ## 4. Queue/octane notes
 

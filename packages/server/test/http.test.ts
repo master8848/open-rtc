@@ -242,19 +242,13 @@ test('http: guarded mode — Bearer token required, wrong room forbidden', async
     // no token -> 401 unauthorized
     const none = await join(undefined, 'secure', 'alice');
     assert.equal(none.status, 401);
-    assert.equal(
-      ((await none.json()) as { error: { code: string } }).error.code,
-      'unauthorized',
-    );
+    assert.equal(((await none.json()) as { error: { code: string } }).error.code, 'unauthorized');
 
     // token for another room -> 403 forbidden
     const wrongRoom = issueToken('http-test-secret', { roomId: 'other', participantId: 'alice' });
     const forbidden = await join(wrongRoom, 'secure', 'alice');
     assert.equal(forbidden.status, 403);
-    assert.equal(
-      ((await forbidden.json()) as { error: { code: string } }).error.code,
-      'forbidden',
-    );
+    assert.equal(((await forbidden.json()) as { error: { code: string } }).error.code, 'forbidden');
 
     // valid token -> 200
     const valid = issueToken('http-test-secret', { roomId: 'secure', participantId: 'alice' });

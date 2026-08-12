@@ -82,8 +82,58 @@ end
 
 ## 3. Auth in Rails
 
-Check `current_user` (and room membership for `rooms/:id/*` paths) in
-`VidcallController` before forwarding — the sidecar stays auth-agnostic.
+Run the sidecar with token auth enabled (a shared HMAC secret + an
+`adminToken` that only your backend knows):
+
+```js
+// sidecar.mjs
+const services = createServices({
+  store,
+  auth: {
+    secret: process.env.VIDCALL_SECRET,
+    adminToken: process.env.VIDCALL_ADMIN_TOKEN,
+  },
+});
+const server = createNodeServer(services);
+attachWebSocketRelay(server, services);
+server.listen(8787);
+```
+
+Room routes now require `Authorization: Bearer <token>` (REST) or
+`?token=<token>` (WS). Rails mints a room-scoped participant token per user
+in a controller — the `adminToken` header is the server-to-server credential:
+
+```ruby
+# app/controllers/vidcall_tokens_controller.rb
+class VidcallTokensController < ApplicationController
+  before_action :authenticate_user!
+
+  def create
+    room_id = params.require(:room_id)
+    unless current_user.rooms.exists?(room_id: room_id)   # your check
+      render json: { error: { code: "forbidden" } }, status: :forbidden
+      return
+    end
+    resp = Net::HTTP.start(
+      ENV.fetch("VIDCALL_SIDECAR_HOST"), ENV.fetch("VIDCALL_SIDECAR_PORT")
+    ) do |http|
+      http.post(
+        "/auth/token",
+        { roomId: room_id, participantId: current_user.id.to_s }.to_json,
+        "Content-Type" => "application/json",
+        "adminToken" => ENV.fetch("VIDCALL_ADMIN_TOKEN"),
+      )
+    end
+    render json: JSON.parse(resp.body), status: resp.code.to_i # { token, ... }
+  end
+end
+```
+
+Route it (`resources :vidcall_tokens, only: :create`), hand `{ token }` to the
+browser, and the client uses `Authorization: Bearer ...` for `/vidcall/...`
+and `?token=...` on `/ws?roomId=...`. Keep your `current_user` and room
+membership checks as the first line of defense — the sidecar tokens are
+room-scoped and identity-bound on top of them.
 
 ## 4. Action Cable note
 

@@ -185,7 +185,10 @@ test('auth http: admin role (and guarded issuance) requires adminToken header', 
       body: JSON.stringify({ roomId: 'r1', participantId: 'alice' }),
     });
     assert.equal(noAdmin.status, 401);
-    assert.equal(((await noAdmin.json()) as { error: { code: string } }).error.code, 'unauthorized');
+    assert.equal(
+      ((await noAdmin.json()) as { error: { code: string } }).error.code,
+      'unauthorized',
+    );
 
     // admin role without adminToken -> 403
     const adminNoHeader = await fetch(`${base}/auth/token`, {
@@ -326,10 +329,7 @@ test('auth http: tokens are identity-bound (cannot join/signal as someone else)'
       body: JSON.stringify({ participantId: 'bob', sessionId: 's-b' }),
     });
     assert.equal(joinAsBob.status, 403);
-    assert.equal(
-      ((await joinAsBob.json()) as { error: { code: string } }).error.code,
-      'forbidden',
-    );
+    assert.equal(((await joinAsBob.json()) as { error: { code: string } }).error.code, 'forbidden');
 
     const signalAsBob = await fetch(`${base}/rooms/r1/signal`, {
       method: 'POST',

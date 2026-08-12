@@ -48,28 +48,134 @@ const server = app.listen(3000, () => console.log('vidcall server on :3000'));
 attachWebSocketRelay(server, services); // /ws?roomId=... relay
 ```
 
+> The snippet above runs in **legacy open mode** (any client can join any
+> room — dev-only). For production, enable auth — see
+> [Authentication & tokens](#authentication--tokens) below.
+
 See `integrations/` for Express, Fastify, Django, Laravel, Rails, and the
 `Store` contract (`DATABASES.md`).
 
 ## REST API
 
-| Method | Path                              | Body                                                                                  | Returns                                   |
-| ------ | --------------------------------- | ------------------------------------------------------------------------------------- | ----------------------------------------- |
-| POST   | `/rooms`                          | `{ roomId?, maxParticipants?, metadata? }`                                            | `201 { room }`                            |
-| POST   | `/rooms/:id/join`                 | `{ participantId, sessionId, displayName?, metadata? }` (or `{ participant: {...} }`) | `200 { room, participant, participants }` |
-| POST   | `/rooms/:id/leave`                | `{ participantId, reason? }`                                                          | `200 { room, participants }`              |
-| POST   | `/rooms/:id/signal`               | one protocol envelope (`protocol/schema.json`)                                        | `200 { seq, relayedTo }`                  |
-| GET    | `/rooms/:id/state`                | —                                                                                     | `200 { room, participants, signalCount }` |
-| GET    | `/rooms/:id/recordings`           | —                                                                                     | `200 { recordings }`                      |
-| POST   | `/recordings/:sessionId/chunks`   | raw bytes (`application/octet-stream`), `?index=n`                                    | `201 { sessionId, index, bytes }`         |
-| POST   | `/recordings/:sessionId/finalize` | `{}`                                                                                  | `200 { recording, storage }`              |
+| Method   | Path                              | Body                                                                                  | Returns                                   |
+| -------- | --------------------------------- | ------------------------------------------------------------------------------------- | ----------------------------------------- |
+| POST     | `/auth/token`                     | `{ roomId, participantId, role?, exp? }`                                              | `200 { token, roomId, participantId, role, exp, iat }` |
+| POST     | `/rooms`                          | `{ roomId?, maxParticipants?, metadata? }`                                            | `201 { room }`                            |
+| POST     | `/rooms/:id/join`                 | `{ participantId, sessionId, displayName?, metadata? }` (or `{ participant: {...} }`) | `200 { room, participant, participants }` |
+| POST     | `/rooms/:id/leave`                | `{ participantId, reason? }`                                                          | `200 { room, participants }`              |
+| POST     | `/rooms/:id/signal`               | one protocol envelope (`protocol/schema.json`)                                        | `200 { seq, relayedTo }`                  |
+| POST     | `/rooms/:id/close`                | `{}` (admin only)                                                                     | `200 { room }`                            |
+| DELETE   | `/rooms/:id`                      | — (admin only)                                                                        | `200 { roomId, deleted }`                 |
+| GET      | `/rooms/:id/state`                | —                                                                                     | `200 { room, participants, signalCount }` |
+| GET      | `/rooms/:id/recordings`           | —                                                                                     | `200 { recordings }`                      |
+| POST     | `/recordings/:sessionId/chunks`   | raw bytes (`application/octet-stream`), `?index=n`                                    | `201 { sessionId, index, bytes }`         |
+| POST     | `/recordings/:sessionId/finalize` | `{}`                                                                                  | `200 { recording, storage }`              |
 
 Errors are always `{ "error": { "code", "message", "details? } }` with a stable
 machine-readable `code`: `room_not_found` (404), `room_already_exists` (409),
 `room_closed` (409), `room_full` (409), `participant_not_found` (404),
 `participant_already_joined` (409), `recording_not_found` (404),
 `invalid_envelope` / `invalid_request` (400), `recording_storage_error` (500),
-`internal_error` (500).
+`internal_error` (500), plus auth codes below (only in auth mode):
+`unauthorized` (401, missing/invalid token), `token_expired` (401),
+`forbidden` (403, wrong room / wrong identity / role too weak),
+`auth_not_configured` (501, `/auth/token` without a secret),
+`not_implemented` (501, `DELETE /rooms/:id` with a Store lacking `deleteRoom`).
+
+## Authentication & tokens
+
+Room access is secured with **HMAC-signed tokens** (`node:crypto` only — no
+new dependencies). A token is a compact JWT-style string —
+`base64url(header).base64url(payload).base64url(signature)`, HS256 via
+`createHmac` — that binds the holder to **one room** and **one participant
+identity**: a token minted for room X cannot join, signal in, or read room Y,
+and it cannot impersonate another participant.
+
+### Enabling auth
+
+Pass `auth` to `createServices` — with a `secret`, every room-scoped route
+requires a token:
+
+```ts
+const services = createServices({
+  store,
+  auth: {
+    secret: process.env.VIDCALL_SECRET!,      // HMAC signing key — never ship to clients
+    adminToken: process.env.VIDCALL_ADMIN_TOKEN, // optional: guard POST /auth/token
+    defaultTokenTtlMs: 60 * 60 * 1000,          // optional: default token lifetime (1h)
+  },
+});
+```
+
+Without `auth`, the server runs in **legacy open mode** — any client can join
+any room. That is fine for local development and tests, but must not be used
+in production (the open-mode behavior is intentionally preserved so existing
+deployments and tests keep working).
+
+### Getting a token
+
+Your host app mints tokens for its own users via `POST /auth/token`
+(participant tokens by default):
+
+```sh
+curl -X POST http://localhost:3000/vidcall/auth/token \
+  -H 'content-type: application/json' \
+  -H 'adminToken: <your-admin-token>' \        # required when adminToken is configured
+  -d '{"roomId": "standup", "participantId": "alice", "role": "participant"}'
+# → { "token": "eyJ...", "roomId": "standup", "participantId": "alice",
+#     "role": "participant", "exp": 1789..., "iat": 1789... }
+```
+
+- **Open issuance**: with a secret but no `adminToken`, participant tokens can
+  be minted without any header (dev convenience). Configure `adminToken` in
+  production so only your backend can mint tokens.
+- **Admin tokens** (`role: "admin"`) always require the `adminToken` header.
+- `exp` is optional (epoch seconds; defaults to `defaultTokenTtlMs` / 1 hour).
+
+Or mint tokens in your own code with `issueToken` (exported from
+`@vidcall/server`):
+
+```ts
+import { issueToken } from '@vidcall/server';
+const token = issueToken(secret, {
+  roomId: 'standup',
+  participantId: 'alice',
+  role: 'participant',
+  exp: Math.floor(Date.now() / 1000) + 3600,
+});
+```
+
+### Sending tokens
+
+| Transport | How                                              |
+| --------- | ------------------------------------------------ |
+| REST      | `Authorization: Bearer <token>` header           |
+| WS        | `?token=<token>` on the `/ws?roomId=<id>` URL    |
+
+Guarded routes (auth mode): `POST /rooms/:id/join`, `POST /rooms/:id/leave`,
+`POST /rooms/:id/signal`, `GET /rooms/:id/state`,
+`GET /rooms/:id/recordings`, `POST /recordings/:sessionId/chunks`,
+`POST /recordings/:sessionId/finalize` (room derived from the recording),
+`POST /rooms/:id/close`, `DELETE /rooms/:id`. `POST /rooms` (create) stays
+open so the first caller can bootstrap a room.
+
+### Roles
+
+- `participant` — join, signal, read state/recordings for **their** room;
+  identity-bound: a token for `alice` cannot join or signal as `bob`, and
+  participants may only leave themselves.
+- `admin` — everything a participant can do, plus `POST /rooms/:id/close`
+  (rejects new joins, existing members keep signaling), `DELETE /rooms/:id`
+  (removes the room + its data, requires `Store.deleteRoom`), and reading any
+  room's state/participant roster (`GET /rooms/:id/state`).
+
+WS joins are checked the same way: connect to `/ws?roomId=<id>&token=<token>`
+and send your `join` envelope. Missing/invalid/expired tokens get an `error`
+envelope (`unauthorized` / `token_expired` / `forbidden`) followed by a close
+with code `4401`. Open mode ignores the `token` parameter entirely.
+
+See `integrations/EXPRESS.md`, `FASTIFY.md`, `DJANGO.md`, `LARAVEL.md`,
+`RAILS.md` for how each host backend mints tokens for its users.
 
 ## WebSocket relay
 

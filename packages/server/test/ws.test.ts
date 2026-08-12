@@ -238,9 +238,7 @@ test('ws: validation errors (must_join, invalid envelope, unknown room)', async 
 
 test('ws: guarded mode — join with a valid ?token= succeeds', async () => {
   const store = new InMemoryStore();
-  const server = createNodeServer(
-    createServices({ store, auth: { secret: 'ws-test-secret' } }),
-  );
+  const server = createNodeServer(createServices({ store, auth: { secret: 'ws-test-secret' } }));
   const relay = attachWebSocketRelay(
     server,
     createServices({ store, auth: { secret: 'ws-test-secret' } }),
