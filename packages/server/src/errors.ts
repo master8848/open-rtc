@@ -20,6 +20,13 @@ export const ERROR_CODES = [
   'invalid_request',
   'recording_storage_error',
   'internal_error',
+  // auth (HTTP guard layer, see auth.ts)
+  'unauthorized',
+  'token_expired',
+  'forbidden',
+  'auth_not_configured',
+  // optional Store capabilities
+  'not_implemented',
 ] as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[number];
@@ -107,5 +114,24 @@ export const errors = {
   },
   internalError(message: string, details?: unknown): VidcallError {
     return new VidcallError('internal_error', message, 500, details);
+  },
+  unauthorized(message = 'Missing or invalid bearer token'): VidcallError {
+    return new VidcallError('unauthorized', message, 401);
+  },
+  tokenExpired(message = 'Token expired'): VidcallError {
+    return new VidcallError('token_expired', message, 401);
+  },
+  forbidden(message = 'Forbidden'): VidcallError {
+    return new VidcallError('forbidden', message, 403);
+  },
+  authNotConfigured(): VidcallError {
+    return new VidcallError(
+      'auth_not_configured',
+      'Auth is not configured on this server (set auth: { secret } in createServices)',
+      501,
+    );
+  },
+  notImplemented(message: string): VidcallError {
+    return new VidcallError('not_implemented', message, 501);
   },
 };

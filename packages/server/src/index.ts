@@ -16,6 +16,9 @@ export * from './errors.ts';
 export * from './core.ts';
 export * from './store.ts';
 
+// Auth (HMAC room tokens)
+export * from './auth.ts';
+
 // Service wiring + hosting
 export * from './services.ts';
 export * from './http.ts';

@@ -4,7 +4,12 @@
  * `attachWebSocketRelay(server, services)` upgrades `GET /ws?roomId=...`
  * connections on any `node:http` server (standalone, or the one Express /
  * Fastify / a reverse proxy already listens on) and relays protocol
- * envelopes between room members:
+ * envelopes between room members.
+ *
+ * Auth mode (`services.auth` set): clients must connect with
+ * `?token=<token>`; the join is rejected with an error envelope + close
+ * (4401) when the token is missing/invalid, scoped to another room, or
+ * bound to another sender. Open mode (no auth) keeps the legacy behavior:
  *
  *  1. Client connects to `/ws?roomId=<id>` and sends a `join` envelope.
  *  2. The relay registers the participant (core `joinRoom`), replies with a
@@ -24,6 +29,7 @@
 import http from 'node:http';
 import { WebSocket, WebSocketServer } from 'ws';
 import { createEnvelope, isEnvelope, type Envelope } from '@vidcall/protocol';
+import { AuthError, verifyToken } from './auth.ts';
 import {
   buildLeaveEnvelope,
   handleSignal,
@@ -122,6 +128,8 @@ export function attachWebSocketRelay(
   });
   const hub = new RoomHub();
   const clients = new Set<WebSocket>();
+  /** Raw `?token=` query value per socket (verified at join, auth mode). */
+  const tokens = new WeakMap<WebSocket, string>();
 
   server.on('upgrade', (req, socket, head) => {
     const url = new URL(req.url ?? '/', 'http://localhost');
@@ -135,7 +143,9 @@ export function attachWebSocketRelay(
       socket.destroy();
       return;
     }
+    const token = url.searchParams.get('token') ?? '';
     wss.handleUpgrade(req, socket, head, (ws) => {
+      tokens.set(ws, token);
       wss.emit('connection', ws, req, url);
     });
   });
@@ -143,10 +153,11 @@ export function attachWebSocketRelay(
   wss.on('connection', (socket: WebSocket) => {
     clients.add(socket);
     socket.on('message', (data) => {
-      void handleMessage(services, hub, socket, data.toString());
+      void handleMessage(services, hub, socket, data.toString(), tokens);
     });
     socket.on('close', () => {
       clients.delete(socket);
+      tokens.delete(socket);
       void handleClose(services, hub, socket);
     });
     socket.on('error', () => {
@@ -180,11 +191,51 @@ function errorEnvelope(roomId: string, code: string, message: string): Envelope 
   });
 }
 
+/**
+ * Verify the socket's `?token=` against the join target (auth mode only).
+ * On failure, sends an error envelope and closes the socket with 4401
+ * (application range, "unauthorized").
+ *
+ * @returns true when the join may proceed (or auth is not configured).
+ */
+function authenticateSocket(
+  services: Services,
+  tokens: WeakMap<WebSocket, string>,
+  socket: WebSocket,
+  roomId: string,
+  senderId: string,
+): boolean {
+  const auth = services.auth;
+  if (!auth) return true; // legacy open mode
+  try {
+    const claims = verifyToken(auth.secret, tokens.get(socket) ?? '');
+    if (claims.roomId !== roomId) {
+      throw new AuthError(
+        'forbidden',
+        `Token is scoped to room ${claims.roomId}, not ${roomId} (tokens are room-scoped)`,
+      );
+    }
+    if (claims.participantId !== senderId) {
+      throw new AuthError(
+        'forbidden',
+        `Token is bound to participant ${claims.participantId}, not ${senderId}`,
+      );
+    }
+    return true;
+  } catch (err) {
+    const code = errCode(err);
+    sendJson(socket, errorEnvelope(roomId, code, errMessage(err)));
+    socket.close(4401, code);
+  }
+  return false;
+}
+
 async function handleMessage(
   services: Services,
   hub: RoomHub,
   socket: WebSocket,
   raw: string,
+  tokens: WeakMap<WebSocket, string>,
 ): Promise<void> {
   let envelope: unknown;
   try {
@@ -215,7 +266,7 @@ async function handleMessage(
       sendJson(socket, errorEnvelope(envelope.roomId, 'must_join', 'Send a join envelope first'));
       return;
     }
-    await handleJoin(services, hub, socket, envelope);
+    await handleJoin(services, hub, socket, envelope, tokens);
     return;
   }
 
@@ -254,8 +305,12 @@ async function handleJoin(
   hub: RoomHub,
   socket: WebSocket,
   envelope: Envelope & { type: 'join' },
+  tokens: WeakMap<WebSocket, string>,
 ): Promise<void> {
   const roomId = envelope.roomId;
+  // Auth mode: reject the join (error envelope + close) when the `?token=`
+  // is missing/invalid, scoped to another room, or bound to another sender.
+  if (!authenticateSocket(services, tokens, socket, roomId, envelope.senderId)) return;
   const payload = envelope.payload;
   const input: ParticipantInput = {
     participantId: envelope.senderId,

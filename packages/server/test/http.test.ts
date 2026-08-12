@@ -6,6 +6,7 @@ import { createServices } from '../src/services.ts';
 import { InMemoryStore } from '../src/stores/InMemoryStore.ts';
 import { DiskRecordingStorage } from '../src/recording.ts';
 import { startRecording, createRoom, joinRoom } from '../src/core.ts';
+import { issueToken } from '../src/auth.ts';
 import { tmpdir } from 'node:os';
 import { mkdtemp } from 'node:fs/promises';
 import path from 'node:path';
@@ -219,6 +220,46 @@ test('http: error mapping (404 room, 400 bad JSON, chunk to unknown session)', a
         'recording_not_found',
       );
     });
+  });
+});
+
+test('http: guarded mode — Bearer token required, wrong room forbidden', async () => {
+  const store = new InMemoryStore();
+  await createRoom(store, { roomId: 'secure' });
+  await createRoom(store, { roomId: 'other' });
+  const services = createServices({ store, auth: { secret: 'http-test-secret' } });
+  await withServer(services, async (base) => {
+    const join = (token: string | undefined, roomId: string, participantId: string) =>
+      fetch(`${base}/rooms/${roomId}/join`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          ...(token ? { authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ participantId, sessionId: `s-${participantId}` }),
+      });
+
+    // no token -> 401 unauthorized
+    const none = await join(undefined, 'secure', 'alice');
+    assert.equal(none.status, 401);
+    assert.equal(
+      ((await none.json()) as { error: { code: string } }).error.code,
+      'unauthorized',
+    );
+
+    // token for another room -> 403 forbidden
+    const wrongRoom = issueToken('http-test-secret', { roomId: 'other', participantId: 'alice' });
+    const forbidden = await join(wrongRoom, 'secure', 'alice');
+    assert.equal(forbidden.status, 403);
+    assert.equal(
+      ((await forbidden.json()) as { error: { code: string } }).error.code,
+      'forbidden',
+    );
+
+    // valid token -> 200
+    const valid = issueToken('http-test-secret', { roomId: 'secure', participantId: 'alice' });
+    const ok = await join(valid, 'secure', 'alice');
+    assert.equal(ok.status, 200);
   });
 });
 

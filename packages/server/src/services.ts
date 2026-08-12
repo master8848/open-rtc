@@ -11,6 +11,30 @@ import type { Envelope } from '@vidcall/protocol';
 import type { RecordingStorage } from './recording.ts';
 import type { Store } from './store.ts';
 
+/**
+ * HMAC auth configuration. When present (`secret` set), room-scoped routes
+ * require a token issued by `issueToken` / `POST /auth/token`:
+ *
+ *  - REST: `Authorization: Bearer <token>` on join/leave/signal/state/
+ *    recordings (+ close/delete for admins);
+ *  - WS: `?token=<token>` on the `/ws?roomId=...` upgrade URL.
+ *
+ * When absent, the server runs in **legacy open mode** (any client can join
+ * any room) — dev-only, see the README auth section.
+ */
+export interface AuthConfig {
+  /** HMAC-SHA256 signing key. Never ship this to clients. */
+  secret: string;
+  /**
+   * Optional shared secret for `POST /auth/token`. When set, token issuance
+   * requires an `adminToken` header; `role: 'admin'` always requires it.
+   * When unset, the token endpoint is open (participant tokens only).
+   */
+  adminToken?: string;
+  /** Lifetime for tokens minted by `/auth/token` without an explicit `exp`; default 1 hour. */
+  defaultTokenTtlMs?: number;
+}
+
 /** Broadcast a relayed envelope to connected WebSocket clients. */
 export interface Relay {
   /**
@@ -31,6 +55,8 @@ export interface Services {
   relay?: Relay;
   /** Clock override (tests). */
   now?: () => number;
+  /** Optional HMAC auth; when set, room routes require tokens (see AuthConfig). */
+  auth?: AuthConfig;
 }
 
 /** Build a `Services` object (convenience factory). */
@@ -39,6 +65,7 @@ export function createServices(partial: {
   recordingStorage?: RecordingStorage;
   relay?: Relay;
   now?: () => number;
+  auth?: AuthConfig;
 }): Services {
   return { ...partial };
 }

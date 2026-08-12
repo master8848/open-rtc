@@ -26,6 +26,11 @@ import type { Services } from './services.ts';
 export function createExpressRouter(services: Services): express.Router {
   const router = express.Router();
 
+  router.post('/auth/token', express.json({ limit: '4mb' }), async (req, res) => {
+    const result = await dispatch(services, expressContext(req));
+    res.status(result.status).json(result.body);
+  });
+
   router.post('/rooms', express.json({ limit: '4mb' }), async (req, res) => {
     const result = await dispatch(services, expressContext(req));
     res.status(result.status).json(result.body);
@@ -42,6 +47,16 @@ export function createExpressRouter(services: Services): express.Router {
   });
 
   router.post('/rooms/:id/signal', express.json({ limit: '8mb' }), async (req, res) => {
+    const result = await dispatch(services, expressContext(req));
+    res.status(result.status).json(result.body);
+  });
+
+  router.post('/rooms/:id/close', express.json({ limit: '4mb' }), async (req, res) => {
+    const result = await dispatch(services, expressContext(req));
+    res.status(result.status).json(result.body);
+  });
+
+  router.delete('/rooms/:id', async (req, res) => {
     const result = await dispatch(services, expressContext(req));
     res.status(result.status).json(result.body);
   });

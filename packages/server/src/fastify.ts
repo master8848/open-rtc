@@ -31,6 +31,10 @@ export function createFastifyPlugin(services: Services): FastifyPluginCallback {
       },
     );
 
+    app.post('/auth/token', async (req, reply) => {
+      const result = await dispatch(services, fastifyContext(req));
+      return reply.code(result.status).send(result.body);
+    });
     app.post('/rooms', async (req, reply) => {
       const result = await dispatch(services, fastifyContext(req));
       return reply.code(result.status).send(result.body);
@@ -44,6 +48,14 @@ export function createFastifyPlugin(services: Services): FastifyPluginCallback {
       return reply.code(result.status).send(result.body);
     });
     app.post('/rooms/:id/signal', async (req, reply) => {
+      const result = await dispatch(services, fastifyContext(req));
+      return reply.code(result.status).send(result.body);
+    });
+    app.post('/rooms/:id/close', async (req, reply) => {
+      const result = await dispatch(services, fastifyContext(req));
+      return reply.code(result.status).send(result.body);
+    });
+    app.delete('/rooms/:id', async (req, reply) => {
       const result = await dispatch(services, fastifyContext(req));
       return reply.code(result.status).send(result.body);
     });

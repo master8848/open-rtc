@@ -8,6 +8,7 @@ import { createNodeServer } from '../src/http.ts';
 import { createServices } from '../src/services.ts';
 import { attachWebSocketRelay } from '../src/ws.ts';
 import { InMemoryStore } from '../src/stores/InMemoryStore.ts';
+import { issueToken } from '../src/auth.ts';
 
 function nextMessage(ws: WebSocket, timeoutMs = 3000): Promise<Envelope | Record<string, unknown>> {
   return new Promise((resolve, reject) => {
@@ -233,6 +234,46 @@ test('ws: validation errors (must_join, invalid envelope, unknown room)', async 
     assert.equal((err3.payload as { code: string }).code, 'invalid_json');
     ws2.close();
   });
+});
+
+test('ws: guarded mode — join with a valid ?token= succeeds', async () => {
+  const store = new InMemoryStore();
+  const server = createNodeServer(
+    createServices({ store, auth: { secret: 'ws-test-secret' } }),
+  );
+  const relay = attachWebSocketRelay(
+    server,
+    createServices({ store, auth: { secret: 'ws-test-secret' } }),
+  );
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const { port } = server.address() as AddressInfo;
+  const base = `http://127.0.0.1:${port}`;
+  try {
+    const created = await fetch(`${base}/rooms`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ roomId: 'sec-room' }),
+    });
+    assert.equal(created.status, 201);
+
+    const token = issueToken('ws-test-secret', { roomId: 'sec-room', participantId: 'alice' });
+    const ws = new WebSocket(`ws://127.0.0.1:${port}/ws?roomId=sec-room&token=${token}`);
+    await new Promise<void>((resolve, reject) => {
+      ws.once('open', resolve);
+      ws.once('error', reject);
+    });
+    ws.send(
+      JSON.stringify(
+        createEnvelope('join', { roomId: 'sec-room', senderId: 'alice', sessionId: 's-a' }),
+      ),
+    );
+    const joined = await nextMessage(ws);
+    assert.equal(joined.type, 'joined');
+    ws.close();
+  } finally {
+    await relay.close();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  }
 });
 
 test('ws: roomId in query is required (400 on upgrade)', async () => {
