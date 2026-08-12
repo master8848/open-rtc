@@ -535,7 +535,7 @@ export class FakeRTCPeerConnection {
     return [];
   }
 
-  createDataChannel(label: string, options?: RTCDataChannelInit): RTCDataChannel {
+  createDataChannel(label: string, _options?: RTCDataChannelInit): RTCDataChannel {
     const channel = new FakeDataChannel(label);
     this.channels.push(channel);
     if (this.link) {

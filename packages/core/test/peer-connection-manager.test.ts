@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 import {
   createPeerPair,
   resetFakeRTC,
-  asFake,
   FakeRTCPeerConnection,
 } from '../../test-utils/src/index.ts';
 import { waitFor } from '../../test-utils/src/fixtures.ts';
