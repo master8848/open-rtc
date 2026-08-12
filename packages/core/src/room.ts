@@ -36,6 +36,16 @@ import type { TrackPublication } from './participants.ts';
 import { PeerConnectionManager } from './peer-connection-manager.ts';
 import type { PeerSignal } from './peer-connection-manager.ts';
 import type { ParticipantInfo, SignalingTransport } from './transport.ts';
+import type { MediaRecorderConstructor } from './recording/media-recorder-recording-hook.ts';
+import type {
+  RecordingChunk,
+  RecordingErrorEvent,
+  RecordingStartedEvent,
+  RecordingStoppedEvent,
+} from './recording/recording-hook.ts';
+import type { RecordingFetch } from './recording/recording-uploader.ts';
+import { FetchRecordingUploader } from './recording/recording-uploader.ts';
+import { RoomRecordingFacade } from './recording/room-recording-facade.ts';
 
 // ------------------------------------------------------------------ events
 
@@ -100,6 +110,11 @@ export type RoomEventMap = {
   error: [Error];
   /** Emitted once after `leave()`/`close()` completes. */
   closed: [];
+  /** Recording facade events (see `room.recording`). */
+  'recording:started': [RecordingStartedEvent];
+  'recording:stopped': [RecordingStoppedEvent];
+  'recording:error': [RecordingErrorEvent];
+  'recording:blob-chunk': [RecordingChunk];
 };
 
 // ------------------------------------------------------------------ config
@@ -140,6 +155,22 @@ export interface RoomConfig {
   autoRestartIce?: boolean;
   /** Data channel label (default 'vidcall'). */
   dataChannelName?: string;
+  /**
+   * Base URL of the vidcall server's recording endpoint. When set, the room's
+   * recording facade uploads chunks + finalize reports there via
+   * `FetchRecordingUploader` (no dependency on the server package).
+   */
+  recordingEndpoint?: string;
+  /**
+   * fetch implementation for the recording uploader (default: global fetch).
+   * Pass `null` to force the "no fetch available" path. Tests inject mocks.
+   */
+  recordingFetchImpl?: RecordingFetch | null;
+  /**
+   * MediaRecorder constructor for the recording facade (default: platform
+   * `MediaRecorder`). Tests inject fakes; `null` forces the unavailable state.
+   */
+  recordingMediaRecorderCtor?: MediaRecorderConstructor | null;
   debug?: (message: string, data?: unknown) => void;
 }
 
@@ -155,6 +186,25 @@ export class Room extends TypedEmitter<RoomEventMap> {
   readonly roomId: string;
   readonly local: LocalParticipant;
   readonly sessionId: string;
+  /**
+   * Recording facade (D6): composite MediaRecorder recording of the local and
+   * remote streams with an optional server upload.
+   *
+   * ```ts
+   * room.recording.on('recording:blob-chunk', (chunk) => { ... });
+   * await room.recording.startRecording({
+   *   localStream, // composed local camera+mic stream
+   *   remoteStreams: [{ participantId: 'alice', stream: aliceStream }],
+   * });
+   * // ... later
+   * await room.recording.stopRecording(); // complete Blobs + finalize report
+   * ```
+   *
+   * The facade re-emits 'recording:started' / 'recording:stopped' /
+   * 'recording:error' / 'recording:blob-chunk' on the room itself.
+   * `leave()` stops any in-progress recording (uploading the finalize report).
+   */
+  readonly recording: RoomRecordingFacade;
   private readonly config: RoomConfig;
   private readonly transport: SignalingTransport;
   private readonly peers = new Map<string, PeerEntry>();
@@ -178,6 +228,23 @@ export class Room extends TypedEmitter<RoomEventMap> {
       deviceProfile: config.deviceProfile,
       capabilities: config.capabilities,
     });
+    this.recording = new RoomRecordingFacade({
+      roomId: this.roomId,
+      sessionId: this.sessionId,
+      uploader: config.recordingEndpoint
+        ? new FetchRecordingUploader({
+            endpoint: config.recordingEndpoint,
+            fetchImpl: config.recordingFetchImpl,
+          })
+        : undefined,
+      mediaRecorderCtor: config.recordingMediaRecorderCtor,
+      debug: this.debug,
+    });
+    // Re-emit facade events on the room so apps can use room.on('recording:...').
+    this.recording.on('recording:started', (event) => this.emit('recording:started', event));
+    this.recording.on('recording:stopped', (event) => this.emit('recording:stopped', event));
+    this.recording.on('recording:error', (event) => this.emit('recording:error', event));
+    this.recording.on('recording:blob-chunk', (chunk) => this.emit('recording:blob-chunk', chunk));
   }
 
   // -------------------------------------------------------------- join/leave
@@ -213,6 +280,12 @@ export class Room extends TypedEmitter<RoomEventMap> {
   async leave(reason?: string): Promise<void> {
     if (this.closed) return;
     this.closed = true;
+    // Stop any in-progress recording (uploads the finalize report).
+    try {
+      await this.recording.stopRecording();
+    } catch (err) {
+      this.debug('leave:recording-stop-failed', err);
+    }
     try {
       await this.transport.setPresence('offline', undefined).catch(() => {});
       await this.emitEnvelope('leave', { reason });
