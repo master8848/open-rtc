@@ -1,82 +1,89 @@
 # @vidcall/transport
 
-Signaling transport contract + helpers for the vidcall video-calling library.
+The **signaling transport contract** for vidcall — plus the shared plumbing
+and the test suite every backend adapter must pass.
 
-Every backend adapter (Supabase, Convex, Postgres, SQLite/libSQL, Appwrite,
-Firebase) implements the same `SignalingTransport` interface, so the engine
-and apps are backend-agnostic. This package also ships the shared adapter
-test suite that every adapter must pass.
-
-## Interface
+Every backend adapter (`@vidcall/backend-supabase`, `-convex`, `-firebase`,
+`-appwrite`, `-postgres`, `-sqlite`) implements the same interface, so the
+engine and your app are backend-agnostic: swap backends by swapping one
+constructor argument.
 
 ```ts
 interface SignalingTransport {
-  readonly name: string; // 'supabase' | 'convex' | ...
-  readonly ordering: 'guaranteed' | 'seq-required';
-  readonly maxPayloadBytes: number; // adapters chunk above this
-
-  join(room: string, opts?: { self?: PresenceUser }): Promise<JoinedRoom>;
-  leave(room: string): Promise<void>;
-  emit(room: string, msg: SignalingMessage): Promise<void>;
-  onMessage(room: string, cb: (msg: SignalingMessage) => void): Unsubscribe;
-  onPresence(room: string, cb: (users: PresenceUser[]) => void): Unsubscribe;
-  setPresence(room: string, data: Record<string, unknown>): Promise<void>;
+  join(roomId: string, self: ParticipantInfo): Promise<void>;
+  leave(): Promise<void>;
+  emit(envelope: Envelope): Promise<void>; // broadcast, or unicast when targetSenderId set
+  onMessage(cb: (envelope: Envelope) => void): () => void;
+  onPresence(cb: (presence: ParticipantPresence) => void): () => void;
+  setPresence(state: PresenceState, metadata?): Promise<void>;
   dispose(): Promise<void>;
 }
 ```
 
-- `SignalingMessage = { kind, payload, from, seq?, ts }` — `kind` is
-  app-defined (`'offer' | 'answer' | 'ice' | 'reaction' | 'chat' | ...`).
-- The wire envelope follows `protocol/schema.json` (`v/type/roomId/senderId/
-sessionId/ts/seq`) — see `toWire`/`fromWire`.
-- `ordering: 'seq-required'` backends stamp a per-sender `seq` and the
-  receiving side reassembles SDP-bearing kinds with `ReorderBuffer`.
-- Adapters chunk any payload above `maxPayloadBytes` transparently
-  (`ChunkAssembler` reassembles on the far side).
+- **One room per instance** — `join`/`leave` bind the transport to a single
+  room; create one transport per room.
+- **Envelopes, not app messages** — payloads are `Envelope`s from
+  `@vidcall/protocol` (`protocol/schema.json` mirror): `{ v, type, roomId,
+senderId, sessionId, ts, seq, targetSenderId?, payload }`. The engine owns
+  `seq` (monotonic per sender) and the ordering/glare state machine; backends
+  stay dumb and just move JSON.
+- **Backend-native presence** — `onPresence` delivers per-peer
+  `ParticipantPresence { participantId, state, metadata }`; backends map this
+  to their native presence (Supabase Realtime presence, Appwrite heartbeat
+  docs, BroadcastChannel frames, …).
 
-> Reconciliation note: `packages/core` may later define its own
-> `SignalingTransport` with the same shape. If `packages/core/src/transport.ts`
-> exists, re-export from there; the shape is intentionally identical.
+The same interface lives structurally in `@vidcall/core` (the engine's
+`transport.ts`); this package declares an identical twin so adapters depend on
+the light transport package instead of the engine. TypeScript structural
+typing makes implementations interchangeable.
 
-## Helpers (`@vidcall/transport/internal`)
+## What's in the package
 
-| Helper                                     | Purpose                                                                                                                           |
-| ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
-| `Chunker` / `ChunkAssembler` / `splitUtf8` | split payloads > backend frame cap into byte-aligned chunks; reassemble out-of-order on the far side (Postgres 7 KB NOTIFY cap)   |
-| `ReorderBuffer`                            | per-sender `seq` buffer; releases `offer`/`answer`/`sfu` only in order, passes `ice` straight through                             |
-| `Heartbeat` / `PresenceSweeper`            | periodic presence refresh + stale-peer sweep for backends with no native disconnect (Postgres, Appwrite)                          |
-| `IceCoalescer`                             | batch trickle-ICE candidates into a short window (default 100 ms) before sending — respects rate limits (Supabase Free 100 msg/s) |
-| `Sequencer`                                | per-sender monotonic seq stamping                                                                                                 |
-| `InMemoryBackend`                          | in-process test double / dev default (used by the shared suite)                                                                   |
+| Export                                                           | What it is                                                                                                                                                            |
+| ---------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SignalingTransport` / `ParticipantInfo` / `ParticipantPresence` | the contract types (`types.ts`)                                                                                                                                       |
+| `BaseSignalingTransport`                                         | shared adapter plumbing: envelope **chunking/assembly**, **seq reorder buffer** (SDP-bearing kinds), **heartbeat + presence sweeper**, **ICE coalescing** (`base.ts`) |
+| `InMemoryBackend`                                                | in-process test double — one room per instance, microtask delivery, optional echo; the reference implementation for the shared suite and a "no backend" dev default   |
+| `@vidcall/transport/internal`                                    | `Sequencer`, `randomSessionId`, chunker, reorder buffer, heartbeat, ICE coalescer (`internal/`)                                                                       |
+| `@vidcall/transport/shared-tests`                                | `runAdapterTestSuite({ name, createPeer, destroyPeer, supportsLargePayload })` — the shared adapter test matrix                                                       |
 
-## Shared adapter test suite
+## Writing an adapter
+
+1. Extend `BaseSignalingTransport` and implement the backend hooks —
+   `doJoin`, `doLeave`, `doSendFrame`, `doSetPresence`, `doDispose` — plus
+   `name`, `ordering`, `maxPayloadBytes`.
+2. Feed inbound backend events into `handleMessage` (the base re-assembles
+   chunks, reorders, and fans out to `onMessage` listeners).
+3. Export the metadata constants (`name`, `ordering`, `maxPayloadBytes`) as
+   the reference implementation does.
+
+The pattern is documented end-to-end in
+[`docs/research/backend-adapters.md`](../../docs/research/backend-adapters.md)
+(§10) and in each backend's source (`packages/backend-*/src/*.ts`).
+
+## Shared adapter tests
+
+Every backend must pass the shared matrix (join/leave · SDP offer/answer
+round-trip ordering · ICE trickle burst · presence join/leave · reaction
+fan-out · payload-over-limit chunking · two concurrent rooms):
 
 ```ts
 import { runAdapterTestSuite } from '@vidcall/transport/shared-tests';
 
 runAdapterTestSuite({
-  name: 'supabase',
-  createPeer: async (peerId) => new SupabaseBackend({ ... }),
+  name: 'mybackend',
+  createPeer: async (peerId) => new MyBackend({/* ... */}),
   destroyPeer: async (peer) => peer.dispose(),
-  supportsLargePayload: true,   // postgres chunker round-trip
+  supportsLargePayload: true,
 });
 ```
 
-Covers: join/leave · SDP offer/answer round-trip ordering · ICE trickle burst
-(30 candidates) · presence join/leave/update · reaction fan-out (3 peers) ·
-payload-over-limit chunking round-trip · 2 concurrent rooms · leave/re-join.
+Backends run the suite twice: against in-memory SDK mocks (unit, always in
+CI) and against real infrastructure (env-var-gated integration tests).
 
-## InMemoryBackend
+## Install
 
-```ts
-import { InMemoryBackend } from '@vidcall/transport';
-
-const backend = new InMemoryBackend();
-await backend.join('room-1', { self: { id: 'me', data: {}, lastSeen: Date.now() } });
-const unsub = backend.onMessage('room-1', (msg) => console.log(msg));
-await backend.emit('room-1', { kind: 'chat', payload: { text: 'hi' }, from: 'me', ts: Date.now() });
+```sh
+npm i @vidcall/transport            # once published
+# today (workspace): npm i file:../vidcall/packages/transport
 ```
-
-Same-process fan-out; presence with an optional stale sweeper
-(`presenceTimeoutMs`, default 30 s). Use it for unit tests, examples, and as
-the engine's no-backend fallback.
