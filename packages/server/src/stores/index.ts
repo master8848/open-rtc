@@ -4,7 +4,7 @@
  * functions or the HTTP/WS services.
  */
 
-export { InMemoryStore } from './InMemoryStore.js';
-export { SqliteStore } from './SqliteStore.js';
-export { PostgresStore } from './PostgresStore.js';
-export { MysqlStore } from './MysqlStore.js';
+export { InMemoryStore } from './InMemoryStore.ts';
+export { SqliteStore } from './SqliteStore.ts';
+export { PostgresStore } from './PostgresStore.ts';
+export { MysqlStore } from './MysqlStore.ts';

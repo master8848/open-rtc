@@ -30,9 +30,9 @@ import {
   joinRoom,
   leaveRoom,
   type ParticipantInput,
-} from './core.js';
-import type { Relay, Services } from './services.js';
-import type { Participant } from './types.js';
+} from './core.ts';
+import type { Relay, Services } from './services.ts';
+import type { Participant } from './types.ts';
 
 /** Server-only message sent to a client right after a successful join. */
 export interface JoinedMessage {
@@ -268,7 +268,8 @@ async function handleJoin(
     // Persist the join envelope into the signal log + compute recipients.
     const delivery = await handleSignal(services.store, envelope);
     hub.attach(roomId, socket, envelope.senderId, envelope.sessionId);
-    hub.broadcast(roomId, delivery.envelope);
+    // Peers learn about the newcomer; the joiner gets the `joined` ack below.
+    hub.broadcast(roomId, delivery.envelope, { exceptSenderId: envelope.senderId });
     const joined: JoinedMessage = { type: 'joined', roomId, room: result.room, participants: result.participants };
     sendJson(socket, joined);
   } catch (err) {

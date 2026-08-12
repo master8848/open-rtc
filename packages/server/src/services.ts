@@ -8,8 +8,8 @@
  */
 
 import type { Envelope } from '@vidcall/protocol';
-import type { RecordingStorage } from './recording.js';
-import type { Store } from './store.js';
+import type { RecordingStorage } from './recording.ts';
+import type { Store } from './store.ts';
 
 /** Broadcast a relayed envelope to connected WebSocket clients. */
 export interface Relay {

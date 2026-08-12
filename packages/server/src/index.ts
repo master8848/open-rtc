@@ -11,21 +11,21 @@
  */
 
 // Core domain
-export * from './types.js';
-export * from './errors.js';
-export * from './core.js';
-export * from './store.js';
+export * from './types.ts';
+export * from './errors.ts';
+export * from './core.ts';
+export * from './store.ts';
 
 // Service wiring + hosting
-export * from './services.js';
-export * from './http.js';
-export * from './ws.js';
-export * from './recording.js';
-export { createExpressRouter } from './express.js';
-export { createFastifyPlugin } from './fastify.js';
+export * from './services.ts';
+export * from './http.ts';
+export * from './ws.ts';
+export * from './recording.ts';
+export { createExpressRouter } from './express.ts';
+export { createFastifyPlugin } from './fastify.ts';
 
 // Store implementations
-export * from './stores/index.js';
+export * from './stores/index.ts';
 
 // Shared test suite (also importable from '@vidcall/server/shared-tests')
-export { runStoreTestSuite, type StoreHarness } from './shared-tests.js';
+export { runStoreTestSuite, type StoreHarness } from './shared-tests.ts';

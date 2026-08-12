@@ -17,8 +17,8 @@
 import { createReadStream, promises as fs } from 'node:fs';
 import path from 'node:path';
 import { Readable } from 'node:stream';
-import { signV4 } from './aws-sigv4.js';
-import { errors } from './errors.js';
+import { signV4 } from './aws-sigv4.ts';
+import { errors } from './errors.ts';
 
 /** Ordered byte storage for one recording session. */
 export interface RecordingStorage {

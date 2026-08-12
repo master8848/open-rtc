@@ -24,7 +24,7 @@
  */
 
 import type { Envelope } from '@vidcall/protocol';
-import type { Participant, RecordingSession, Room, StoredSignal } from './types.js';
+import type { Participant, RecordingSession, Room, StoredSignal } from './types.ts';
 
 /** A signal waiting to be persisted (seq is assigned by the Store). */
 export interface SignalInput {

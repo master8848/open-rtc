@@ -15,8 +15,8 @@
  */
 
 import { createEnvelope, isEnvelope, type Envelope } from '@vidcall/protocol';
-import { errors } from './errors.js';
-import type { Store } from './store.js';
+import { errors } from './errors.ts';
+import type { Store } from './store.ts';
 import type {
   JoinResult,
   LeaveResult,
@@ -24,7 +24,7 @@ import type {
   RecordingSession,
   Room,
   SignalDelivery,
-} from './types.js';
+} from './types.ts';
 
 /** Input for `joinRoom` — everything except server-assigned timestamps. */
 export interface ParticipantInput {
@@ -281,10 +281,7 @@ export async function handleSignal(store: Store, envelope: unknown): Promise<Sig
     if (!participant) {
       throw errors.participantNotFound(envelope.roomId, envelope.senderId);
     }
-    if (envelope.type !== 'leave' && room.state === 'closed') {
-      throw errors.roomClosed(envelope.roomId);
-    }
-    // Touch lastSeen so presence/roster stay fresh for heartbeats + signals.
+    // Closed rooms keep existing members signaling; only new joins are rejected.
     if (envelope.type !== 'leave') {
       await store.putParticipant({ ...participant, lastSeenAt: t });
     }

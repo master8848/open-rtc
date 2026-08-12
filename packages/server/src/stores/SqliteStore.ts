@@ -16,8 +16,8 @@
 
 import type Database from 'better-sqlite3';
 import type { Envelope } from '@vidcall/protocol';
-import type { Store } from '../store.js';
-import type { Participant, RecordingSession, Room, StoredSignal } from '../types.js';
+import type { Store } from '../store.ts';
+import type { Participant, RecordingSession, Room, StoredSignal } from '../types.ts';
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS vidcall_rooms (
@@ -192,5 +192,10 @@ export class SqliteStore implements Store {
       .prepare('SELECT recording_json FROM vidcall_recordings WHERE session_id = ?')
       .get(sessionId) as { recording_json: string } | undefined;
     return row ? (JSON.parse(row.recording_json) as RecordingSession) : null;
+  }
+
+  /** Close the underlying database handle. */
+  close(): void {
+    this.db.close();
   }
 }

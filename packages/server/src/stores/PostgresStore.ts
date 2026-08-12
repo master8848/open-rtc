@@ -20,8 +20,8 @@
 import pg from 'pg';
 import type { Pool, PoolClient } from 'pg';
 import type { Envelope } from '@vidcall/protocol';
-import type { Store } from '../store.js';
-import type { Participant, RecordingSession, Room, StoredSignal } from '../types.js';
+import type { Store } from '../store.ts';
+import type { Participant, RecordingSession, Room, StoredSignal } from '../types.ts';
 
 const { Pool: PgPool } = pg;
 
@@ -175,5 +175,12 @@ export class PostgresStore implements Store {
       [sessionId],
     );
     return rows[0] ? (rows[0].recording_json as RecordingSession) : null;
+  }
+
+  /** Close the underlying pool (call when shutting down). */
+  async close(): Promise<void> {
+    if ('end' in this.pool && typeof this.pool.end === 'function') {
+      await this.pool.end();
+    }
   }
 }

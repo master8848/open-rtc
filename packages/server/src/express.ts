@@ -20,8 +20,8 @@
  */
 
 import express from 'express';
-import { dispatch, type RouteContext } from './http.js';
-import type { Services } from './services.js';
+import { dispatch, type RouteContext } from './http.ts';
+import type { Services } from './services.ts';
 
 export function createExpressRouter(services: Services): express.Router {
   const router = express.Router();

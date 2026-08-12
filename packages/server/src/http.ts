@@ -29,9 +29,9 @@ import {
   leaveRoom,
   startRecording,
   stopRecording,
-} from './core.js';
-import { errors, isVidcallError } from './errors.js';
-import type { Services } from './services.js';
+} from './core.ts';
+import { errors, isVidcallError } from './errors.ts';
+import type { Services } from './services.ts';
 
 /** Everything a handler needs to answer one request, framework-agnostic. */
 export interface RouteContext {
@@ -233,7 +233,7 @@ export async function dispatch(services: Services, ctx: RouteContext): Promise<R
   try {
     const matched = matchRoute(ctx.method, ctx.path);
     if (!matched) return { status: 404, body: { error: { code: 'not_found', message: `No route for ${ctx.method} ${ctx.path}` } } };
-    return await matched.route.handler(services, ctx);
+    return await matched.route.handler(services, { ...ctx, params: matched.params });
   } catch (err) {
     if (isVidcallError(err)) return { status: err.status, body: err.toJSON() };
     if (err instanceof SyntaxError) return { status: 400, body: { error: { code: 'invalid_request', message: 'Malformed JSON body' } } };

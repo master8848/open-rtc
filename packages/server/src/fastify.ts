@@ -18,8 +18,8 @@
  */
 
 import type { FastifyInstance, FastifyPluginCallback, FastifyRequest } from 'fastify';
-import { dispatch, type RouteContext } from './http.js';
-import type { Services } from './services.js';
+import { dispatch, type RouteContext } from './http.ts';
+import type { Services } from './services.ts';
 
 export function createFastifyPlugin(services: Services): FastifyPluginCallback {
   return async (app: FastifyInstance) => {

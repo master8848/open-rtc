@@ -26,9 +26,9 @@ import {
   leaveRoom,
   startRecording,
   stopRecording,
-} from './core.js';
-import type { Store } from './store.js';
-import type { ParticipantInput } from './core.js';
+} from './core.ts';
+import type { Store } from './store.ts';
+import type { ParticipantInput } from './core.ts';
 
 export interface StoreHarness {
   /** Store name (describe title). */

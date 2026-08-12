@@ -14,34 +14,34 @@
 
 import mysql, { type Pool, type PoolOptions } from 'mysql2/promise';
 import type { Envelope } from '@vidcall/protocol';
-import type { Store } from '../store.js';
-import type { Participant, RecordingSession, Room, StoredSignal } from '../types.js';
+import type { Store } from '../store.ts';
+import type { Participant, RecordingSession, Room, StoredSignal } from '../types.ts';
 
-const SCHEMA = `
-CREATE TABLE IF NOT EXISTS vidcall_rooms (
-  room_id   VARCHAR(255) PRIMARY KEY,
-  room_json JSON NOT NULL
-);
-CREATE TABLE IF NOT EXISTS vidcall_participants (
-  room_id         VARCHAR(255) NOT NULL,
-  participant_id  VARCHAR(255) NOT NULL,
-  participant_json JSON NOT NULL,
-  PRIMARY KEY (room_id, participant_id)
-);
-CREATE TABLE IF NOT EXISTS vidcall_signals (
-  room_id       VARCHAR(255) NOT NULL,
-  seq           BIGINT NOT NULL AUTO_INCREMENT,
-  envelope_json JSON NOT NULL,
-  received_at   BIGINT NOT NULL,
-  PRIMARY KEY (room_id, seq)
-);
-CREATE TABLE IF NOT EXISTS vidcall_recordings (
-  session_id     VARCHAR(255) PRIMARY KEY,
-  room_id        VARCHAR(255) NOT NULL,
-  recording_json JSON NOT NULL,
-  INDEX idx_vidcall_recordings_room (room_id)
-);
-`;
+const SCHEMA_STATEMENTS = [
+  `CREATE TABLE IF NOT EXISTS vidcall_rooms (
+    room_id   VARCHAR(255) PRIMARY KEY,
+    room_json JSON NOT NULL
+  )`,
+  `CREATE TABLE IF NOT EXISTS vidcall_participants (
+    room_id         VARCHAR(255) NOT NULL,
+    participant_id  VARCHAR(255) NOT NULL,
+    participant_json JSON NOT NULL,
+    PRIMARY KEY (room_id, participant_id)
+  )`,
+  `CREATE TABLE IF NOT EXISTS vidcall_signals (
+    seq           BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    room_id       VARCHAR(255) NOT NULL,
+    envelope_json JSON NOT NULL,
+    received_at   BIGINT NOT NULL,
+    KEY idx_vidcall_signals_room (room_id)
+  )`,
+  `CREATE TABLE IF NOT EXISTS vidcall_recordings (
+    session_id     VARCHAR(255) PRIMARY KEY,
+    room_id        VARCHAR(255) NOT NULL,
+    recording_json JSON NOT NULL,
+    INDEX idx_vidcall_recordings_room (room_id)
+  )`,
+];
 
 export class MysqlStore implements Store {
   private readonly pool: Pool;
@@ -49,18 +49,20 @@ export class MysqlStore implements Store {
 
   constructor(poolOrOptions: Pool | PoolOptions | string) {
     if (typeof poolOrOptions === 'string') {
-      this.pool = mysql.createPool(parseConnectionUrl(poolOrOptions));
+      this.pool = mysql.createPool({ ...parseConnectionUrl(poolOrOptions), connectTimeout: 5000 });
     } else if (isPool(poolOrOptions)) {
       this.pool = poolOrOptions;
     } else {
-      this.pool = mysql.createPool(poolOrOptions);
+      this.pool = mysql.createPool({ ...poolOrOptions, connectTimeout: 5000 });
     }
   }
 
   /** Create tables if missing. Idempotent; call once at boot. */
   async bootstrap(): Promise<void> {
     if (this.bootstrapped) return;
-    await this.pool.query(SCHEMA);
+    for (const statement of SCHEMA_STATEMENTS) {
+      await this.pool.query(statement);
+    }
     this.bootstrapped = true;
   }
 
@@ -168,6 +170,11 @@ export class MysqlStore implements Store {
     );
     const row = firstRow(rows);
     return row ? (row.recording_json as RecordingSession) : null;
+  }
+
+  /** Close the underlying pool (call when shutting down). */
+  async close(): Promise<void> {
+    await this.pool.end();
   }
 }
 

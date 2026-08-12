@@ -7,8 +7,8 @@
  */
 
 import type { Envelope } from '@vidcall/protocol';
-import type { Store } from '../store.js';
-import type { Participant, RecordingSession, Room, StoredSignal } from '../types.js';
+import type { Store } from '../store.ts';
+import type { Participant, RecordingSession, Room, StoredSignal } from '../types.ts';
 
 export class InMemoryStore implements Store {
   private readonly rooms = new Map<string, Room>();
