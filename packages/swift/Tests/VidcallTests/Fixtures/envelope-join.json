@@ -1,0 +1,34 @@
+{
+  "v": 1,
+  "type": "join",
+  "roomId": "room-abc",
+  "senderId": "user-42",
+  "sessionId": "sess-001",
+  "ts": 1780000000000,
+  "seq": 1,
+  "payload": {
+    "displayName": "Alice",
+    "metadata": {
+      "avatar": "https://cdn.example.com/alice.png",
+      "muted": false,
+      "joinedFrom": "swift"
+    },
+    "deviceProfile": {
+      "hardwareConcurrency": 8,
+      "deviceMemory": 8.0,
+      "mobile": true,
+      "screenWidth": 1170,
+      "screenHeight": 2532,
+      "platform": "swift"
+    },
+    "capabilities": {
+      "simulcast": true,
+      "svc": false,
+      "codecs": [
+        "H264",
+        "VP8",
+        "VP9"
+      ]
+    }
+  }
+}

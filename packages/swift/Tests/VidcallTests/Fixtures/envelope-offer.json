@@ -1,0 +1,13 @@
+{
+  "v": 1,
+  "type": "offer",
+  "roomId": "room-abc",
+  "senderId": "user-7",
+  "sessionId": "sess-002",
+  "ts": 1780000001000,
+  "seq": 7,
+  "payload": {
+    "sdp": "v=0\r\no=- 461173133 2 IN IP4 127.0.0.1\r\ns=-\r\nt=0 0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111 63 103\r\nc=IN IP4 0.0.0.0\r\na=rtcp:9 IN IP4 0.0.0.0\r\na=ice-ufrag:7Qyq\r\na=ice-pwd:abcdefghijklmnopqrstuvwxyz\r\na=fingerprint:sha-256 AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99\r\na=setup:actpass\r\na=mid:0\r\na=sendrecv\r\na=rtpmap:111 opus/48000/2\r\na=rtcp-mux\r\n",
+    "label": "main"
+  }
+}

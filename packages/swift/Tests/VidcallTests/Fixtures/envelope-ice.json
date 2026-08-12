@@ -1,0 +1,14 @@
+{
+  "v": 1,
+  "type": "ice",
+  "roomId": "room-abc",
+  "senderId": "user-7",
+  "sessionId": "sess-002",
+  "ts": 1780000001500,
+  "seq": 8,
+  "payload": {
+    "candidate": "candidate:842163049 1 udp 1677729535 192.0.2.1 54321 typ srflx raddr 0.0.0.0 rport 0 generation 0 ufrag 7Qyq network-cost 999",
+    "sdpMid": "0",
+    "sdpMLineIndex": 0
+  }
+}
