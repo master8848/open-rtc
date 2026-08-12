@@ -14,7 +14,7 @@
     "clean": "tsc -b --clean",
     "test": "node --conditions=development --test \"packages/core/test/*.test.ts\" \"packages/quality/test/*.test.ts\" \"packages/test-utils/test/*.test.ts\" \"packages/server/test/*.test.ts\"",
     "typecheck": "tsc -p tsconfig.test.json",
-    "lint": "eslint protocol packages/core packages/quality packages/test-utils packages/server && prettier --check protocol packages/core packages/quality packages/test-utils packages/server package.json tsconfig.base.json tsconfig.json tsconfig.test.json eslint.config.mjs .prettierrc.json",
+    "lint": "eslint protocol packages/core packages/quality packages/test-utils packages/transport packages/server && prettier --check protocol packages/core packages/quality packages/test-utils packages/transport packages/server package.json tsconfig.base.json tsconfig.json tsconfig.test.json eslint.config.mjs .prettierrc.json",
     "format": "prettier --write protocol packages/core packages/quality packages/test-utils packages/server",
     "test:server": "node --conditions=development --test \"packages/server/test/*.test.ts\"",
     "test:server:pg": "VIDCALL_TEST_POSTGRES_URL=postgres://vidcall:vidcall@127.0.0.1:5433/vidcall_test node --conditions=development --test packages/server/test/PostgresStore.test.ts",

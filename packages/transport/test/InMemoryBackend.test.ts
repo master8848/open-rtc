@@ -84,7 +84,7 @@ describe('InMemoryBackend basics', () => {
 // matrix — it must pass every test it defines.
 runAdapterTestSuite({
   name: 'memory',
-  createPeer: async (peerId: string): Promise<SignalingTransport> => new InMemoryBackend(),
+  createPeer: async (_peerId: string): Promise<SignalingTransport> => new InMemoryBackend(),
   destroyPeer: async (p) => p.dispose(),
   roomPrefix: 'inmem',
 } satisfies AdapterHarness);
