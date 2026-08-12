@@ -11,9 +11,9 @@ test suite that every adapter must pass.
 
 ```ts
 interface SignalingTransport {
-  readonly name: string;                    // 'supabase' | 'convex' | ...
+  readonly name: string; // 'supabase' | 'convex' | ...
   readonly ordering: 'guaranteed' | 'seq-required';
-  readonly maxPayloadBytes: number;         // adapters chunk above this
+  readonly maxPayloadBytes: number; // adapters chunk above this
 
   join(room: string, opts?: { self?: PresenceUser }): Promise<JoinedRoom>;
   leave(room: string): Promise<void>;
@@ -28,7 +28,7 @@ interface SignalingTransport {
 - `SignalingMessage = { kind, payload, from, seq?, ts }` — `kind` is
   app-defined (`'offer' | 'answer' | 'ice' | 'reaction' | 'chat' | ...`).
 - The wire envelope follows `protocol/schema.json` (`v/type/roomId/senderId/
-  sessionId/ts/seq`) — see `toWire`/`fromWire`.
+sessionId/ts/seq`) — see `toWire`/`fromWire`.
 - `ordering: 'seq-required'` backends stamp a per-sender `seq` and the
   receiving side reassembles SDP-bearing kinds with `ReorderBuffer`.
 - Adapters chunk any payload above `maxPayloadBytes` transparently
@@ -40,14 +40,14 @@ interface SignalingTransport {
 
 ## Helpers (`@vidcall/transport/internal`)
 
-| Helper | Purpose |
-|---|---|
-| `Chunker` / `ChunkAssembler` / `splitUtf8` | split payloads > backend frame cap into byte-aligned chunks; reassemble out-of-order on the far side (Postgres 7 KB NOTIFY cap) |
-| `ReorderBuffer` | per-sender `seq` buffer; releases `offer`/`answer`/`sfu` only in order, passes `ice` straight through |
-| `Heartbeat` / `PresenceSweeper` | periodic presence refresh + stale-peer sweep for backends with no native disconnect (Postgres, Appwrite) |
-| `IceCoalescer` | batch trickle-ICE candidates into a short window (default 100 ms) before sending — respects rate limits (Supabase Free 100 msg/s) |
-| `Sequencer` | per-sender monotonic seq stamping |
-| `InMemoryBackend` | in-process test double / dev default (used by the shared suite) |
+| Helper                                     | Purpose                                                                                                                           |
+| ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
+| `Chunker` / `ChunkAssembler` / `splitUtf8` | split payloads > backend frame cap into byte-aligned chunks; reassemble out-of-order on the far side (Postgres 7 KB NOTIFY cap)   |
+| `ReorderBuffer`                            | per-sender `seq` buffer; releases `offer`/`answer`/`sfu` only in order, passes `ice` straight through                             |
+| `Heartbeat` / `PresenceSweeper`            | periodic presence refresh + stale-peer sweep for backends with no native disconnect (Postgres, Appwrite)                          |
+| `IceCoalescer`                             | batch trickle-ICE candidates into a short window (default 100 ms) before sending — respects rate limits (Supabase Free 100 msg/s) |
+| `Sequencer`                                | per-sender monotonic seq stamping                                                                                                 |
+| `InMemoryBackend`                          | in-process test double / dev default (used by the shared suite)                                                                   |
 
 ## Shared adapter test suite
 
