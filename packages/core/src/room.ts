@@ -46,6 +46,8 @@ import type {
 import type { RecordingFetch } from './recording/recording-uploader.ts';
 import { FetchRecordingUploader } from './recording/recording-uploader.ts';
 import { RoomRecordingFacade } from './recording/room-recording-facade.ts';
+import { RoomDevicesFacade } from './devices.ts';
+import type { MediaDevicesLike } from './devices.ts';
 
 // ------------------------------------------------------------------ events
 
@@ -115,6 +117,8 @@ export type RoomEventMap = {
   'recording:stopped': [RecordingStoppedEvent];
   'recording:error': [RecordingErrorEvent];
   'recording:blob-chunk': [RecordingChunk];
+  /** The platform reported a change in connected media devices (see `room.devices`). */
+  'devices:changed': [];
 };
 
 // ------------------------------------------------------------------ config
@@ -131,6 +135,14 @@ export interface TrackSubscription {
   /** Enable/disable decoding of the subscribed tracks (mesh: track.enabled). */
   setEnabled(enabled: boolean): void;
   close(): void;
+}
+
+export interface RoomDevicesConfig {
+  /**
+   * `navigator.mediaDevices` provider for the devices facade (default:
+   * platform). Tests inject fakes; `null` forces the "unavailable" state.
+   */
+  mediaDevices?: MediaDevicesLike | null;
 }
 
 export interface RoomConfig {
@@ -171,6 +183,11 @@ export interface RoomConfig {
    * `MediaRecorder`). Tests inject fakes; `null` forces the unavailable state.
    */
   recordingMediaRecorderCtor?: MediaRecorderConstructor | null;
+  /**
+   * Devices facade configuration (`room.devices`): enumerate/switch/restart
+   * local media devices, with `devices:changed` events.
+   */
+  devices?: RoomDevicesConfig;
   debug?: (message: string, data?: unknown) => void;
 }
 
@@ -205,6 +222,22 @@ export class Room extends TypedEmitter<RoomEventMap> {
    * `leave()` stops any in-progress recording (uploading the finalize report).
    */
   readonly recording: RoomRecordingFacade;
+  /**
+   * Devices facade (local media-device management).
+   *
+   * ```ts
+   * const cameras = await room.devices.listDevices('videoinput');
+   * await room.devices.switchCamera(); // user <-> environment
+   * await room.devices.restartTrack('audio', { deviceId: 'mic-2' });
+   * room.on('devices:changed', () => void room.devices.listDevices());
+   * ```
+   *
+   * Platform-guarded: in environments without `navigator.mediaDevices`
+   * `listDevices` resolves `[]`, `switchCamera`/`setFacingMode` resolve
+   * `false`, and `restartTrack` rejects with `DevicesUnavailableError`.
+   * `leave()` releases the `devicechange` subscription.
+   */
+  readonly devices: RoomDevicesFacade;
   private readonly config: RoomConfig;
   private readonly transport: SignalingTransport;
   private readonly peers = new Map<string, PeerEntry>();
@@ -245,6 +278,28 @@ export class Room extends TypedEmitter<RoomEventMap> {
     this.recording.on('recording:stopped', (event) => this.emit('recording:stopped', event));
     this.recording.on('recording:error', (event) => this.emit('recording:error', event));
     this.recording.on('recording:blob-chunk', (chunk) => this.emit('recording:blob-chunk', chunk));
+    this.devices = new RoomDevicesFacade({
+      mediaDevices: config.devices?.mediaDevices,
+      getSenders: () => {
+        const senders: RTCRtpSender[] = [];
+        for (const entry of this.peers.values()) senders.push(...entry.pc.getSenders());
+        return senders;
+      },
+      getLocalVideoTracks: () =>
+        this.local.publications
+          .filter((p) => p.kind === 'video' && p.track !== null)
+          .map((p) => p.track as MediaStreamTrack),
+      onTrackReplaced: (kind, oldTrack, newTrack) => {
+        for (const publication of this.local.publications) {
+          if (publication.kind === kind && publication.track === oldTrack) {
+            publication.track = newTrack;
+          }
+        }
+      },
+      debug: this.debug,
+    });
+    // Re-emit device-change events on the room so apps can use room.on(...).
+    this.devices.on('devices:changed', () => this.emit('devices:changed'));
   }
 
   // -------------------------------------------------------------- join/leave
@@ -286,6 +341,8 @@ export class Room extends TypedEmitter<RoomEventMap> {
     } catch (err) {
       this.debug('leave:recording-stop-failed', err);
     }
+    // Release the devices facade's devicechange subscription.
+    this.devices.dispose();
     try {
       await this.transport.setPresence('offline', undefined).catch(() => {});
       await this.emitEnvelope('leave', { reason });
