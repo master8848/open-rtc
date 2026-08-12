@@ -12,4 +12,5 @@ export 'src/client.dart';
 export 'src/protocol/envelope.dart';
 export 'src/protocol/message_type.dart';
 export 'src/protocol/payloads.dart';
+export 'src/rtc_mesh.dart';
 export 'src/webrtc/rtc_session.dart';
