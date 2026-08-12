@@ -5,15 +5,18 @@
  * this file is the hand-written TS mirror (quicktype codegen is a later step).
  * It is shared by every binding (JS/Kotlin/Swift/Dart) via the schema.
  *
- * Wire rules (see docs/research/mobile-bindings.md §2):
+ * Wire rules (schema.json — single source of truth):
  *  - One JSON envelope per message, carried over any backend pub/sub.
  *  - `v` bumps only on breaking changes; additive changes are non-breaking.
  *  - SDP/ICE payloads are opaque; the engine owns ordering/idempotency/glare.
  *  - Unknown fields are ignored; unknown `type` values are ignored + logged.
- *
- * Additive extension (not in schema.json, permitted because the schema keeps
- * `additionalProperties` open): an optional `targetSenderId` field lets a mesh
- * engine address SDP/ICE to a specific peer over a broadcast-only backend.
+ *  - `seq` is monotonic per sender per `sessionId`, starting at 0; the engine
+ *    dedupes per `sessionId` and reorders by `seq`.
+ *  - Unicast: optional `targetSenderId` addresses one peer; absent = room
+ *    broadcast (relayed to everyone except the sender), present = relayed only
+ *    to that participant. Receivers MUST filter on it.
+ *  - Glare (perfect negotiation): `polite = selfId < remoteId` (lexicographic
+ *    comparison of `senderId`) — every binding derives the same polarity.
  */
 
 /** Wire protocol version (schema.json `properties.v.const`). */
@@ -198,9 +201,10 @@ export interface EnvelopeBase {
   /** Monotonic per sender; the engine dedupes/reorders. */
   seq: number;
   /**
-   * Additive extension (schema keeps additionalProperties open): optional
-   * target for peer-addressed messages. Absent = room broadcast. Backends
-   * may ignore it; receivers filter on it.
+   * schema.json `targetSenderId`: optional target for peer-addressed signal
+   * payloads (join/leave/offer/answer/ice/presence/reaction/chat). Absent =
+   * room broadcast (sender-excluded relay); present = unicast to that peer.
+   * Backends may ignore it; receivers MUST filter on it.
    */
   targetSenderId?: string;
 }

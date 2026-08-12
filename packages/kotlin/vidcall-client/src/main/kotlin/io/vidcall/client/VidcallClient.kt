@@ -37,8 +37,10 @@ import kotlinx.serialization.json.JsonObject
  * "engine owns ordering/idempotency" note.
  *
  * Threading: callbacks arrive on the transport thread; sending is thread-safe.
- * Envelope `targetSessionId` parameters are transport-level routing hints for
- * unicast offer/answer/ice (see [SignalingTransport]).
+ * Unicast offer/answer/ice set the schema `targetSenderId` envelope field
+ * (absent = room broadcast, sender-excluded relay); receivers filter on it.
+ * The same value is also passed to [SignalingTransport.send] as an optional
+ * transport-level routing hint (see [SignalingTransport]).
  */
 class VidcallClient(
     val config: VidcallConfig,
@@ -130,24 +132,24 @@ class VidcallClient(
         send(MessageType.ERROR, ErrorPayload(code, message).encodeAsPayload())
     }
 
-    /** Outbound WebRTC offer (unicast to [targetSessionId] when set). */
-    fun sendOffer(sdp: String, label: String? = null, targetSessionId: String? = null) {
-        send(MessageType.OFFER, OfferPayload(sdp, label).encodeAsPayload(), targetSessionId)
+    /** Outbound WebRTC offer (unicast to [targetSenderId] when set). */
+    fun sendOffer(sdp: String, label: String? = null, targetSenderId: String? = null) {
+        send(MessageType.OFFER, OfferPayload(sdp, label).encodeAsPayload(), targetSenderId)
     }
 
-    /** Outbound WebRTC answer (unicast to [targetSessionId] when set). */
-    fun sendAnswer(sdp: String, label: String? = null, targetSessionId: String? = null) {
-        send(MessageType.ANSWER, AnswerPayload(sdp, label).encodeAsPayload(), targetSessionId)
+    /** Outbound WebRTC answer (unicast to [targetSenderId] when set). */
+    fun sendAnswer(sdp: String, label: String? = null, targetSenderId: String? = null) {
+        send(MessageType.ANSWER, AnswerPayload(sdp, label).encodeAsPayload(), targetSenderId)
     }
 
-    /** Outbound trickled ICE candidate (unicast to [targetSessionId] when set). */
-    fun sendIce(candidate: String, sdpMid: String? = null, sdpMLineIndex: Int? = null, targetSessionId: String? = null) {
-        send(MessageType.ICE, IcePayload(candidate, sdpMid, sdpMLineIndex).encodeAsPayload(), targetSessionId)
+    /** Outbound trickled ICE candidate (unicast to [targetSenderId] when set). */
+    fun sendIce(candidate: String, sdpMid: String? = null, sdpMLineIndex: Int? = null, targetSenderId: String? = null) {
+        send(MessageType.ICE, IcePayload(candidate, sdpMid, sdpMLineIndex).encodeAsPayload(), targetSenderId)
     }
 
-    /** Low-level escape hatch: send any envelope (broadcast unless [targetSessionId] set). */
-    fun sendRaw(envelope: Envelope, targetSessionId: String? = null) {
-        transport.send(envelope, targetSessionId)
+    /** Low-level escape hatch: send any envelope (broadcast unless [targetSenderId] set). */
+    fun sendRaw(envelope: Envelope, targetSenderId: String? = null) {
+        transport.send(envelope.copy(targetSenderId = targetSenderId), targetSenderId)
     }
 
     fun ping() {
@@ -159,6 +161,8 @@ class VidcallClient(
     // ------------------------------------------------------------------
 
     private fun dispatch(envelope: Envelope) {
+        val target = envelope.targetSenderId
+        if (target != null && target != config.clientId) return // addressed to another peer
         if (envelope.v != Protocol.VERSION) {
             listener.onError(
                 ErrorPayload("protocol-version", "unsupported protocol version ${envelope.v}"),
@@ -203,11 +207,11 @@ class VidcallClient(
         }
     }
 
-    private fun send(type: MessageType, payload: JsonObject, targetSessionId: String? = null) {
-        transport.send(buildEnvelope(type, payload), targetSessionId)
+    private fun send(type: MessageType, payload: JsonObject, targetSenderId: String? = null) {
+        transport.send(buildEnvelope(type, payload, targetSenderId), targetSenderId)
     }
 
-    private fun buildEnvelope(type: MessageType, payload: JsonObject): Envelope =
+    private fun buildEnvelope(type: MessageType, payload: JsonObject, targetSenderId: String? = null): Envelope =
         Envelope(
             type = type,
             roomId = config.roomId,
@@ -215,6 +219,7 @@ class VidcallClient(
             sessionId = config.sessionId,
             ts = now(),
             seq = ++seq,
+            targetSenderId = targetSenderId,
             payload = payload,
         )
 

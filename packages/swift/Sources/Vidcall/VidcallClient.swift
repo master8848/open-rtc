@@ -241,8 +241,13 @@ public final class VidcallClient: NSObject, URLSessionWebSocketDelegate, @unchec
     }
 
     /// Builds an envelope with the client's room/sender/session and the next
-    /// monotonic `seq`/`ts`.
-    public func makeEnvelope(type: MessageType, payload: Payload = .none) -> Envelope {
+    /// monotonic `seq`/`ts`. Pass `targetSenderId` to unicast a signal payload
+    /// to one peer (absent = room broadcast, sender-excluded relay).
+    public func makeEnvelope(
+        type: MessageType,
+        payload: Payload = .none,
+        targetSenderId: String? = nil
+    ) -> Envelope {
         Envelope(
             v: configuration.protocolVersion,
             type: type,
@@ -251,6 +256,7 @@ public final class VidcallClient: NSObject, URLSessionWebSocketDelegate, @unchec
             sessionId: resolvedSessionId,
             ts: Int64(Date().timeIntervalSince1970 * 1000),
             seq: nextSeq(),
+            targetSenderId: targetSenderId,
             payload: payload
         )
     }
@@ -289,19 +295,22 @@ public final class VidcallClient: NSObject, URLSessionWebSocketDelegate, @unchec
         try send(makeEnvelope(type: .sfu, payload: .sfu(SfuPayload(action: action, trackId: trackId, kind: kind, senderId: senderId, layer: layer))))
     }
 
-    /// Sends an SDP offer (WebRTC layer). SDP is relayed verbatim.
-    public func sendOffer(_ payload: OfferPayload) throws {
-        try send(makeEnvelope(type: .offer, payload: .offer(payload)))
+    /// Sends an SDP offer (WebRTC layer). SDP is relayed verbatim. Unicast to
+    /// `targetSenderId` when set (schema envelope field; absent = broadcast).
+    public func sendOffer(_ payload: OfferPayload, targetSenderId: String? = nil) throws {
+        try send(makeEnvelope(type: .offer, payload: .offer(payload), targetSenderId: targetSenderId))
     }
 
-    /// Sends an SDP answer (WebRTC layer). SDP is relayed verbatim.
-    public func sendAnswer(_ payload: OfferPayload) throws {
-        try send(makeEnvelope(type: .answer, payload: .answer(payload)))
+    /// Sends an SDP answer (WebRTC layer). SDP is relayed verbatim. Unicast to
+    /// `targetSenderId` when set (schema envelope field; absent = broadcast).
+    public func sendAnswer(_ payload: OfferPayload, targetSenderId: String? = nil) throws {
+        try send(makeEnvelope(type: .answer, payload: .answer(payload), targetSenderId: targetSenderId))
     }
 
-    /// Sends a trickle ICE candidate (WebRTC layer).
-    public func sendIce(_ payload: IcePayload) throws {
-        try send(makeEnvelope(type: .ice, payload: .ice(payload)))
+    /// Sends a trickle ICE candidate (WebRTC layer). Unicast to `targetSenderId`
+    /// when set (schema envelope field; absent = broadcast).
+    public func sendIce(_ payload: IcePayload, targetSenderId: String? = nil) throws {
+        try send(makeEnvelope(type: .ice, payload: .ice(payload), targetSenderId: targetSenderId))
     }
 
     public func ping() throws {

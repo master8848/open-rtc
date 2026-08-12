@@ -3,8 +3,12 @@
 //  Vidcall
 //
 //  The wire envelope defined by protocol/schema.json:
-//    { "v", "type", "roomId", "senderId", "sessionId", "ts", "seq", "payload" }
+//    { "v", "type", "roomId", "senderId", "sessionId", "ts", "seq",
+//      "targetSenderId", "payload" }
 //  Required fields: v, type, roomId, senderId, sessionId, ts, seq.
+//  `targetSenderId` (optional) addresses one peer: absent = room broadcast
+//  (sender-excluded relay), present = relayed only to that participant
+//  (receivers MUST filter on it). Glare polarity: polite = selfId < remoteId.
 //  Unknown `type` values are preserved (MessageType.unknown) instead of
 //  failing decode — schema.json requires clients to "tolerate unknown type
 //  values (ignore + log)".
@@ -196,8 +200,12 @@ public struct Envelope: Equatable, Sendable {
     public var sessionId: String
     /// Epoch milliseconds.
     public var ts: Int64
-    /// Monotonic per sender; the engine dedupes/reorders.
+    /// Monotonic per sender per session, starting at 0; the engine dedupes/reorders.
     public var seq: UInt64
+    /// Optional unicast target (a peer `senderId`) for signal payloads. Absent =
+    /// room broadcast (sender-excluded relay); present = relayed only to that
+    /// participant. Receivers MUST filter on it.
+    public var targetSenderId: String?
     public var payload: Payload
 
     public init(
@@ -208,6 +216,7 @@ public struct Envelope: Equatable, Sendable {
         sessionId: String,
         ts: Int64,
         seq: UInt64,
+        targetSenderId: String? = nil,
         payload: Payload = .none
     ) {
         self.v = v
@@ -217,13 +226,14 @@ public struct Envelope: Equatable, Sendable {
         self.sessionId = sessionId
         self.ts = ts
         self.seq = seq
+        self.targetSenderId = targetSenderId
         self.payload = payload
     }
 }
 
 extension Envelope: Codable {
     private enum CodingKeys: String, CodingKey {
-        case v, type, roomId, senderId, sessionId, ts, seq, payload
+        case v, type, roomId, senderId, sessionId, ts, seq, targetSenderId, payload
     }
 
     public init(from decoder: Decoder) throws {
@@ -235,6 +245,7 @@ extension Envelope: Codable {
         self.sessionId = try container.decode(String.self, forKey: .sessionId)
         self.ts = try container.decode(Int64.self, forKey: .ts)
         self.seq = try container.decode(UInt64.self, forKey: .seq)
+        self.targetSenderId = try container.decodeIfPresent(String.self, forKey: .targetSenderId)
 
         if container.contains(.payload) {
             let raw = try container.decodeIfPresent(JSONValue.self, forKey: .payload)
@@ -253,6 +264,9 @@ extension Envelope: Codable {
         try container.encode(sessionId, forKey: .sessionId)
         try container.encode(ts, forKey: .ts)
         try container.encode(seq, forKey: .seq)
+        if let targetSenderId {
+            try container.encode(targetSenderId, forKey: .targetSenderId)
+        }
         switch payload {
         case .none:
             break // ping/pong carry no `payload` key on the wire

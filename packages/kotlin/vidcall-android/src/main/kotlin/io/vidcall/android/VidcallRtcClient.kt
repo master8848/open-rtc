@@ -118,14 +118,16 @@ class VidcallRtcClient(
     }
 
     private val signalingAdapter = object : PeerSignaling {
+        // Unicast per-peer signaling carries the schema `targetSenderId` envelope
+        // field (absent = room broadcast, sender-excluded relay).
         override fun sendOffer(peerId: String, payload: io.vidcall.protocol.OfferPayload) =
-            signaling.sendOffer(payload.sdp, payload.label, targetSessionId = peerId)
+            signaling.sendOffer(payload.sdp, payload.label, targetSenderId = peerId)
 
         override fun sendAnswer(peerId: String, payload: io.vidcall.protocol.AnswerPayload) =
-            signaling.sendAnswer(payload.sdp, payload.label, targetSessionId = peerId)
+            signaling.sendAnswer(payload.sdp, payload.label, targetSenderId = peerId)
 
         override fun sendIce(peerId: String, payload: io.vidcall.protocol.IcePayload) =
-            signaling.sendIce(payload.candidate, payload.sdpMid, payload.sdpMLineIndex, targetSessionId = peerId)
+            signaling.sendIce(payload.candidate, payload.sdpMid, payload.sdpMLineIndex, targetSenderId = peerId)
     }
 
     private val peerEvents = object : PeerEvents {

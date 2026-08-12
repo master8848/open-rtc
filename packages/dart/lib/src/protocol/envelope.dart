@@ -27,6 +27,7 @@ class Envelope {
     required this.sessionId,
     required this.ts,
     required this.seq,
+    this.targetSenderId,
     this.payload,
   }) : rawType = rawType ?? type?.wire ?? '';
 
@@ -54,8 +55,14 @@ class Envelope {
   /// Epoch milliseconds.
   final int ts;
 
-  /// Monotonic per sender; the engine dedupes/reorders on it.
+  /// Monotonic per sender per session, starting at 0; the engine
+  /// dedupes/reorders on it.
   final int seq;
+
+  /// Optional unicast target (a peer `senderId`) for signal payloads. Absent
+  /// = room broadcast (sender-excluded relay); present = relayed only to that
+  /// participant. Receivers MUST filter on it.
+  final String? targetSenderId;
 
   /// Raw payload object, or `null` for payload-less messages (e.g. `ping`).
   final Map<String, dynamic>? payload;
@@ -128,6 +135,7 @@ class Envelope {
       sessionId: _requireString(json, 'sessionId'),
       ts: _requireInt(json, 'ts'),
       seq: _requireInt(json, 'seq'),
+      targetSenderId: json['targetSenderId'] as String?,
       payload: payloadValue is Map<String, dynamic>
           ? payloadValue
           : payloadValue == null
@@ -149,6 +157,7 @@ class Envelope {
       'sessionId': sessionId,
       'ts': ts,
       'seq': seq,
+      if (targetSenderId != null) 'targetSenderId': targetSenderId,
       if (payload != null) 'payload': payload,
     };
   }

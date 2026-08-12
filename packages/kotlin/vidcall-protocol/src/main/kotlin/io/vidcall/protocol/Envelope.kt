@@ -1,5 +1,6 @@
 package io.vidcall.protocol
 
+import kotlinx.serialization.EncodeDefault
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
 
@@ -12,8 +13,11 @@ import kotlinx.serialization.json.JsonObject
  * engine owns ordering / idempotency / glare handling.
  *
  * Required wire fields: `v`, `type`, `roomId`, `senderId`, `sessionId`, `ts`, `seq`.
- * `payload` is a JSON object (schema `type: object`); absent payloads are encoded
- * as `{}` (see [Protocol.json]).
+ * `payload` is a JSON object (schema `type: object`); when absent (e.g. `ping` /
+ * `pong`) the `payload` key is omitted on the wire (see [Protocol.json]).
+ * `targetSenderId` (optional) addresses one peer; absent = room broadcast with a
+ * sender-excluded relay, present = relayed only to that participant (receivers
+ * MUST filter on it). Glare polarity: `polite = selfId < remoteId` (lexicographic).
  */
 @Serializable
 data class Envelope(
@@ -28,8 +32,15 @@ data class Envelope(
     val sessionId: String,
     /** Epoch milliseconds (schema: integer). */
     val ts: Long,
-    /** Monotonic per sender; the engine dedupes/reorders by it (schema: >= 0). */
+    /** Monotonic per sender per session, starting at 0 (schema: >= 0). */
     val seq: Long,
-    /** Type-specific payload as a JSON object. */
+    /**
+     * Schema `targetSenderId`: optional unicast target (a peer `senderId`) for
+     * signal payloads. Absent = room broadcast (sender-excluded relay); present =
+     * relayed only to the addressed participant. Receivers MUST filter on it.
+     */
+    val targetSenderId: String? = null,
+    /** Type-specific payload as a JSON object; omitted when empty (ping/pong). */
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
     val payload: JsonObject = JsonObject(emptyMap()),
 )

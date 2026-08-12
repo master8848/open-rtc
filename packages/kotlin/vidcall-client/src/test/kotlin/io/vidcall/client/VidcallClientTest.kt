@@ -117,19 +117,41 @@ class VidcallClientTest {
     }
 
     @Test
-    fun `offer answer and ice carry the targetSessionId routing hint`() {
+    fun `offer answer and ice carry targetSenderId in the envelope`() {
         val t = FakeTransport()
         val c = client(transport = t)
-        c.sendOffer("v=0 sdp offer", label = "main", targetSessionId = "sess-bob")
-        c.sendAnswer("v=0 sdp answer", targetSessionId = "sess-bob")
-        c.sendIce("candidate:1 1 udp 1 127.0.0.1 9 typ host", sdpMid = "0", sdpMLineIndex = 0, targetSessionId = "sess-bob")
+        c.sendOffer("v=0 sdp offer", label = "main", targetSenderId = "user-bob")
+        c.sendAnswer("v=0 sdp answer", targetSenderId = "user-bob")
+        c.sendIce("candidate:1 1 udp 1 127.0.0.1 9 typ host", sdpMid = "0", sdpMLineIndex = 0, targetSenderId = "user-bob")
 
         val (offer, target1) = t.sent[0]
         assertEquals(MessageType.OFFER, offer.type)
-        assertEquals("sess-bob", target1)
+        assertEquals("user-bob", offer.targetSenderId)
+        assertEquals("user-bob", target1) // same value forwarded as transport hint
         assertEquals("main", offer.payload.decodeAsPayload<OfferPayload>().label)
-        assertEquals("sess-bob", t.sent[1].second)
-        assertEquals("sess-bob", t.sent[2].second)
+        assertEquals("user-bob", t.sent[1].first.targetSenderId)
+        assertEquals("user-bob", t.sent[2].first.targetSenderId)
+        // broadcast sends carry no targetSenderId on the wire
+        c.sendOffer("v=0 sdp offer")
+        assertEquals(null, t.sent[3].first.targetSenderId)
+        assertEquals(null, t.sent[3].second)
+    }
+
+    @Test
+    fun `incoming envelope addressed to another peer is ignored`() {
+        var count = 0
+        val t = FakeTransport()
+        val c = client(listener = object : VidcallEventListener {
+            override fun onChat(senderId: String, payload: ChatPayload, envelope: Envelope) {
+                count++
+            }
+        }, transport = t)
+        c.connect()
+        // unicast for someone else (config.clientId = "user-ada")
+        t.receive(chatEnvelope("user-bob", "not for ada", seq = 5L).copy(targetSenderId = "user-cara"))
+        // unicast for us must be delivered
+        t.receive(chatEnvelope("user-bob", "for ada", seq = 6L).copy(targetSenderId = "user-ada"))
+        assertEquals(1, count)
     }
 
     // ------------------------------------------------------------------ incoming dispatch
