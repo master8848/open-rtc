@@ -39,7 +39,9 @@ interface PeerEvents {
  * [PeerSignaling]; remote offers/answers/candidates arrive via the `onRemote*`
  * methods. Implements the canonical perfect-negotiation pattern:
  *
- * - the designated initiator (see [shouldInitiate]) creates the first offer;
+ * - polarity per protocol/schema.json: `polite = selfId < remoteId`
+ *   (lexicographic, see [isPolite]); the impolite side (larger senderId)
+ *   creates the first offer;
  * - on glare (both sides offered), the polite side rolls back its local offer
  *   and accepts the remote one; the impolite side ignores the remote offer;
  * - ICE candidates received before the remote description are queued and

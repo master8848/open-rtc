@@ -39,9 +39,9 @@ class SdpMappingTest {
     }
 
     @Test
-    fun `smaller senderId initiates the mesh offer`() {
-        assertTrue(shouldInitiate("user-ada", "user-bob"))
-        assertFalse(shouldInitiate("user-bob", "user-ada"))
-        assertFalse(shouldInitiate("user-ada", "user-ada"))
+    fun `glare polarity follows the schema rule polite = selfId less than remoteId`() {
+        assertTrue(isPolite("user-ada", "user-bob"))
+        assertFalse(isPolite("user-bob", "user-ada"))
+        assertFalse(isPolite("user-ada", "user-ada"))
     }
 }

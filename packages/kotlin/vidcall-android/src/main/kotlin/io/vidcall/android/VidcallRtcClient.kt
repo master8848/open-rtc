@@ -45,8 +45,8 @@ interface VidcallRtcListener {
  * Wiring:
  * - the client joins the room and broadcasts `join`;
  * - every incoming `join` adds that peer to the mesh (one PeerConnection per
- *   remote client), with a deterministic initiator (smaller `senderId` offers,
- *   see [shouldInitiate]) so exactly one side creates the initial offer;
+ *   remote client), with the deterministic schema glare rule `polite =
+ *   selfId < remoteId` (see [isPolite]) so exactly one side is polite;
  * - offer/answer/ICE envelopes are exchanged through the signaling transport
  *   and applied to the peer connections ([PeerConnectionManager]).
  *
@@ -230,7 +230,9 @@ class VidcallRtcClient(
     private fun ensurePeer(peerId: String) {
         if (manager.hasPeer(peerId)) return
         val media = localMedia ?: return
-        val polite = !shouldInitiate(signaling.config.clientId, peerId)
+        // Schema glare rule: polite = selfId < remoteId (lexicographic).
+        // The impolite side (larger senderId) creates the first offer.
+        val polite = isPolite(signaling.config.clientId, peerId)
         if (manager.addPeer(peerId, media, polite)) {
             if (!polite) manager.negotiate(peerId)
         }

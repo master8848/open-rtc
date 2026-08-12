@@ -12,6 +12,15 @@ import 'dart:convert';
 import 'message_type.dart';
 import 'payloads.dart';
 
+/// Perfect-negotiation glare polarity, per `protocol/schema.json`:
+/// `polite = selfId < remoteId` (lexicographic comparison of `senderId`).
+/// Every binding MUST derive the same polarity (TS core, Kotlin
+/// `io.vidcall.android.isPolite`, Swift `PerfectNegotiation.isPolite`). The
+/// polite peer rolls back its in-flight offer and accepts the remote offer;
+/// the impolite peer ignores a colliding remote offer.
+bool isPolitePeer(String selfId, String remoteId) =>
+    selfId.compareTo(remoteId) < 0;
+
 /// A single signaling message: the shared envelope + optional payload.
 ///
 /// The payload is kept as the raw JSON map (so unknown/forward-compatible

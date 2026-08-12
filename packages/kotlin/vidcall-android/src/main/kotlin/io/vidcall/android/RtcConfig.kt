@@ -26,7 +26,8 @@ data class RtcConfig(
     val iceServers: List<IceServerConfig> = emptyList(),
     /**
      * Default perfect-negotiation polarity for peers whose polarity is not
-     * derivable from the deterministic rule (smaller `senderId` initiates).
+     * derivable from the deterministic schema rule (`polite = selfId <
+     * remoteId`, lexicographic — see [io.vidcall.android.isPolite]).
      * `true` = polite (answers offers, never fights for the offer).
      */
     val polite: Boolean = true,

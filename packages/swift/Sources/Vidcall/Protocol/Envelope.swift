@@ -98,6 +98,19 @@ public enum MessageType: LenientStringEnum {
     }
 }
 
+/// Perfect-negotiation glare polarity, per protocol/schema.json:
+/// `polite = selfId < remoteId` (lexicographic comparison of `senderId`).
+/// Every binding MUST derive the same polarity (TS core, Kotlin
+/// `io.vidcall.android.isPolite`, Dart `isPolitePeer`). The polite peer rolls
+/// back its in-flight offer and accepts the remote offer; the impolite peer
+/// ignores a colliding remote offer.
+public enum PerfectNegotiation {
+    /// True when `selfId` is the polite side of the pair.
+    public static func isPolite(selfId: String, remoteId: String) -> Bool {
+        selfId < remoteId
+    }
+}
+
 /// Typed payload carried by an `Envelope`. The associated value mirrors the
 /// payload definition for the envelope's `type` in protocol/schema.json.
 public enum Payload: Equatable, Sendable {

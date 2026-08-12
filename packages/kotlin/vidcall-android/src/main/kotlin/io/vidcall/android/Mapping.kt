@@ -25,10 +25,15 @@ fun IceCandidate.toIcePayload(): IcePayload =
     IcePayload(candidate = sdp, sdpMid = sdpMid, sdpMLineIndex = sdpMLineIndex)
 
 /**
- * Deterministic glare policy for the mesh: the client with the lexicographically
- * smaller `senderId` initiates the offer (is "impolite"); the other side is
- * "polite" and only answers. Both clients derive the same polarity from the two
- * known senderIds, so exactly one side ever creates the initial offer.
+ * Deterministic glare polarity for the mesh, per protocol/schema.json:
+ * `polite = selfId < remoteId` (lexicographic string comparison of
+ * `senderId`). Both clients derive the same polarity from the two known
+ * senderIds. The polite peer rolls back its in-flight offer and accepts the
+ * remote offer; the impolite peer ignores a colliding remote offer. The
+ * impolite side (larger `senderId`) is the designated first offerer.
+ *
+ * This MUST match every other binding (TS core: `polite = selfId < remoteId`;
+ * Swift: `PerfectNegotiation.isPolite`; Dart: `isPolitePeer`).
  */
-fun shouldInitiate(myClientId: String, theirClientId: String): Boolean =
+fun isPolite(myClientId: String, theirClientId: String): Boolean =
     myClientId < theirClientId
