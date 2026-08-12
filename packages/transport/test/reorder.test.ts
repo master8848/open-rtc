@@ -3,7 +3,13 @@ import { createEnvelope, type Envelope } from '@vidcall/protocol';
 import { ReorderBuffer } from '../src/internal/reorder.js';
 
 function msg(seq: number, type: 'offer' | 'ice' | 'chat' = 'offer', sender = 'a'): Envelope {
-  return createEnvelope(type, { roomId: 'r', senderId: sender, sessionId: 's', seq, payload: { seq } });
+  return createEnvelope(type, {
+    roomId: 'r',
+    senderId: sender,
+    sessionId: 's',
+    seq,
+    payload: { seq },
+  });
 }
 
 describe('ReorderBuffer', () => {

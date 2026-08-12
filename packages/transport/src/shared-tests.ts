@@ -46,7 +46,11 @@ export interface AdapterHarness {
 let suiteCounter = 0;
 
 /** Poll until `cond` is true or timeout. */
-export async function waitFor(cond: () => boolean, timeoutMs = 2000, intervalMs = 10): Promise<void> {
+export async function waitFor(
+  cond: () => boolean,
+  timeoutMs = 2000,
+  intervalMs = 10,
+): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     if (cond()) return;
@@ -55,7 +59,12 @@ export async function waitFor(cond: () => boolean, timeoutMs = 2000, intervalMs 
   throw new Error('waitFor: condition not met within ' + timeoutMs + 'ms');
 }
 
-function env(room: string, sender: string, seq: number, session: string): Parameters<typeof createEnvelope>[1] {
+function env(
+  room: string,
+  sender: string,
+  seq: number,
+  session: string,
+): Parameters<typeof createEnvelope>[1] {
   return { roomId: room, senderId: sender, sessionId: session, seq, ts: Date.now() };
 }
 
@@ -85,14 +94,24 @@ export function runAdapterTestSuite(h: AdapterHarness): void {
       b.onMessage((e) => bGot.push(e));
       a.onMessage((e) => aGot.push(e));
 
-      await a.emit(createEnvelope('offer', { ...env(r, 'a', 0, 's-a'), payload: { sdp: 'v=0\r\no=- 1 1 IN IP4 127.0.0.1\r\ns=-\r\nt=0 0\r\n' } }));
+      await a.emit(
+        createEnvelope('offer', {
+          ...env(r, 'a', 0, 's-a'),
+          payload: { sdp: 'v=0\r\no=- 1 1 IN IP4 127.0.0.1\r\ns=-\r\nt=0 0\r\n' },
+        }),
+      );
       await waitFor(() => bGot.length >= 1);
       expect(bGot[0]!.type).toBe('offer');
       expect(bGot[0]!.senderId).toBe('a');
       expect(bGot[0]!.roomId).toBe(r);
       expect(bGot[0]!.payload).toMatchObject({ sdp: expect.stringContaining('v=0') });
 
-      await b.emit(createEnvelope('answer', { ...env(r, 'b', 0, 's-b'), payload: { sdp: 'v=0\r\no=- 2 2 IN IP4 127.0.0.1\r\ns=-\r\nt=0 0\r\n' } }));
+      await b.emit(
+        createEnvelope('answer', {
+          ...env(r, 'b', 0, 's-b'),
+          payload: { sdp: 'v=0\r\no=- 2 2 IN IP4 127.0.0.1\r\ns=-\r\nt=0 0\r\n' },
+        }),
+      );
       await waitFor(() => aGot.length >= 1);
       expect(aGot[0]!.type).toBe('answer');
       expect(aGot[0]!.senderId).toBe('b');
@@ -112,7 +131,12 @@ export function runAdapterTestSuite(h: AdapterHarness): void {
       b.onMessage((e) => got.push((e.payload as OfferPayload).label ?? ''));
 
       for (let i = 0; i < 10; i++) {
-        await a.emit(createEnvelope('offer', { ...env(r, 'a', i, 's-a'), payload: taggedSdp(`m${i}`, `sdp-${i}`) }));
+        await a.emit(
+          createEnvelope('offer', {
+            ...env(r, 'a', i, 's-a'),
+            payload: taggedSdp(`m${i}`, `sdp-${i}`),
+          }),
+        );
       }
       await waitFor(() => got.length >= 10);
       expect(got).toEqual(['m0', 'm1', 'm2', 'm3', 'm4', 'm5', 'm6', 'm7', 'm8', 'm9']);
@@ -132,7 +156,16 @@ export function runAdapterTestSuite(h: AdapterHarness): void {
       b.onMessage((e) => got.push(e));
 
       for (let i = 0; i < 30; i++) {
-        await a.emit(createEnvelope('ice', { ...env(r, 'a', i, 's-a'), payload: { candidate: `candidate:${i} 1 udp 2122260223 192.0.2.1 ${40000 + i} typ host`, sdpMid: '0', sdpMLineIndex: 0 } }));
+        await a.emit(
+          createEnvelope('ice', {
+            ...env(r, 'a', i, 's-a'),
+            payload: {
+              candidate: `candidate:${i} 1 udp 2122260223 192.0.2.1 ${40000 + i} typ host`,
+              sdpMid: '0',
+              sdpMLineIndex: 0,
+            },
+          }),
+        );
       }
       await waitFor(() => got.length >= 30);
       const candidates = got.filter((e) => e.type === 'ice');
@@ -158,7 +191,12 @@ export function runAdapterTestSuite(h: AdapterHarness): void {
       b.onMessage((e) => bGot.push(e));
       c.onMessage((e) => cGot.push(e));
 
-      await a.emit(createEnvelope('reaction', { ...env(r, 'a', 0, 's-a'), payload: { emoji: '🔥', targetSenderId: 'b' } }));
+      await a.emit(
+        createEnvelope('reaction', {
+          ...env(r, 'a', 0, 's-a'),
+          payload: { emoji: '🔥', targetSenderId: 'b' },
+        }),
+      );
       await waitFor(() => bGot.length >= 1 && cGot.length >= 1);
       expect(bGot[0]!.payload).toMatchObject({ emoji: '🔥' });
       expect(cGot[0]!.payload).toMatchObject({ emoji: '🔥' });
@@ -230,8 +268,12 @@ export function runAdapterTestSuite(h: AdapterHarness): void {
       c.onMessage((e) => cGot.push(e));
       d.onMessage((e) => dGot.push(e));
 
-      await a.emit(createEnvelope('chat', { ...env(r1, 'a', 0, 's-a'), payload: { text: 'room1 only' } }));
-      await c.emit(createEnvelope('chat', { ...env(r2, 'c', 0, 's-c'), payload: { text: 'room2 only' } }));
+      await a.emit(
+        createEnvelope('chat', { ...env(r1, 'a', 0, 's-a'), payload: { text: 'room1 only' } }),
+      );
+      await c.emit(
+        createEnvelope('chat', { ...env(r2, 'c', 0, 's-c'), payload: { text: 'room2 only' } }),
+      );
 
       await waitFor(() => bGot.length >= 1 && dGot.length >= 1);
       expect(bGot[0]!.payload).toMatchObject({ text: 'room1 only' });
@@ -258,12 +300,16 @@ export function runAdapterTestSuite(h: AdapterHarness): void {
       const got: Envelope[] = [];
       b.onMessage((e) => got.push(e));
 
-      await a.emit(createEnvelope('chat', { ...env(r, 'a', 0, 's-a'), payload: { text: 'before' } }));
+      await a.emit(
+        createEnvelope('chat', { ...env(r, 'a', 0, 's-a'), payload: { text: 'before' } }),
+      );
       await waitFor(() => got.length >= 1);
 
       await a.leave();
       await a.join(r, { id: 'a' });
-      await a.emit(createEnvelope('chat', { ...env(r, 'a', 1, 's-a'), payload: { text: 'after' } }));
+      await a.emit(
+        createEnvelope('chat', { ...env(r, 'a', 1, 's-a'), payload: { text: 'after' } }),
+      );
       await waitFor(() => got.some((e) => (e.payload as { text: string }).text === 'after'));
 
       await h.destroyPeer(a);

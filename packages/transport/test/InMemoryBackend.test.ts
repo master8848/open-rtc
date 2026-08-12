@@ -12,7 +12,15 @@ describe('InMemoryBackend basics', () => {
     await b.join('r', { id: 'b' });
     const got: string[] = [];
     b.onMessage((e) => got.push((e.payload as { text: string }).text));
-    await a.emit(createEnvelope('chat', { roomId: 'r', senderId: 'a', sessionId: 's', seq: 0, payload: { text: 'hi' } }));
+    await a.emit(
+      createEnvelope('chat', {
+        roomId: 'r',
+        senderId: 'a',
+        sessionId: 's',
+        seq: 0,
+        payload: { text: 'hi' },
+      }),
+    );
     await new Promise((r) => setTimeout(r, 10));
     expect(got).toEqual(['hi']);
     await a.dispose();
@@ -37,7 +45,15 @@ describe('InMemoryBackend basics', () => {
     const b = new InMemoryBackend();
     await b.join('r1', { id: 'a' });
     await expect(
-      b.emit(createEnvelope('chat', { roomId: 'r2', senderId: 'a', sessionId: 's', seq: 0, payload: { text: 'x' } })),
+      b.emit(
+        createEnvelope('chat', {
+          roomId: 'r2',
+          senderId: 'a',
+          sessionId: 's',
+          seq: 0,
+          payload: { text: 'x' },
+        }),
+      ),
     ).rejects.toThrow();
     await b.dispose();
   });
@@ -70,7 +86,16 @@ describe('InMemoryBackend basics', () => {
     const cGot: string[] = [];
     b.onMessage((e) => bGot.push((e.payload as { text: string }).text));
     c.onMessage((e) => cGot.push((e.payload as { text: string }).text));
-    await a.emit(createEnvelope('chat', { roomId: 'r', senderId: 'a', sessionId: 's', seq: 0, targetSenderId: 'b', payload: { text: 'only b' } }));
+    await a.emit(
+      createEnvelope('chat', {
+        roomId: 'r',
+        senderId: 'a',
+        sessionId: 's',
+        seq: 0,
+        targetSenderId: 'b',
+        payload: { text: 'only b' },
+      }),
+    );
     await new Promise((r) => setTimeout(r, 10));
     expect(bGot).toEqual(['only b']);
     expect(cGot).toEqual([]);

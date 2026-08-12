@@ -3,7 +3,13 @@ import { createEnvelope, type Envelope } from '@vidcall/protocol';
 import { IceCoalescer } from '../src/internal/iceCoalescer.js';
 
 function ice(i: number): Envelope {
-  return createEnvelope('ice', { roomId: 'r', senderId: 'a', sessionId: 's', seq: i, payload: { candidate: `candidate:${i}`, sdpMid: null, sdpMLineIndex: null } });
+  return createEnvelope('ice', {
+    roomId: 'r',
+    senderId: 'a',
+    sessionId: 's',
+    seq: i,
+    payload: { candidate: `candidate:${i}`, sdpMid: null, sdpMLineIndex: null },
+  });
 }
 
 describe('IceCoalescer', () => {

@@ -60,7 +60,8 @@ export abstract class BaseSignalingTransport implements SignalingTransport {
 
   protected currentRoom: string | null = null;
   protected self: ParticipantInfo | null = null;
-  protected lastPresence: { state: PresenceState; metadata?: Record<string, unknown> } | null = null;
+  protected lastPresence: { state: PresenceState; metadata?: Record<string, unknown> } | null =
+    null;
   protected disposed = false;
 
   private readonly messageCbs = new Set<(envelope: Envelope) => void>();
@@ -73,7 +74,10 @@ export abstract class BaseSignalingTransport implements SignalingTransport {
   private sweepTimer: ReturnType<typeof setInterval> | null = null;
   private coalescer: IceCoalescer | null = null;
 
-  constructor(private readonly hooks: BackendHooks, private readonly opts: BaseOptions = {}) {
+  constructor(
+    private readonly hooks: BackendHooks,
+    private readonly opts: BaseOptions = {},
+  ) {
     this.reorder = new ReorderBuffer({
       orderedKinds: opts.reorderKinds,
       ...(opts.reorder === false ? { orderedKinds: () => false } : {}),
@@ -124,10 +128,13 @@ export abstract class BaseSignalingTransport implements SignalingTransport {
     }
     this.heartbeat?.start();
     if (this.sweeper) {
-      this.sweepTimer = setInterval(() => {
-        this.sweeper!.sweep();
-        this.reorder.sweep();
-      }, Math.max(500, Math.min(this.presenceTimeoutMs, 5000)));
+      this.sweepTimer = setInterval(
+        () => {
+          this.sweeper!.sweep();
+          this.reorder.sweep();
+        },
+        Math.max(500, Math.min(this.presenceTimeoutMs, 5000)),
+      );
       this.sweepTimer.unref?.();
     }
   }
@@ -152,7 +159,9 @@ export abstract class BaseSignalingTransport implements SignalingTransport {
     if (this.disposed) throw new Error(`${this.name}: transport disposed`);
     if (this.currentRoom === null) throw new Error(`${this.name}: join() before emit()`);
     if (envelope.roomId !== this.currentRoom) {
-      throw new Error(`${this.name}: envelope.roomId ${envelope.roomId} != joined room ${this.currentRoom}`);
+      throw new Error(
+        `${this.name}: envelope.roomId ${envelope.roomId} != joined room ${this.currentRoom}`,
+      );
     }
     if (this.coalescer && envelope.type === 'ice') {
       this.coalescer.push(envelope);

@@ -73,7 +73,10 @@ export interface ChunkerOptions {
  * Handles out-of-order arrival per group; discards stale groups.
  */
 export class ChunkAssembler {
-  private groups = new Map<string, { parts: Map<number, string>; total: number; seen: Set<number>; startedAt: number }>();
+  private groups = new Map<
+    string,
+    { parts: Map<number, string>; total: number; seen: Set<number>; startedAt: number }
+  >();
   private readonly timeoutMs: number;
   private readonly maxGroups: number;
 

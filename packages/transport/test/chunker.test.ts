@@ -1,10 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import {
-  splitUtf8,
-  encodeChunks,
-  isChunkFrame,
-  ChunkAssembler,
-} from '../src/internal/chunker.js';
+import { splitUtf8, encodeChunks, isChunkFrame, ChunkAssembler } from '../src/internal/chunker.js';
 
 describe('splitUtf8', () => {
   it('splits ASCII at byte boundaries', () => {
@@ -33,7 +28,16 @@ describe('splitUtf8', () => {
 
 describe('encodeChunks / ChunkAssembler', () => {
   it('round-trips a payload larger than the cap', () => {
-    const json = JSON.stringify({ v: 1, type: 'offer', roomId: 'r', senderId: 's', sessionId: 'x', ts: 1, seq: 0, payload: { sdp: 'x'.repeat(20000) } });
+    const json = JSON.stringify({
+      v: 1,
+      type: 'offer',
+      roomId: 'r',
+      senderId: 's',
+      sessionId: 'x',
+      ts: 1,
+      seq: 0,
+      payload: { sdp: 'x'.repeat(20000) },
+    });
     expect(new TextEncoder().encode(json).length).toBeGreaterThan(7000);
     const frames = encodeChunks(json, 7000);
     expect(frames.length).toBeGreaterThan(1);

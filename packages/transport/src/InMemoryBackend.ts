@@ -47,7 +47,8 @@ export class InMemoryBackend implements SignalingTransport {
 
   async join(roomId: string, self: ParticipantInfo): Promise<void> {
     if (this.disposed) throw new Error('InMemoryBackend: disposed');
-    if (this.roomId !== null) throw new Error(`InMemoryBackend: already in room ${this.roomId}; leave() first`);
+    if (this.roomId !== null)
+      throw new Error(`InMemoryBackend: already in room ${this.roomId}; leave() first`);
     this.self = self;
     this.roomId = roomId;
     let room = InMemoryBackend.rooms.get(roomId);
@@ -86,7 +87,9 @@ export class InMemoryBackend implements SignalingTransport {
     const roomId = this.roomId;
     if (!roomId) throw new Error('InMemoryBackend: not in a room');
     if (envelope.roomId !== roomId) {
-      throw new Error(`InMemoryBackend: envelope.roomId ${envelope.roomId} != joined room ${roomId}`);
+      throw new Error(
+        `InMemoryBackend: envelope.roomId ${envelope.roomId} != joined room ${roomId}`,
+      );
     }
     const room = InMemoryBackend.rooms.get(roomId);
     if (!room) return;
