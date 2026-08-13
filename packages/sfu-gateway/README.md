@@ -105,7 +105,7 @@ npm run test:integration   # sets VIDCALL_MEDIASOUP_INTEGRATION=1
 
 - `@vidcall/protocol` (runtime): envelope + `SfuPayload` types.
 - `mediasoup` (devDependency only, exact pin `3.23.1`): the adapter `import
-  type`s mediasoup for compile-time types and the integration test drives a
+type`s mediasoup for compile-time types and the integration test drives a
   real worker. Runtime code never loads the native module.
   - Published 2026-07-28, ≥ 14-day supply-chain gate (CONTRIBUTING.md). The
     later 3.23.2 (2026-07-29) only adds subchannel handling for pipe
