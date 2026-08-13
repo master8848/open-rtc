@@ -846,34 +846,12 @@ void main() {
     await waitFor(() =>
         a.mesh.participant('b') != null && b.mesh.participant('a') != null);
 
-    // --- Polite side: A has an offer in flight when B's offer arrives.
-    final offerFutureA = a.mesh.sendOffer('b');
-    await waitFor(() => a.mesh.peerConnection('b') != null);
-    final pcA2B = a.mesh.peerConnection('b')! as _BlockingOfferPc;
-    await pcA2B.entered.future; // createOffer in flight -> makingOffer == true
-    _injectEnvelope(hub, 'room-1', Envelope(
-      type: MessageType.offer,
-      roomId: 'room-1',
-      senderId: 'b',
-      sessionId: 'sess-b',
-      ts: 1,
-      seq: 1,
-      targetSenderId: 'a',
-      payload: SdpPayload(sdp: 'v=0 b-offer').toJson(),
-    ));
-    await waitFor(() => a.sentEnvelopes().any(
-        (e) => e.type == MessageType.answer && e.targetSenderId == 'b'));
-    // Rolled back its in-flight offer and accepted B's offer.
-    expect(pcA2B.remoteDescription?.sdp, 'v=0 b-offer');
-    expect(pcA2B.localDescription?.type, 'answer');
-    pcA2B.gate.complete();
-    await offerFutureA;
-
-    // --- Impolite side: B has an offer in flight when A's offer arrives.
+    // --- Impolite side first (no real offers in flight yet): B has an
+    // offer in flight when A's offer arrives.
     final offerFutureB = b.mesh.sendOffer('a');
     await waitFor(() => b.mesh.peerConnection('a') != null);
     final pcB2A = b.mesh.peerConnection('a')! as _BlockingOfferPc;
-    await pcB2A.entered.future;
+    await pcB2A.entered.future; // createOffer in flight -> makingOffer == true
     _injectEnvelope(hub, 'room-1', Envelope(
       type: MessageType.offer,
       roomId: 'room-1',
@@ -891,6 +869,30 @@ void main() {
         b.sentEnvelopes().where((e) => e.type == MessageType.answer), isEmpty);
     pcB2A.gate.complete();
     await offerFutureB;
+
+    // --- Polite side: A has an offer in flight when B's offer arrives.
+    final offerFutureA = a.mesh.sendOffer('b');
+    await waitFor(() => a.mesh.peerConnection('b') != null);
+    final pcA2B = a.mesh.peerConnection('b')! as _BlockingOfferPc;
+    await pcA2B.entered.future; // createOffer in flight -> makingOffer == true
+    _injectEnvelope(hub, 'room-1', Envelope(
+      type: MessageType.offer,
+      roomId: 'room-1',
+      senderId: 'b',
+      sessionId: 'sess-b',
+      ts: 1,
+      seq: 2,
+      targetSenderId: 'a',
+      payload: SdpPayload(sdp: 'v=0 b-offer').toJson(),
+    ));
+    // Rolled back its in-flight offer and accepted B's offer (the answer is
+    // addressed back to b and follows the rollback).
+    await waitFor(() => pcA2B.remoteDescription?.sdp == 'v=0 b-offer');
+    expect(pcA2B.localDescription?.type, 'answer');
+    expect(a.sentEnvelopes().where((e) =>
+        e.type == MessageType.answer && e.targetSenderId == 'b'), isNotEmpty);
+    pcA2B.gate.complete();
+    await offerFutureA;
 
     await a.mesh.dispose();
     await b.mesh.dispose();
