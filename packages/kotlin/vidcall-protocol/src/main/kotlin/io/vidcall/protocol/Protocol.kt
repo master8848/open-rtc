@@ -2,8 +2,10 @@ package io.vidcall.protocol
 
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.decodeFromJsonElement
 import kotlinx.serialization.json.encodeToJsonElement
+import java.util.logging.Logger
 
 /**
  * vidcall protocol constants and shared JSON codec.
@@ -29,6 +31,41 @@ object Protocol {
         encodeDefaults = true
         explicitNulls = false
         ignoreUnknownKeys = true
+    }
+
+    /**
+     * Wire `type` names of every known [MessageType] (the schema `type` enum),
+     * derived from the serializer descriptor so it cannot drift from the
+     * `@SerialName` values.
+     */
+    private val knownWireTypes: Set<String> = run {
+        val descriptor = MessageType.serializer().descriptor
+        (0 until descriptor.elementsCount).mapTo(mutableSetOf()) { descriptor.getElementName(it) }
+    }
+
+    private val logger: Logger = Logger.getLogger("io.vidcall.protocol")
+
+    /**
+     * Tolerant envelope decode per `protocol/schema.json` wire rules: "unknown
+     * `type` values are ignored + logged (clients MUST NOT fail decode)".
+     *
+     * Returns the decoded [Envelope], or `null` when the envelope's `type` is
+     * not a known schema value — the envelope is logged and skipped, so an
+     * additive protocol evolution cannot wedge a client. Malformed JSON and
+     * missing required fields still throw [kotlinx.serialization.SerializationException]:
+     * those are local bugs, not forward compatibility.
+     */
+    fun decodeEnvelopeOrNull(text: String): Envelope? {
+        val element = json.parseToJsonElement(text)
+        val typeName = (element as? JsonObject)?.get("type")?.let { (it as? JsonPrimitive)?.content }
+        if (typeName != null && typeName !in knownWireTypes) {
+            logger.warning(
+                "ignoring envelope with unknown type '$typeName' " +
+                    "(schema rule: unknown types are ignored + logged; clients must not fail decode)",
+            )
+            return null
+        }
+        return json.decodeFromString(Envelope.serializer(), text)
     }
 }
 
