@@ -14,6 +14,11 @@ with typed payloads, carried over any backend pub/sub. This package provides:
 - **`VidcallRtcSession`** — a `flutter_webrtc` peer connection wired to the
   signaling stream: opaque SDP/ICE relayed verbatim, trickle ICE,
   offer/answer/ICE handling, perfect-negotiation glare control.
+- **`RtcMeshSession`** — N-1 multi-peer mesh over the SAME `VidcallClient`
+  socket: one `RTCPeerConnection` per remote participant, perfect
+  negotiation per peer (polite = `selfId < remoteId`), participant roster
+  with join/leave presence, and a per-peer `RTCDataChannel` for
+  reactions/chat/control.
 
 ## Install
 
@@ -78,6 +83,64 @@ await session.dispose();
 await client.close();
 ```
 
+### Mesh session (N-1 multi-peer)
+
+`RtcMeshSession` turns one signaling socket into a full mesh: a peer
+connection per remote participant (N-1 uplinks) over the same
+`VidcallClient`, with per-peer perfect negotiation and a `RTCDataChannel`
+for reactions/chat/control. The mesh itself imports only the pure-Dart
+`webrtc_interface` types, so it unit-tests under plain `dart test`; the app
+injects the `flutter_webrtc` factory via `peerFactory`.
+
+```dart
+final client = VidcallClient(roomId: 'room-abc', senderId: 'user-42');
+await client.connect(Uri.parse('wss://signal.example.com'));
+
+final mesh = RtcMeshSession(
+  client: client,
+  peerFactory: createPeerConnection, // flutter_webrtc's top-level factory
+  displayName: 'Ada',
+);
+await mesh.start();
+await client.join(displayName: 'Ada'); // broadcast join; roster replies are unicast
+
+// Publish once -> offered to every current and future participant.
+await mesh.addLocalStream(await VidcallRtcSession.captureLocalMedia());
+
+mesh.onParticipantJoined.listen((p) => print('${p.displayName} joined'));
+mesh.onParticipantLeft.listen((p) => print('${p.id} left'));
+mesh.onTrack.listen((event) {
+  // event.participantId tells you which peer this track belongs to.
+});
+mesh.onData.listen((message) {
+  // Typed MeshDataMessage (reaction / chat / control), tagged with
+  // message.participantId.
+});
+
+await mesh.sendOffer('user-7'); // explicit unicast offer (e.g. ICE restart)
+await mesh.dataChannel('user-7')?.sendReaction('👋');
+
+await mesh.dispose(); // closes every peer connection and data channel
+await client.close();
+```
+
+Design notes:
+
+- **One shared socket** — join/leave/presence and every offer/answer/ICE
+  frame flow through the same `VidcallClient`. The mesh filters by
+  `senderId` (only the matching sender drives that peer's connection) and
+  honors `targetSenderId` for unicast, so backend broadcast is fine.
+- **Ordering/dedupe** — envelopes are sequenced per sender session
+  (`seq`); duplicates and stale frames are dropped, pings are auto-ponged.
+- **Glare** — perfect negotiation per peer: the polite side (lower
+  `senderId`) rolls back its in-flight offer, the impolite side ignores
+  the colliding remote offer.
+- **N-1 uplinks** — each participant uploads once and fans out to
+  everyone: upload bandwidth is O(1), total mesh traffic is O(N). For
+  larger rooms an SFU (single upload, server-side mixing) is the next
+  step — the `sfu` envelope type is already modeled in the protocol
+  (see `docs/architecture.md` §3, D2).
+
 ## Test matrix
 
 The binding follows the shared matrix from `docs/research/mobile-bindings.md`
@@ -105,12 +168,13 @@ before adoption, and an audit trail. Verified 2026-08-11 (cutoff 2026-07-28):
 | Dep | Pin | Published | Why |
 |---|---|---|---|
 | `flutter_webrtc` | 1.5.2 | 2026-06-19 | cross-platform WebRTC plugin (Android/iOS/macOS/Windows/Linux/web). `1.6.0` (2026-08-03) was too fresh at adoption; `webrtc_flutter` does not exist on pub.dev (404, verified). |
+| `webrtc_interface` | 1.5.1 | 2026-03-16 | pure-Dart WebRTC types shared with `flutter_webrtc`; lets `RtcMeshSession` and its tests run under plain `dart test` without a Flutter device. |
 | `test` (dev) | 1.25.2 | 2024-01-24 | test runner; `test_api 0.7.0` keeps `meta` compatible with the Flutter-pinned 1.12.0. |
 | `lints` (dev) | 4.0.0 | 2024-05-09 | recommended lint set; newer `lints` require Dart ≥ 3.5 (this package supports 3.4). |
 
-`pubspec.lock` is committed (workspace policy). No runtime dependency beyond
-`flutter_webrtc` — protocol models and the client use only `dart:convert` /
-`dart:io` / `dart:math` from the stdlib.
+`pubspec.lock` is committed (workspace policy). Runtime dependencies are
+`flutter_webrtc` + `webrtc_interface` — protocol models and the client use
+only `dart:convert` / `dart:io` / `dart:math` from the stdlib.
 
 ## Publishing (pub.dev)
 
