@@ -57,19 +57,19 @@ See `integrations/` for Express, Fastify, Django, Laravel, Rails, and the
 
 ## REST API
 
-| Method   | Path                              | Body                                                                                  | Returns                                   |
-| -------- | --------------------------------- | ------------------------------------------------------------------------------------- | ----------------------------------------- |
-| POST     | `/auth/token`                     | `{ roomId, participantId, role?, exp? }`                                              | `200 { token, roomId, participantId, role, exp, iat }` |
-| POST     | `/rooms`                          | `{ roomId?, maxParticipants?, metadata? }`                                            | `201 { room }`                            |
-| POST     | `/rooms/:id/join`                 | `{ participantId, sessionId, displayName?, metadata? }` (or `{ participant: {...} }`) | `200 { room, participant, participants }` |
-| POST     | `/rooms/:id/leave`                | `{ participantId, reason? }`                                                          | `200 { room, participants }`              |
-| POST     | `/rooms/:id/signal`               | one protocol envelope (`protocol/schema.json`)                                        | `200 { seq, relayedTo }`                  |
-| POST     | `/rooms/:id/close`                | `{}` (admin only)                                                                     | `200 { room }`                            |
-| DELETE   | `/rooms/:id`                      | — (admin only)                                                                        | `200 { roomId, deleted }`                 |
-| GET      | `/rooms/:id/state`                | —                                                                                     | `200 { room, participants, signalCount }` |
-| GET      | `/rooms/:id/recordings`           | —                                                                                     | `200 { recordings }`                      |
-| POST     | `/recordings/:sessionId/chunks`   | raw bytes (`application/octet-stream`), `?index=n`                                    | `201 { sessionId, index, bytes }`         |
-| POST     | `/recordings/:sessionId/finalize` | `{}`                                                                                  | `200 { recording, storage }`              |
+| Method | Path                              | Body                                                                                  | Returns                                                |
+| ------ | --------------------------------- | ------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| POST   | `/auth/token`                     | `{ roomId, participantId, role?, exp? }`                                              | `200 { token, roomId, participantId, role, exp, iat }` |
+| POST   | `/rooms`                          | `{ roomId?, maxParticipants?, metadata? }`                                            | `201 { room }`                                         |
+| POST   | `/rooms/:id/join`                 | `{ participantId, sessionId, displayName?, metadata? }` (or `{ participant: {...} }`) | `200 { room, participant, participants }`              |
+| POST   | `/rooms/:id/leave`                | `{ participantId, reason? }`                                                          | `200 { room, participants }`                           |
+| POST   | `/rooms/:id/signal`               | one protocol envelope (`protocol/schema.json`)                                        | `200 { seq, relayedTo }`                               |
+| POST   | `/rooms/:id/close`                | `{}` (admin only)                                                                     | `200 { room }`                                         |
+| DELETE | `/rooms/:id`                      | — (admin only)                                                                        | `200 { roomId, deleted }`                              |
+| GET    | `/rooms/:id/state`                | —                                                                                     | `200 { room, participants, signalCount }`              |
+| GET    | `/rooms/:id/recordings`           | —                                                                                     | `200 { recordings }`                                   |
+| POST   | `/recordings/:sessionId/chunks`   | raw bytes (`application/octet-stream`), `?index=n`                                    | `201 { sessionId, index, bytes }`                      |
+| POST   | `/recordings/:sessionId/finalize` | `{}`                                                                                  | `200 { recording, storage }`                           |
 
 Errors are always `{ "error": { "code", "message", "details? } }` with a stable
 machine-readable `code`: `room_not_found` (404), `room_already_exists` (409),
@@ -100,9 +100,9 @@ requires a token:
 const services = createServices({
   store,
   auth: {
-    secret: process.env.VIDCALL_SECRET!,      // HMAC signing key — never ship to clients
+    secret: process.env.VIDCALL_SECRET!, // HMAC signing key — never ship to clients
     adminToken: process.env.VIDCALL_ADMIN_TOKEN, // optional: guard POST /auth/token
-    defaultTokenTtlMs: 60 * 60 * 1000,          // optional: default token lifetime (1h)
+    defaultTokenTtlMs: 60 * 60 * 1000, // optional: default token lifetime (1h)
   },
 });
 ```
@@ -147,10 +147,10 @@ const token = issueToken(secret, {
 
 ### Sending tokens
 
-| Transport | How                                              |
-| --------- | ------------------------------------------------ |
-| REST      | `Authorization: Bearer <token>` header           |
-| WS        | `?token=<token>` on the `/ws?roomId=<id>` URL    |
+| Transport | How                                           |
+| --------- | --------------------------------------------- |
+| REST      | `Authorization: Bearer <token>` header        |
+| WS        | `?token=<token>` on the `/ws?roomId=<id>` URL |
 
 Guarded routes (auth mode): `POST /rooms/:id/join`, `POST /rooms/:id/leave`,
 `POST /rooms/:id/signal`, `GET /rooms/:id/state`,
