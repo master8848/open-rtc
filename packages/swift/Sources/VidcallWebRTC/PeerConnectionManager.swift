@@ -128,6 +128,15 @@ public final class PeerConnectionManager: PeerConnectionManaging, @unchecked Sen
     private var closed = false
     private var pendingIceCandidates: [IceCandidate] = []
     private var _dataChannelBus: DataChannelBus?
+    /// A negotiation is enqueued on the serial queue but not yet started
+    /// (dedupe: `negotiationneeded` + an explicit call must produce one offer).
+    private var negotiationScheduled = false
+    /// An ICE restart is enqueued but not yet started (dedupe for auto-restart).
+    private var restartScheduled = false
+
+    /// Serializes all async state-machine operations (negotiate / restartIce /
+    /// receiveRemoteOffer / receiveRemoteAnswer) — see `SignalingSerialQueue`.
+    private let signalingQueue = SignalingSerialQueue()
 
     // MARK: Init
 
@@ -225,20 +234,47 @@ public final class PeerConnectionManager: PeerConnectionManaging, @unchecked Sen
     /// real adapter; fakes implement `createOffer(iceRestart:)` directly).
     public func restartIce() async throws {
         let proceed = withLock { () -> Bool in
-            guard !closed, !restartingIce else { return false }
-            restartingIce = true
+            guard !closed, !restartingIce, !restartScheduled else { return false }
+            restartScheduled = true
             return true
         }
         guard proceed else { return }
-        defer {
-            withLock { restartingIce = false }
+        try await signalingQueue.enqueue { [weak self] in
+            guard let self else { return }
+            self.withLock { self.restartScheduled = false }
+            let proceed = self.withLock { () -> Bool in
+                guard !self.closed, !self.restartingIce else { return false }
+                self.restartingIce = true
+                return true
+            }
+            guard proceed else { return }
+            defer { self.withLock { self.restartingIce = false } }
+            try await self.negotiateCore(iceRestart: true)
         }
-        try await negotiate(iceRestart: true)
     }
 
-    /// Core negotiation. Guards against overlapping offers; the local data
-    /// channel is created before the offer so it is part of the SCTP setup.
+    /// Enqueues a negotiation on the serial queue. Deduped: a queued or
+    /// in-flight negotiation swallows additional requests (mirrors the TS
+    /// core's `if (this.makingOffer) return`), so `negotiationneeded` +
+    /// an explicit call produce exactly one offer.
     private func negotiate(iceRestart: Bool) async throws {
+        let proceed = withLock { () -> Bool in
+            guard !closed, !makingOffer, !negotiationScheduled else { return false }
+            negotiationScheduled = true
+            return true
+        }
+        guard proceed else { return }
+        try await signalingQueue.enqueue { [weak self] in
+            guard let self else { return }
+            self.withLock { self.negotiationScheduled = false }
+            try await self.negotiateCore(iceRestart: iceRestart)
+        }
+    }
+
+    /// Core negotiation (runs on the serial queue). Guards against
+    /// overlapping offers; the local data channel is created before the offer
+    /// so it is part of the SCTP setup.
+    private func negotiateCore(iceRestart: Bool) async throws {
         let proceed = withLock { () -> Bool in
             guard !closed, !makingOffer else { return false }
             makingOffer = true
@@ -281,6 +317,15 @@ public final class PeerConnectionManager: PeerConnectionManaging, @unchecked Sen
     // drive the state machine directly and await completion.
 
     func receiveRemoteOffer(_ payload: OfferPayload) async throws {
+        try await signalingQueue.enqueue { [weak self] in
+            guard let self else { return }
+            try await self.applyRemoteOffer(payload)
+        }
+    }
+
+    /// Remote-offer handling (runs on the serial queue, so no local offer can
+    /// be mid-flight: the collision check is purely state-based).
+    private func applyRemoteOffer(_ payload: OfferPayload) async throws {
         guard !withLock({ closed }) else { return }
         let sdp = SessionDescription(type: .offer, sdp: payload.sdp)
 
@@ -297,8 +342,9 @@ public final class PeerConnectionManager: PeerConnectionManaging, @unchecked Sen
             }
             // Polite side: back out of our own in-flight offer, then accept
             // theirs. Rollback is a LOCAL description operation (W3C
-            // `RTCSdpType.rollback`); it is a no-op if our local offer has
-            // not landed yet (mid-`createOffer` glare race).
+            // `RTCSdpType.rollback`); because the queue serializes signaling
+            // operations, our own offer has fully landed by now whenever it
+            // exists (`haveLocalOffer`), so the rollback always applies.
             if session.signalingState == .haveLocalOffer {
                 try await session.setLocalDescription(SessionDescription(type: .rollback, sdp: ""))
             }
@@ -316,6 +362,14 @@ public final class PeerConnectionManager: PeerConnectionManaging, @unchecked Sen
     }
 
     func receiveRemoteAnswer(_ payload: OfferPayload) async throws {
+        try await signalingQueue.enqueue { [weak self] in
+            guard let self else { return }
+            try await self.applyRemoteAnswer(payload)
+        }
+    }
+
+    /// Remote-answer handling (runs on the serial queue).
+    private func applyRemoteAnswer(_ payload: OfferPayload) async throws {
         guard !withLock({ closed }) else { return }
         let sdp = SessionDescription(type: .answer, sdp: payload.sdp)
         try await session.setRemoteDescription(sdp)
@@ -416,5 +470,65 @@ public final class PeerConnectionManager: PeerConnectionManaging, @unchecked Sen
     private func accepts(senderId: String) -> Bool {
         guard let expected = remotePeerId else { return true }
         return senderId == expected
+    }
+}
+
+// MARK: - Signaling serial queue
+
+/// Serial executor for the manager's async signaling operations
+/// (`negotiate` / `restartIce` / `receiveRemoteOffer` / `receiveRemoteAnswer`).
+/// Guarantees the underlying session is never touched by two state-machine
+/// operations at the same time. Without this, a colliding remote offer can
+/// arrive while the polite peer's own `createOffer`/`setLocalDescription` is
+/// still in flight (signaling state still `.stable`): the polite peer skips
+/// the rollback and calls `setRemoteDescription` concurrently, which the real
+/// stack rejects with InvalidStateError — the answer is never sent and both
+/// peers stay stuck in `haveLocalOffer` (observed as a flaky real-WebRTC
+/// loopback test). Serializing the operations makes glare resolution
+/// deterministic: by the time a remote offer is handled, any local offer has
+/// fully landed, so the collision check is purely state-based.
+private final class SignalingSerialQueue: @unchecked Sendable {
+    private let lock = NSLock()
+    private var pending: [() async -> Void] = []
+    private var running = false
+
+    /// Enqueues `body` for serial execution. The returned future completes
+    /// with `body`'s result (or error) once its turn arrives.
+    func enqueue<T>(_ body: @escaping () async throws -> T) async throws -> T {
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<T, Error>) in
+            lock.lock()
+            pending.append { [weak self] in
+                guard let self else {
+                    continuation.resume(throwing: VidcallError.notConnected)
+                    return
+                }
+                do {
+                    let value = try await body()
+                    continuation.resume(returning: value)
+                } catch {
+                    continuation.resume(throwing: error)
+                }
+            }
+            lock.unlock()
+            pump()
+        }
+    }
+
+    private func pump() {
+        lock.lock()
+        guard !running, !pending.isEmpty else {
+            lock.unlock()
+            return
+        }
+        running = true
+        let op = pending.removeFirst()
+        lock.unlock()
+        Task {
+            await op()
+            lock.lock()
+            running = false
+            lock.unlock()
+            pump()
+        }
     }
 }

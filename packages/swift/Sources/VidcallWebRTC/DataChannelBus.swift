@@ -329,6 +329,12 @@ public final class DataChannelBus: @unchecked Sendable {
             }, continuation: continuation)
             onOpen = { state.complete(nil) }
             onClose = { state.complete(DataChannelBusError.closedBeforeOpen) }
+            // The channel may have opened between the `isOpen` check above and
+            // installing the callbacks (real WebRTC fires `onOpen` on a
+            // background thread). `complete` is idempotent, so this is safe.
+            if isOpen {
+                state.complete(nil)
+            }
         }
     }
 }

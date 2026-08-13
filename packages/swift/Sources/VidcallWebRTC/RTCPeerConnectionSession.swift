@@ -278,7 +278,7 @@ final class RTCPeerConnectionSession: NSObject, PeerConnectionSession, RTCPeerCo
             return
         }
         capturer.startCapture(with: device, format: format, fps: maxFrameRate) { [weak self] error in
-            if let error {
+            if error != nil {
                 self?.onConnectionStateChange?(.failed)
             }
         }

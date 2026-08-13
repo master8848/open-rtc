@@ -58,16 +58,20 @@ let package = Package(
             dependencies: [
                 "Vidcall",
                 // __VIDCALL_WEBRTC_DEP__
-                // "WebRTC",  // disabled: run scripts/enable-webrtc.sh
+                "WebRTC", // WebRTC 150.0.0 binary target (Path A, enabled)
             ]
         ),
         // __VIDCALL_WEBRTC_BINARY_BEGIN__
-        // (disabled by scripts/disable-webrtc.sh — run scripts/enable-webrtc.sh to re-enable)
-        // .binaryTarget(
-        //     name: "WebRTC",
-        //     url: "https://github.com/stasel/WebRTC/releases/download/150.0.0/WebRTC-M150.xcframework.zip",
-        //     checksum: "f9890492b0016e4c88ab20f07867b8b420054caedc8a692b2ec6ac041f3cf6b2"
-        // ),
+        // Path A: SwiftPM binary target for WebRTC 150.0.0 (community build,
+        // stasel). SHA-256 verified from the published release asset via
+        // scripts/enable-webrtc.sh (44 MB; iOS arm64 + simulator +
+        // maccatalyst + macOS arm64/x86_64 slices; module name `WebRTC`).
+        // Disable for fully-offline builds with scripts/disable-webrtc.sh.
+        .binaryTarget(
+            name: "WebRTC",
+            url: "https://github.com/stasel/WebRTC/releases/download/150.0.0/WebRTC-M150.xcframework.zip",
+            checksum: "f9890492b0016e4c88ab20f07867b8b420054caedc8a692b2ec6ac041f3cf6b2"
+        ),
         // __VIDCALL_WEBRTC_BINARY_END__
         .testTarget(
             name: "VidcallTests",

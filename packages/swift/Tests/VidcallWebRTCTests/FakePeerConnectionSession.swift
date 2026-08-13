@@ -259,6 +259,13 @@ final class SignalingBridge {
     var managerA: PeerConnectionManager?
     var managerB: PeerConnectionManager?
 
+    /// True when no signals are pending delivery.
+    var isEmpty: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return queue.isEmpty
+    }
+
     /// A signaling endpoint for side `isA`.
     func endpoint(isA: Bool) -> PeerSignaling {
         BridgeEndpoint(bridge: self, isA: isA)

@@ -48,9 +48,32 @@ final class RealWebRTCTests: XCTestCase {
         let busA = try XCTUnwrap(managerA.dataChannelBus)
         let busB = try XCTUnwrap(managerB.dataChannelBus)
 
-        // Negotiate (offer crosses the bridge, B answers, answer returns).
+        // Negotiate. Real WebRTC fires `negotiationneeded` as soon as the
+        // data channel is created, so both sides may auto-negotiate before or
+        // after the explicit call; the first drain can therefore come up
+        // empty. Drain the bridge until the glare resolves and both sides
+        // hold `stable` with an empty queue for a quiescence streak, which
+        // guarantees no offer is still in flight (bounded settle loop).
         try await managerA.negotiate()
-        try await bridge.processAll()
+        var quiescentSamples = 0
+        var settled = false
+        for _ in 0..<100 {
+            try await bridge.processAll()
+            if bridge.isEmpty,
+                sessionA.signalingState == .stable,
+                sessionB.signalingState == .stable
+            {
+                quiescentSamples += 1
+                if quiescentSamples >= 5 {
+                    settled = true
+                    break
+                }
+            } else {
+                quiescentSamples = 0
+            }
+            try await Task.sleep(nanoseconds: 50_000_000)
+        }
+        XCTAssertTrue(settled, "peers did not converge to stable: A=\(sessionA.signalingState) B=\(sessionB.signalingState)")
 
         // Wait for the data channels to open over real SCTP.
         try await busA.open(timeoutMs: 15_000)
@@ -59,11 +82,11 @@ final class RealWebRTCTests: XCTestCase {
         XCTAssertTrue(busB.isOpen)
 
         // Data roundtrip.
-        var received: ChatPayload?
-        busB.onChat = { received = $0 }
+        let received = ValueBox<ChatPayload>()
+        busB.onChat = { received.set($0) }
         try busA.sendChat("hello over real SCTP")
-        try await waitUntil(timeout: 10) { received != nil }
-        XCTAssertEqual(received?.text, "hello over real SCTP")
+        try await waitUntil(timeout: 10) { received.value != nil }
+        XCTAssertEqual(received.value?.text, "hello over real SCTP")
 
         // Cleanup.
         managerA.leave()
