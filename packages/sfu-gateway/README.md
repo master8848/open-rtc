@@ -88,8 +88,8 @@ the PeerConnection, so it is a _platform_ — see webrtc-js.md §3.3).
 
 ```sh
 npm run build        # tsc -p tsconfig.json
-npm test             # node:test unit + smoke (35 tests; no mediasoup worker needed)
-npm run test:integration
+npm test             # node:test unit + smoke (36 tests; no mediasoup worker needed)
+npm run test:integration   # real mediasoup worker (needs Node >= 22)
 ```
 
 The integration test (`test/integration.mediasoup.test.ts`) exercises the full
@@ -104,12 +104,19 @@ npm run test:integration   # sets VIDCALL_MEDIASOUP_INTEGRATION=1
 ### Dependencies
 
 - `@vidcall/protocol` (runtime): envelope + `SfuPayload` types.
-- `mediasoup` (devDependency only, pinned `3.23.1`): the adapter `import type`s
-  mediasoup for compile-time types and the integration test drives a real
-  worker. Runtime code never loads the native module. Pinned to 3.23.1
-  (published 2026-07-28, ≥ 14-day supply-chain gate) — 3.24.x was still inside
-  the 14-day window at scaffold time; re-check `npm view mediasoup time` at
-  publish per CONTRIBUTING.md.
+- `mediasoup` (devDependency only, exact pin `3.23.1`): the adapter `import
+  type`s mediasoup for compile-time types and the integration test drives a
+  real worker. Runtime code never loads the native module.
+  - Published 2026-07-28, ≥ 14-day supply-chain gate (CONTRIBUTING.md). The
+    later 3.23.2 (2026-07-29) only adds subchannel handling for pipe
+    `DataConsumers` — irrelevant to this adapter — so the pin stays on the
+    version verified by the integration test. 3.24.x was still inside the
+    14-day window at scaffold time; re-check `npm view mediasoup time` before
+    any bump.
+  - The mediasoup worker requires Node >= 22 (its `engines`); the package
+    itself keeps `>=18.18` because mediasoup is a dev-time-only import.
+  - Supply-chain check: `node_modules/mediasoup` is absent from the runtime
+    graph — `dist/` has no `require('mediasoup')` (type-only import).
 
 ### Reference quality notes
 
@@ -118,3 +125,16 @@ minimal (DTLS fingerprints/role, ICE ufrag/pwd, m-line codecs; placeholder
 SSRCs for `produce()`). Production deployments must swap in a full SDP↔RTP
 mapping (e.g. mediasoup-client on the device side, or a full SDP parser on the
 server) — see `src/sdp.ts` doc comments.
+
+Mediasoup 3.23 API notes (verified against the installed `.d.ts` and a real
+worker):
+
+- `WebRtcTransport.connect()` takes `{ dtlsParameters }` only — there is no
+  remote-ICE input, so `addIceCandidate()` is a contract-keeping no-op (the
+  worker handles ICE consent via `iceConsentTimeout`).
+- Keyframe requests are receiver-driven: `consumer.requestKeyFrame()`
+  (`Producer.requestKeyFrame()` no longer exists).
+- `ProducerOptions.keyFrameRequestDelay` (ms) is exposed as
+  `PublishOptions.keyFrameRequestDelayMs` (video only; default 0).
+- `setPreferredLayers({ spatialLayer, temporalLayer })` maps the protocol's
+  `l`/`m`/`h` layers to spatial indices 0/1/2.

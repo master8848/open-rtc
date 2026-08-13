@@ -20,6 +20,8 @@ vidcall engine (in-workspace, dependency-light)
  └─ hooks: RecordingHook, ScreenShare, KeyframeRequester
         │
 optional: SfuGateway adapter (generic SFU protocol; reference impl; mediasoup/LiveKit integration guides)
+          ^ scaffolding done in packages/sfu-gateway (interface + SfuRouter + mediasoup reference adapter);
+            Room integration TODO (parent wires SfuGateway into Room)
 ```
 
 ## 3. Core decisions (from research)
@@ -27,8 +29,8 @@ optional: SfuGateway adapter (generic SFU protocol; reference impl; mediasoup/Li
 | #   | Decision                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | Rationale                                                                                                                                                                                                                                                                                                                           |
 | --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | D1  | **Zero runtime deps in core** — build on platform `RTCPeerConnection`                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | simple-peer stale (2023), peerjs cloud server not for prod; platform API is enough with perfect negotiation                                                                                                                                                                                                                         |
-| D2  | **Mesh = core; SFU = optional `SfuGateway` interface** (not bundled)                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | mesh works over any dumb pub/sub, fine for 2-4 participants ("simple Zoom clone" tier); SFU add-on via reference impl + mediasoup/LiveKit guides                                                                                                                                                                                    |
-| D3  | **JSON envelope over backend pub/sub**: `{v,type,roomId,senderId,sessionId,ts,seq}`; types `join/leave/offer/answer/ice/presence/reaction/chat/screen-share/quality-warning` + SFU types                                                                                                                                                                                                                                                                                                                                                       | one channel per room; engine owns ordering/idempotency/glare so backends stay dumb                                                                                                                                                                                                                                                  |
+| D2  | **Mesh = core; SFU = optional `SfuGateway` interface** (not bundled). **Status:** `packages/sfu-gateway` landed — interface + `SfuRouter` envelope handling + mediasoup reference adapter, unit + real-worker integration tests green (see §4.1); wiring into `Room` is TODO |                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | mesh works over any dumb pub/sub, fine for 2-4 participants ("simple Zoom clone" tier); SFU add-on via reference impl + mediasoup/LiveKit guides                                                                                                                                                                                    |
+| D3  | **JSON envelope over backend pub/sub**: `{v,type,roomId,senderId,sessionId,ts,seq}`; types `join/leave/offer/answer/ice/presence/reaction/chat/screen-share/quality-warning` + `sfu` (actions `publish/subscribe/layer-change/keyframe-request/leave`, §4.1)                                                                                                                                                                                                                                                                                                                                                       | one channel per room; engine owns ordering/idempotency/glare so backends stay dumb                                                                                                                                                                                                                                                  |
 | D4  | **Backend adapters**: unified `SignalingBackend` TS interface (join/leave/emit/onMessage/onPresence/setPresence/dispose)                                                                                                                                                                                                                                                                                                                                                                                                                       | ≥2 impls per interface policy; matrix: Supabase (native broadcast+presence, default), Firebase RTDB (best ceiling, onDisconnect), Convex (realtime), Appwrite (one-way → doc-write signaling + heartbeat presence), Postgres (LISTEN/NOTIFY + 7KB chunker + ws bridge), SQLite/libSQL (same-device BroadcastChannel; dev/test only) |
 | D5  | **Adaptive quality, 3 layers**: (a) device profile at join → initial caps; (b) native GCC/transport-CC (RFC 8888) → `availableOutgoingBitrate`; (c) policy engine on tier ladder with hysteresis (instant downgrade, 10s-stable upgrade), reacting to RTT/loss/bitrate + `qualityLimitationReason:'cpu'` + `totalEncodeTime` slope; applies `maxBitrate`/`scaleResolutionDownBy`/`degradationPreference`/simulcast layer drops; Safari falls back to single-stream H.264. Emits `quality:changed`/`quality:warning` `{from,to,reason:'network' | 'cpu'                                                                                                                                                                                                                                                                                                                               | 'device' | 'manual' | 'recovery',direction}` | network speed × device capability, with user-visible warnings |
 | D6  | **Reactions/presence/chat/screen-share/recording**: backend pub/sub + one typed DataChannel (SCTP RFC 8831/8832); presence backend-native; recording = hook interface (MediaRecorder default, SFU-egress later)                                                                                                                                                                                                                                                                                                                                | zero extra infra                                                                                                                                                                                                                                                                                                                    |
@@ -52,7 +54,7 @@ vidcall/
 │   ├── backend-appwrite/      # adapter (doc-write signaling + heartbeat presence)
 │   ├── backend-postgres/      # adapter (LISTEN/NOTIFY + chunker + optional ws bridge)
 │   ├── backend-sqlite/        # adapter (libSQL; same-device BroadcastChannel; dev/test mode)
-│   ├── sfu-gateway/           # SfuGateway interface + reference impl + mediasoup/LiveKit guides
+│   ├── sfu-gateway/           # SfuGateway interface + SfuRouter + mediasoup reference adapter (scaffolded; Room wiring TODO)
 │   ├── kotlin/                # Kotlin binding (mirrors core, same protocol)
 │   ├── swift/                 # Swift binding
 │   └── dart/                  # Dart/Flutter binding
@@ -61,6 +63,50 @@ vidcall/
 ├── e2e/                       # L2 integration + benchmarks (per-backend)
 └── docs/                      # research/ (done), api/, guides/
 ```
+
+### 4.1 SFU path (`packages/sfu-gateway`)
+
+Landed (scaffolding milestone; `npm run build` + tests green):
+
+```
+packages/sfu-gateway/
+├── src/
+│   ├── sfu-gateway.ts        # SfuGateway/SfuSession contract (media-agnostic)
+│   ├── sfu-router.ts         # protocol sfu-envelope handling, pure logic
+│   ├── mediasoup-adapter.ts  # reference SfuGateway on a mediasoup Router
+│   ├── sdp.ts                # minimal SDP<->mediasoup translation
+│   └── events.ts             # typed emitter (in-workspace, leaf package)
+└── test/                     # unit (fake gateway/router/transport) +
+                              # env-gated real-worker integration
+```
+
+- **Contract**: `SfuGateway.join(roomId, participantId)` → `SfuSession` with
+  `publishTrack` / `subscribe` / `setPreferredLayers` / `requestKeyframe` /
+  `handleOffer` / `handleAnswer` / `addIceCandidate` / `leave`, plus
+  `onTrack` events and `close(roomId?)`. SDP offers/answers and ICE
+  candidates pass through untouched — adapters own the translation.
+- **Envelope flow** (`SfuRouter.handle`, one per room): `sfu` envelopes
+  (`publish` / `subscribe` / `layer-change` / `keyframe-request` / `leave`,
+  protocol/schema.json `SfuPayload`) are validated against room membership,
+  then forwarded to the sender's session; `offer`/`answer`/`ice` envelopes
+  are consumed only when `targetSenderId` is the SFU participant id
+  (default `'sfu'`). Everything else (mesh chat/reactions/presence) keeps
+  flowing through the same backend untouched.
+- **Mediasoup adapter** (reference): verified against the pinned mediasoup
+  `3.23.1` API (`.d.ts`) and a real worker — `transport.connect({dtlsParameters})`
+  only (no remote-ICE input), receiver-driven `consumer.requestKeyFrame()`,
+  `ProducerOptions.keyFrameRequestDelay` via
+  `PublishOptions.keyFrameRequestDelayMs`, `setPreferredLayers` maps
+  `l/m/h` → spatial layers. `mediasoup` is a pinned devDependency
+  (type-only import; runtime `dist` never loads the native module; worker
+  needs Node >= 22). The integration test
+  (`VIDCALL_MEDIASOUP_INTEGRATION=1`) passes against a real worker; unit
+  tests run without one.
+- **Room wiring is a TODO**: `Room` (packages/core) will construct one
+  gateway per room, `join`+`registerSession` on participant join (SFU mode),
+  route envelopes through `SfuRouter`, and forward `onTrack` events to
+  subscriptions. Mesh stays the default; LiveKit would be a second adapter
+  behind the same contract.
 
 ## 5. Build order (tomorrow, mapped to Reminders plan)
 
@@ -73,6 +119,7 @@ vidcall/
 ## 6. Open items (from research, verify at implementation)
 
 - Re-verify pin publish dates (packages ship weekly); Supabase per-publisher broadcast FIFO; Ably/Firebase/Turso pricing numbers.
+- SFU: `packages/sfu-gateway` scaffolded (protocol `sfu` envelopes routed, mediasoup reference adapter compiled, integration env-gated and verified against a real worker — §4.1). TODO: wire `SfuGateway` into `Room` (create sessions on join, route envelopes, forward `onTrack` to subscriptions), plus a LiveKit adapter guide.
 - Postgres NOTIFY: confirm relay design (browser clients need ws bridge; keep LISTEN on dedicated `pg` client, NOT pool).
 - iOS Safari: no getDisplayMedia / no send-side simulcast / no VP9-AV1 / AEC quirks → capability-aware warnings in docs + engine.
 
