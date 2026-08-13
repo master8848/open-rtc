@@ -1,0 +1,13 @@
+{
+  "v": 1,
+  "type": "leave",
+  "roomId": "room-42",
+  "senderId": "user-bob",
+  "sessionId": "sess-xyz-0002",
+  "ts": 1786000000600,
+  "seq": 1,
+  "targetSenderId": "user-ada",
+  "payload": {
+    "reason": "call-ended"
+  }
+}

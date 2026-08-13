@@ -1,0 +1,12 @@
+{
+  "v": 1,
+  "type": "chat",
+  "roomId": "room-42",
+  "senderId": "user-ada",
+  "sessionId": "sess-abc-0001",
+  "ts": 1786000003500,
+  "seq": 7,
+  "payload": {
+    "text": "hello room"
+  }
+}

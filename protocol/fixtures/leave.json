@@ -1,0 +1,12 @@
+{
+  "v": 1,
+  "type": "leave",
+  "roomId": "room-42",
+  "senderId": "user-ada",
+  "sessionId": "sess-abc-0001",
+  "ts": 1786000000500,
+  "seq": 1,
+  "payload": {
+    "reason": "bye"
+  }
+}

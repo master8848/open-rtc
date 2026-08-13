@@ -1,0 +1,15 @@
+{
+  "v": 1,
+  "type": "presence",
+  "roomId": "room-42",
+  "senderId": "user-ada",
+  "sessionId": "sess-abc-0001",
+  "ts": 1786000002500,
+  "seq": 5,
+  "payload": {
+    "state": "online",
+    "metadata": {
+      "muted": false
+    }
+  }
+}

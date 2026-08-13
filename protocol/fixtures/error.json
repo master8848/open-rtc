@@ -1,0 +1,13 @@
+{
+  "v": 1,
+  "type": "error",
+  "roomId": "room-42",
+  "senderId": "user-ada",
+  "sessionId": "sess-abc-0001",
+  "ts": 1786000005500,
+  "seq": 11,
+  "payload": {
+    "code": "protocol-version",
+    "message": "unsupported protocol version 2"
+  }
+}

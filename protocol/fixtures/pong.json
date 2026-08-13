@@ -1,0 +1,9 @@
+{
+  "v": 1,
+  "type": "pong",
+  "roomId": "room-42",
+  "senderId": "user-ada",
+  "sessionId": "sess-abc-0001",
+  "ts": 1786000006500,
+  "seq": 13
+}

@@ -1,0 +1,14 @@
+{
+  "v": 1,
+  "type": "answer",
+  "roomId": "room-42",
+  "senderId": "user-bob",
+  "sessionId": "sess-xyz-0002",
+  "ts": 1786000001600,
+  "seq": 3,
+  "targetSenderId": "user-ada",
+  "payload": {
+    "sdp": "v=0\r\no=- 4611731406677955672 2 IN IP4 127.0.0.1\r\ns=-\r\nt=0 0\r\na=group:BUNDLE 0 1\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\nc=IN IP4 0.0.0.0\r\na=rtcp:9 IN IP4 0.0.0.0\r\na=ice-ufrag:7Qyq\r\na=ice-pwd:abcdefghijklmnopqrstuvwxyz\r\na=mid:0\r\na=recvonly\r\na=rtpmap:111 opus/48000/2\r\na=rtcp-mux\r\nm=video 9 UDP/TLS/RTP/SAVPF 96\r\nc=IN IP4 0.0.0.0\r\na=rtcp:9 IN IP4 0.0.0.0\r\na=ice-ufrag:7Qyq\r\na=ice-pwd:abcdefghijklmnopqrstuvwxyz\r\na=mid:1\r\na=recvonly\r\na=rtpmap:96 VP8/90000\r\na=rtcp-mux",
+    "label": "main"
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "v": 1,
+  "type": "quality-warning",
+  "roomId": "room-42",
+  "senderId": "user-ada",
+  "sessionId": "sess-abc-0001",
+  "ts": 1786000004500,
+  "seq": 9,
+  "payload": {
+    "from": "720p@30",
+    "to": "480p@30",
+    "reason": "network",
+    "direction": "receive"
+  }
+}

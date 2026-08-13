@@ -1,0 +1,14 @@
+{
+  "v": 1,
+  "type": "sfu",
+  "roomId": "room-42",
+  "senderId": "user-ada",
+  "sessionId": "sess-abc-0001",
+  "ts": 1786000005000,
+  "seq": 10,
+  "payload": {
+    "action": "publish",
+    "trackId": "track-1",
+    "kind": "video"
+  }
+}

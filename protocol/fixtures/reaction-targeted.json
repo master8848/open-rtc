@@ -1,0 +1,14 @@
+{
+  "v": 1,
+  "type": "reaction",
+  "roomId": "room-42",
+  "senderId": "user-bob",
+  "sessionId": "sess-xyz-0002",
+  "ts": 1786000003100,
+  "seq": 6,
+  "targetSenderId": "user-ada",
+  "payload": {
+    "emoji": "👍",
+    "targetSenderId": "user-ada"
+  }
+}

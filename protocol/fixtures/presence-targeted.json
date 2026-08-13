@@ -1,0 +1,16 @@
+{
+  "v": 1,
+  "type": "presence",
+  "roomId": "room-42",
+  "senderId": "user-bob",
+  "sessionId": "sess-xyz-0002",
+  "ts": 1786000002600,
+  "seq": 5,
+  "targetSenderId": "user-ada",
+  "payload": {
+    "state": "busy",
+    "metadata": {
+      "muted": true
+    }
+  }
+}

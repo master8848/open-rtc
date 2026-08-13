@@ -1,0 +1,32 @@
+{
+  "v": 1,
+  "type": "join",
+  "roomId": "room-42",
+  "senderId": "user-bob",
+  "sessionId": "sess-xyz-0002",
+  "ts": 1786000000100,
+  "seq": 0,
+  "targetSenderId": "user-ada",
+  "payload": {
+    "displayName": "Bob Builder",
+    "metadata": {
+      "tier": "free",
+      "locale": "de"
+    },
+    "deviceProfile": {
+      "hardwareConcurrency": 4,
+      "deviceMemory": 4.0,
+      "mobile": true,
+      "screenWidth": 1170,
+      "screenHeight": 2532,
+      "platform": "browser"
+    },
+    "capabilities": {
+      "simulcast": false,
+      "svc": false,
+      "codecs": [
+        "H264"
+      ]
+    }
+  }
+}

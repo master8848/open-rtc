@@ -1,0 +1,17 @@
+{
+  "v": 1,
+  "type": "chat",
+  "roomId": "room-42",
+  "senderId": "user-bob",
+  "sessionId": "sess-xyz-0002",
+  "ts": 1786000003600,
+  "seq": 7,
+  "targetSenderId": "user-ada",
+  "payload": {
+    "text": "psst ada",
+    "replyTo": {
+      "senderId": "user-ada",
+      "seq": 0
+    }
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "v": 1,
+  "type": "screen-share",
+  "roomId": "room-42",
+  "senderId": "user-ada",
+  "sessionId": "sess-abc-0001",
+  "ts": 1786000004000,
+  "seq": 8,
+  "payload": {
+    "action": "start",
+    "label": "screen"
+  }
+}
