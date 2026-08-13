@@ -1,0 +1,38 @@
+{
+  "name": "@vidcall/sfu-gateway",
+  "version": "0.1.0",
+  "description": "vidcall SFU gateway: transport-agnostic SfuGateway interface + SfuRouter (protocol sfu-envelope handling, pure logic) + reference mediasoup adapter. Mesh -> SFU at scale (docs/architecture.md D2); Room integration TODO.",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "development": "./src/index.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=18.18"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "tsc -b --clean",
+    "test": "node --conditions=development --test \"test/*.test.ts\"",
+    "test:integration": "VIDCALL_MEDIASOUP_INTEGRATION=1 node --conditions=development --test test/integration.mediasoup.test.ts"
+  },
+  "dependencies": {
+    "@vidcall/protocol": "0.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "22.19.1",
+    "mediasoup": "3.23.1",
+    "typescript": "5.9.3"
+  }
+}
