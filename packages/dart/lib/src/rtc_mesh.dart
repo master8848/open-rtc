@@ -356,6 +356,14 @@ class RtcMeshSession {
   final Map<String, dynamic> _configuration;
 
   final Map<String, _MeshPeer> _peers = <String, _MeshPeer>{};
+
+  /// Peer creations in flight per participant: concurrent signaling (e.g. a
+  /// join racing a publish loop) can call [_ensurePeer] for the same
+  /// participant while the (async) factory is still running; without this
+  /// guard we would open two connections to the same peer.
+  final Map<String, Future<_MeshPeer>> _peerCreating =
+      <String, Future<_MeshPeer>>{};
+
   final Map<String, MeshParticipant> _participants =
       <String, MeshParticipant>{};
 
@@ -660,6 +668,18 @@ class RtcMeshSession {
       peer.ignoreOffer = false;
       return;
     }
+    // JSEP: an answer only applies to a pending local offer. A stray answer
+    // (glare artifact — the remote answered an offer whose local description
+    // has not landed yet, or a duplicate) must be dropped, not applied.
+    if (peer.pc.signalingState !=
+        RTCSignalingState.RTCSignalingStateHaveLocalOffer) {
+      if (!_disposed) {
+        _errorsController.add(StateError(
+            'stray answer from ${envelope.senderId}: no pending local offer '
+            '(state=${peer.pc.signalingState})'));
+      }
+      return;
+    }
     await peer.pc
         .setRemoteDescription(RTCSessionDescription(payload.sdp, 'answer'));
     await _flushPendingCandidates(peer);
@@ -713,6 +733,10 @@ class RtcMeshSession {
     if (existing != null) {
       return existing;
     }
+    final inFlight = _peerCreating[participantId];
+    if (inFlight != null) {
+      return inFlight;
+    }
     _requireActive();
     // SDP/ICE can arrive before the join envelope on unordered backends:
     // synthesize a roster entry so signaling still works.
@@ -723,6 +747,21 @@ class RtcMeshSession {
         _joinedController.add(shell);
       }
     }
+    final creating = _createPeer(participantId);
+    _peerCreating[participantId] = creating;
+    try {
+      final peer = await creating;
+      _peers[participantId] = peer;
+      return peer;
+    } finally {
+      _peerCreating.remove(participantId);
+    }
+  }
+
+  /// Creates the [RTCPeerConnection] and data channel for [participantId]
+  /// and re-publishes local tracks onto it. Not guarded against concurrent
+  /// calls — route through [_ensurePeer].
+  Future<_MeshPeer> _createPeer(String participantId) async {
     final pc = await _peerFactory(_configuration);
     final dataChannel = MeshDataChannel(
       participantId: participantId,
@@ -736,7 +775,6 @@ class RtcMeshSession {
       dataChannel: dataChannel,
     );
     _wirePeer(peer);
-    _peers[participantId] = peer;
     // Local data channel (initiator side); the remote side adopts the
     // channel it negotiated via onDataChannel.
     try {
