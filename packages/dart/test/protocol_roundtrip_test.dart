@@ -1,6 +1,7 @@
-/// L0 protocol conformance: round-trips the 3 sample envelopes from
-/// `protocol/schema.json` (see test/fixtures/sample_envelopes.json) plus
-/// forward-compat and validation edge cases.
+/// L0 protocol conformance over the CANONICAL wire fixtures in
+/// `protocol/fixtures/` (single source of truth — the same 22 files are parsed
+/// by the Kotlin L0 suite and the Swift/TS mirrors, see protocol/fixtures/README.md),
+/// plus forward-compat and validation edge cases.
 library;
 
 import 'dart:convert';
@@ -11,27 +12,36 @@ import 'package:vidcall/src/protocol/envelope.dart';
 import 'package:vidcall/src/protocol/message_type.dart';
 import 'package:vidcall/src/protocol/payloads.dart';
 
+/// Every canonical fixture name (protocol/fixtures, without the `.json` suffix).
+const fixtureNames = [
+  'join', 'leave', 'offer', 'answer', 'ice', 'presence', 'reaction', 'chat',
+  'screen-share', 'quality-warning', 'sfu', 'error', 'ping', 'pong',
+  'join-targeted', 'leave-targeted', 'offer-targeted', 'answer-targeted',
+  'ice-targeted', 'presence-targeted', 'reaction-targeted', 'chat-targeted',
+];
+
 void main() {
   final fixtures = _loadFixtures();
 
-  group('Envelope round-trip (schema.json samples)', () {
-    for (final fixture in fixtures) {
-      test('${fixture['name']}: fromJson -> toJson is lossless', () {
-        final source = fixture['envelope'] as Map<String, dynamic>;
+  group('Envelope round-trip (canonical protocol/fixtures)', () {
+    for (final name in fixtureNames) {
+      final source = fixtures[name]!;
+
+      test('$name: fromJson -> toJson is lossless', () {
         final envelope = Envelope.fromJson(source);
 
         expect(envelope.v, 1);
-        expect(envelope.roomId, 'room-abc');
-        expect(envelope.senderId, 'user-42');
-        expect(envelope.sessionId, 'sess-1');
+        expect(envelope.rawType, name.replaceFirst('-targeted', ''));
+        expect(envelope.roomId, 'room-42');
+        expect(envelope.senderId, startsWith('user-'));
+        expect(envelope.sessionId, startsWith('sess-'));
         expect(envelope.seq, greaterThanOrEqualTo(0));
 
         // Exact JSON round-trip (key order included).
         expect(jsonEncode(envelope.toJson()), jsonEncode(source));
       });
 
-      test('${fixture['name']}: parse -> encode string round-trip', () {
-        final source = fixture['envelope'] as Map<String, dynamic>;
+      test('$name: parse -> encode string round-trip', () {
         final encoded = jsonEncode(source);
         final envelope = Envelope.parse(encoded);
 
@@ -39,39 +49,84 @@ void main() {
       });
     }
 
-    test('join: typed payload decodes deviceProfile + capabilities', () {
-      final envelope = Envelope.fromJson(fixtures[0]['envelope'] as Map<String, dynamic>);
+    test('fixtures cover every schema envelope type', () {
+      final covered = fixtureNames
+          .map((name) => name.replaceFirst('-targeted', ''))
+          .toSet();
+      expect(covered, MessageType.values.map((t) => t.wire).toSet());
+    });
+
+    test('targeted fixtures carry targetSenderId, broadcast fixtures do not', () {
+      for (final name in fixtureNames) {
+        final envelope = Envelope.fromJson(fixtures[name]!);
+        if (name.endsWith('-targeted')) {
+          expect(envelope.targetSenderId, 'user-ada', reason: name);
+          expect(sourceHasKey(fixtures[name]!, 'targetSenderId'), isTrue,
+              reason: name);
+        } else {
+          expect(envelope.targetSenderId, isNull, reason: name);
+          expect(sourceHasKey(fixtures[name]!, 'targetSenderId'), isFalse,
+              reason: name);
+        }
+      }
+    });
+
+    test('ping and pong omit the payload key on the wire', () {
+      for (final name in ['ping', 'pong']) {
+        final source = fixtures[name]!;
+        expect(source.containsKey('payload'), isFalse, reason: name);
+        final envelope = Envelope.fromJson(source);
+        expect(envelope.payload, isNull, reason: name);
+        expect(envelope.toJson().containsKey('payload'), isFalse, reason: name);
+        expect(envelope.decodePayload(), isNull, reason: name);
+      }
+    });
+  });
+
+  group('Typed payload decode (canonical fixtures)', () {
+    test('join: full device profile + capabilities', () {
+      final envelope = Envelope.fromJson(fixtures['join']!);
       final payload = envelope.decodePayload();
 
       expect(payload, isA<JoinPayload>());
       final join = payload! as JoinPayload;
-      expect(join.displayName, 'Ada');
-      expect(join.metadata, {'avatar': 'https://example.com/ada.png'});
+      expect(join.displayName, 'Ada Lovelace');
+      expect(join.metadata, {'tier': 'pro', 'locale': 'en'});
       expect(join.deviceProfile!.hardwareConcurrency, 8);
-      expect(join.deviceProfile!.deviceMemory, 8);
+      expect(join.deviceProfile!.deviceMemory, 8.0);
       expect(join.deviceProfile!.mobile, isFalse);
-      expect(join.deviceProfile!.screenWidth, 1440);
-      expect(join.deviceProfile!.screenHeight, 900);
-      expect(join.deviceProfile!.platform, DevicePlatform.dart);
+      expect(join.deviceProfile!.screenWidth, 1920);
+      expect(join.deviceProfile!.screenHeight, 1080);
+      expect(join.deviceProfile!.platform, DevicePlatform.browser);
       expect(join.capabilities!.simulcast, isTrue);
       expect(join.capabilities!.svc, isFalse);
       expect(join.capabilities!.codecs, ['VP8', 'H264']);
     });
 
     test('offer: typed payload decodes opaque sdp', () {
-      final envelope = Envelope.fromJson(fixtures[1]['envelope'] as Map<String, dynamic>);
+      final envelope = Envelope.fromJson(fixtures['offer']!);
       final payload = envelope.decodePayload();
 
       expect(payload, isA<SdpPayload>());
       final sdp = payload! as SdpPayload;
       expect(sdp.sdp, startsWith('v=0'));
       expect(sdp.sdp, contains('m=audio'));
+      expect(sdp.sdp, contains('a=rtpmap:96 VP8/90000'));
       expect(sdp.label, 'main');
       expect(sdp.toJson()['sdp'], sdp.sdp);
     });
 
+    test('answer uses the offer payload shape', () {
+      final envelope = Envelope.fromJson(fixtures['answer']!);
+      final sdp = envelope.decodePayload()! as SdpPayload;
+
+      expect(sdp.label, 'main');
+      expect(sdp.sdp, startsWith('v=0'));
+      expect(sdp.sdp, contains('a=recvonly'));
+    });
+
     test('ice: typed payload decodes candidate/sdpMid/sdpMLineIndex', () {
-      final envelope = Envelope.fromJson(fixtures[2]['envelope'] as Map<String, dynamic>);
+      final envelope = Envelope.fromJson(fixtures['ice']!);
       final payload = envelope.decodePayload();
 
       expect(payload, isA<IcePayload>());
@@ -79,6 +134,71 @@ void main() {
       expect(ice.candidate, startsWith('candidate:842163049'));
       expect(ice.sdpMid, '0');
       expect(ice.sdpMLineIndex, 0);
+    });
+
+    test('chat: broadcast text', () {
+      final chat = Envelope.fromJson(fixtures['chat']!).decodePayload()! as ChatPayload;
+      expect(chat.text, 'hello room');
+      expect(chat.replyTo, isNull);
+    });
+
+    test('chat-targeted: unicast text with replyTo', () {
+      final envelope = Envelope.fromJson(fixtures['chat-targeted']!);
+      expect(envelope.targetSenderId, 'user-ada');
+      final chat = envelope.decodePayload()! as ChatPayload;
+      expect(chat.text, 'psst ada');
+      expect(chat.replyTo!.senderId, 'user-ada');
+      expect(chat.replyTo!.seq, 0);
+    });
+
+    test('reaction: emoji', () {
+      final reaction =
+          Envelope.fromJson(fixtures['reaction']!).decodePayload()! as ReactionPayload;
+      expect(reaction.emoji, '🎉');
+    });
+
+    test('presence: state + metadata', () {
+      final presence =
+          Envelope.fromJson(fixtures['presence']!).decodePayload()! as PresencePayload;
+      expect(presence.state, PresenceState.online);
+      expect(presence.metadata, {'muted': false});
+    });
+
+    test('leave: reasons', () {
+      final leave = Envelope.fromJson(fixtures['leave']!).decodePayload()! as LeavePayload;
+      expect(leave.reason, 'bye');
+      final targeted =
+          Envelope.fromJson(fixtures['leave-targeted']!).decodePayload()! as LeavePayload;
+      expect(targeted.reason, 'call-ended');
+    });
+
+    test('screen-share: start with label', () {
+      final share = Envelope.fromJson(fixtures['screen-share']!)
+          .decodePayload()! as ScreenSharePayload;
+      expect(share.action, ScreenShareAction.start);
+      expect(share.label, 'screen');
+    });
+
+    test('quality-warning: tier switch', () {
+      final warning = Envelope.fromJson(fixtures['quality-warning']!)
+          .decodePayload()! as QualityWarningPayload;
+      expect(warning.from, '720p@30');
+      expect(warning.to, '480p@30');
+      expect(warning.reason, QualityWarningReason.network);
+      expect(warning.direction, QualityWarningDirection.receive);
+    });
+
+    test('sfu: publish/video control', () {
+      final sfu = Envelope.fromJson(fixtures['sfu']!).decodePayload()! as SfuPayload;
+      expect(sfu.action, SfuAction.publish);
+      expect(sfu.trackId, 'track-1');
+      expect(sfu.kind, SfuKind.video);
+    });
+
+    test('error: protocol-version payload', () {
+      final error = Envelope.fromJson(fixtures['error']!).decodePayload()! as ErrorPayload;
+      expect(error.code, 'protocol-version');
+      expect(error.message, 'unsupported protocol version 2');
     });
   });
 
@@ -209,8 +329,19 @@ void main() {
   });
 }
 
-List<Map<String, dynamic>> _loadFixtures() {
-  final file = File('test/fixtures/sample_envelopes.json');
-  final decoded = jsonDecode(file.readAsStringSync()) as List<dynamic>;
-  return decoded.cast<Map<String, dynamic>>();
+bool sourceHasKey(Map<String, dynamic> json, String key) => json.containsKey(key);
+
+/// Loads every canonical fixture from `protocol/fixtures/` (repo root, two
+/// levels up from `packages/dart`), keyed by file name without `.json`.
+Map<String, Map<String, dynamic>> _loadFixtures() {
+  final fixtures = <String, Map<String, dynamic>>{};
+  for (final name in fixtureNames) {
+    final file = File('../../protocol/fixtures/$name.json');
+    final decoded = jsonDecode(file.readAsStringSync());
+    if (decoded is! Map<String, dynamic>) {
+      throw FormatException('fixture $name is not a JSON object');
+    }
+    fixtures[name] = decoded;
+  }
+  return fixtures;
 }

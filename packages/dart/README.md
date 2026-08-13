@@ -85,7 +85,7 @@ The binding follows the shared matrix from `docs/research/mobile-bindings.md`
 
 | Layer | What it covers | Where it runs |
 |---|---|---|
-| **L0 protocol conformance** | encode/decode of the shared envelope fixtures (see `test/fixtures/sample_envelopes.json`, sourced from `schema.json`), unknown-field/type tolerance, version guard | `dart test` — CI (no devices) |
+| **L0 protocol conformance** | encode/decode of the canonical wire fixtures (`protocol/fixtures/`, the single source of truth shared with the Kotlin/Swift/TS suites — see `protocol/fixtures/README.md`), unknown-field/type tolerance, version guard | `dart test` — CI (no devices) |
 | **L1 unit tests** | `VidcallClient` over an in-process `dart:io` WebSocket broadcast server: send/receive round-trip, seq monotonicity, state transitions, schema validation | `dart test` — CI (no devices) |
 | **L2 integration** | two real peers through a local signaling server + native WebRTC loopback | `flutter test integration_test` on iOS simulator + Android emulator (macOS GitHub Actions runner) |
 
