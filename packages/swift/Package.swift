@@ -8,22 +8,28 @@
 //  - Vidcall        : pure Swift — Envelope + payloads (Codable), and the
 //                     VidcallClient WebSocket signaling client. Zero
 //                     dependencies; builds and tests fully offline.
-//  - VidcallWebRTC  : optional WebRTC glue (peer connection + offer/answer/ICE
-//                     wired to VidcallClient). The code is complete and
-//                     compiles to a stub when the `WebRTC` module is absent;
-//                     the real integration activates with `#if canImport(WebRTC)`.
+//  - VidcallWebRTC  : WebRTC glue (peer connection + offer/answer/ICE + data
+//                     channel bus wired to VidcallClient). The negotiation
+//                     state machine and bus are WebRTC-agnostic and compile +
+//                     test offline with injected fakes; the GoogleWebRTC
+//                     adapter activates with `#if canImport(WebRTC)`.
+//  - VidcallWebRTCTests : state-machine + L2 loopback tests (fakes, offline)
+//                     plus an env-gated real-WebRTC smoke test that runs when
+//                     the binary target below is enabled.
 //
-//  WebRTC integration (two supported paths, see README.md "WebRTC integration")
-//  ---------------------------------------------------------------------------
-//  Path A — SwiftPM binary target (recommended):
-//    Uncomment the .binaryTarget and add "WebRTC" to VidcallWebRTC's
-//    dependencies below, then `swift build`. The artifact is the community
-//    WebRTC 150.0.0 xcframework (stasel) — the same binary the community
-//    CocoaPod `WebRTC` 150.0.0 ships (verified 2026-08-11:
-//    https://github.com/stasel/WebRTC/releases/tag/150.0.0).
-//    URL + checksum below were verified against the published SHA-256 of the
-//    release asset (44 MB, iOS arm64 + simulator + macOS arm64/x86_64 slices;
-//    module name `WebRTC`). Re-verify with `swift package compute-checksum`.
+//  WebRTC integration (see README.md "WebRTC integration")
+//  ------------------------------------------------------
+//  Path A — SwiftPM binary target (commented below by default so the package
+//    builds and tests fully offline): the community WebRTC 150.0.0 xcframework
+//    (stasel) — the same binary the community CocoaPod `WebRTC` 150.0.0 ships
+//    (verified 2026-08-12: https://github.com/stasel/WebRTC/releases/tag/150.0.0).
+//    The SHA-256 was recomputed from the downloaded release asset
+//    (`swift package compute-checksum WebRTC-M150.xcframework.zip`) and
+//    matches the checksum in scripts/enable-webrtc.sh. Enable with
+//    scripts/enable-webrtc.sh (fetches the 44 MB artifact once, verifies the
+//    checksum, and uncomments the dependency + binary target); disable again
+//    with scripts/disable-webrtc.sh. With the target commented, the state-
+//    machine + bus tests run against injected fakes.
 //
 //  Path B — CocoaPods (manual):
 //    pod 'WebRTC', '150.0.0'   (community pod, iOS only)
@@ -51,22 +57,26 @@ let package = Package(
             name: "VidcallWebRTC",
             dependencies: [
                 "Vidcall",
-                // Path A: uncomment together with the .binaryTarget below.
-                // "WebRTC",
+                // __VIDCALL_WEBRTC_DEP__
+                // "WebRTC",  // disabled: run scripts/enable-webrtc.sh
             ]
         ),
-        // Path A: SwiftPM binary target for WebRTC 150.0.0 (community build,
-        // stasel). Commented out by default so the package builds offline and
-        // without the 44 MB binary; uncomment to link real WebRTC.
+        // __VIDCALL_WEBRTC_BINARY_BEGIN__
+        // (disabled by scripts/disable-webrtc.sh — run scripts/enable-webrtc.sh to re-enable)
         // .binaryTarget(
         //     name: "WebRTC",
         //     url: "https://github.com/stasel/WebRTC/releases/download/150.0.0/WebRTC-M150.xcframework.zip",
         //     checksum: "f9890492b0016e4c88ab20f07867b8b420054caedc8a692b2ec6ac041f3cf6b2"
         // ),
+        // __VIDCALL_WEBRTC_BINARY_END__
         .testTarget(
             name: "VidcallTests",
             dependencies: ["Vidcall"],
             resources: [.copy("Fixtures")]
+        ),
+        .testTarget(
+            name: "VidcallWebRTCTests",
+            dependencies: ["VidcallWebRTC"]
         ),
     ]
 )
