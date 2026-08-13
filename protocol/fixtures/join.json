@@ -23,10 +23,7 @@
     "capabilities": {
       "simulcast": true,
       "svc": false,
-      "codecs": [
-        "VP8",
-        "H264"
-      ]
+      "codecs": ["VP8", "H264"]
     }
   }
 }

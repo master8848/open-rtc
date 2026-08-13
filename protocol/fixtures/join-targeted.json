@@ -24,9 +24,7 @@
     "capabilities": {
       "simulcast": false,
       "svc": false,
-      "codecs": [
-        "H264"
-      ]
+      "codecs": ["H264"]
     }
   }
 }
