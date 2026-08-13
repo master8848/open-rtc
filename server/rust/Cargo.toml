@@ -1,0 +1,61 @@
+# vidcall-server — Rust workspace
+#
+# One lightweight Rust component (library + sidecar binary) that provides the
+# vidcall backend: rooms, participant rosters, the per-room signal log,
+# envelope relay and recording storage. Language-agnostic over HTTP/WS so any
+# app backend (Django / Laravel / Express / Fastify / Rails) can attach it.
+#
+# Dependency policy (CONTRIBUTING.md): every crate in Cargo.lock must be at
+# least 14 days old on crates.io; Cargo.lock is committed. Verify with
+# ./scripts/check-supply-chain.sh.
+
+[workspace]
+resolver = "2"
+members = ["crates/vidcall-server"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/vidcall/vidcall"
+description = "vidcall backend as a lightweight Rust sidecar: rooms, signaling relay, recording storage over HTTP/WS"
+keywords = ["webrtc", "signaling", "sidecar", "realtime", "video"]
+categories = ["network-programming", "web-programming::http-server"]
+
+[workspace.dependencies]
+# --- runtime --------------------------------------------------------------
+axum = { version = "0.8.9", default-features = false, features = ["http1", "json", "query", "ws", "tokio", "macros", "tracing"] }
+tokio = { version = "1.53.0", features = ["rt-multi-thread", "macros", "sync", "time", "net", "io-util", "fs", "signal"] }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
+thiserror = "=2.0.19"          # newest (2.0.20) published <14d before impl
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["fmt", "env-filter"] }
+async-trait = "=0.1.91"        # newest (0.1.92) published <14d before impl
+futures-util = "=0.3.33"       # newest (0.3.34) published <14d before impl
+bytes = "1.12.1"
+getrandom = "0.3.4"
+
+# --- stores ---------------------------------------------------------------
+rusqlite = { version = "=0.40.1", features = ["bundled"] }   # newest (0.40.2) <14d
+url = "2.5.8"
+tokio-postgres = { version = "=0.7.18", features = ["with-serde_json-1"] }
+reqwest = { version = "=0.12.28", default-features = false, features = ["json", "rustls-tls"] }
+
+# --- SigV4 signing for S3-compatible recording storage (in-workspace impl) --
+hmac = "0.13.0"
+sha2 = "0.11.0"
+base64 = "=0.23.0"             # newest (0.23.1) <14d
+
+# --- dev / tests ----------------------------------------------------------
+tower = { version = "0.5.3", features = ["util"] }
+http-body-util = "0.1.4"
+tempfile = "3.27.0"
+tokio-tungstenite = "0.30.0"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+panic = "abort"
+strip = true
