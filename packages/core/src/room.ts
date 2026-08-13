@@ -35,6 +35,13 @@ import { LocalParticipant, RemoteParticipant } from './participants.ts';
 import type { TrackPublication } from './participants.ts';
 import { PeerConnectionManager } from './peer-connection-manager.ts';
 import type { PeerSignal } from './peer-connection-manager.ts';
+import { RoomQualityController, qualityEnvironmentSupported } from './room-quality.ts';
+import type {
+  LocalQualityChangedEvent,
+  LocalQualityWarningEvent,
+  RoomQualityConfig,
+  RoomQualityHost,
+} from './room-quality.ts';
 import type { ParticipantInfo, SignalingTransport } from './transport.ts';
 import type { MediaRecorderConstructor } from './recording/media-recorder-recording-hook.ts';
 import type {
@@ -107,6 +114,19 @@ export type RoomEventMap = {
   chat: [RoomChatEvent];
   'screen-share': [RoomScreenShareEvent];
   'quality-warning': [RoomQualityWarningEvent];
+  /**
+   * Local adaptive-quality tier changed (tier, reason, direction, metrics).
+   * Emitted by the RoomQualityController when the policy ladder moves; the
+   * app can show the tier badge or react to `reason`
+   * ('network'|'cpu'|'device'|'manual'|'recovery').
+   */
+  'quality:changed': [LocalQualityChangedEvent];
+  /**
+   * Local adaptive-quality warning: `code` is one of 'cpu-high' |
+   * 'network-degraded' | 'uplink-starved' | 'device-capped' | 'recovered' |
+   * 'manual' | 'monitor-error', with a human `message` and `level` for toasts.
+   */
+  'quality:warning': [LocalQualityWarningEvent];
   /** Presence update from the backend presence layer. */
   presence: [ParticipantInfo & { state: PresenceState }];
   error: [Error];
@@ -188,6 +208,21 @@ export interface RoomConfig {
    * local media devices, with `devices:changed` events.
    */
   devices?: RoomDevicesConfig;
+  /**
+   * Adaptive-quality wiring (docs/architecture.md D5). Default: enabled in
+   * browsers, auto-disabled in non-browser/test environments (guarded like
+   * recording — `room.quality` stays defined and inert when unavailable).
+   *
+   * ```ts
+   * const room = new Room({
+   *   roomId, selfId, transport,
+   *   quality: { intervalMs: 2000, simulcast: false },
+   * });
+   * room.on('quality:changed', ({ from, to, reason, stats }) => { ... });
+   * room.on('quality:warning', ({ code, message, level }) => { ... });
+   * ```
+   */
+  quality?: RoomQualityConfig;
   debug?: (message: string, data?: unknown) => void;
 }
 
@@ -199,7 +234,7 @@ interface PeerEntry {
 
 // ------------------------------------------------------------------- room
 
-export class Room extends TypedEmitter<RoomEventMap> {
+export class Room extends TypedEmitter<RoomEventMap> implements RoomQualityHost {
   readonly roomId: string;
   readonly local: LocalParticipant;
   readonly sessionId: string;
@@ -238,6 +273,13 @@ export class Room extends TypedEmitter<RoomEventMap> {
    * `leave()` releases the `devicechange` subscription.
    */
   readonly devices: RoomDevicesFacade;
+  /**
+   * Adaptive-quality controller (D5): samples `getStats()`, feeds the policy
+   * ladder, and applies tier changes to the local video senders. Inert when
+   * the environment lacks a browser WebRTC stack (see `available`).
+   * Re-emits 'quality:changed' / 'quality:warning' on the room.
+   */
+  readonly quality: RoomQualityController;
   private readonly config: RoomConfig;
   private readonly transport: SignalingTransport;
   private readonly peers = new Map<string, PeerEntry>();
@@ -278,6 +320,16 @@ export class Room extends TypedEmitter<RoomEventMap> {
     this.recording.on('recording:stopped', (event) => this.emit('recording:stopped', event));
     this.recording.on('recording:error', (event) => this.emit('recording:error', event));
     this.recording.on('recording:blob-chunk', (chunk) => this.emit('recording:blob-chunk', chunk));
+    // Adaptive quality (D5): construct the controller (inert when disabled or
+    // in a non-browser environment) and re-emit its events on the room.
+    this.quality = new RoomQualityController({
+      room: this,
+      ...(config.quality ?? {}),
+      enabled: config.quality?.enabled ?? qualityEnvironmentSupported(),
+      debug: this.debug,
+    });
+    this.quality.on('quality:changed', (event) => this.emit('quality:changed', event));
+    this.quality.on('quality:warning', (event) => this.emit('quality:warning', event));
     this.devices = new RoomDevicesFacade({
       mediaDevices: config.devices?.mediaDevices,
       getSenders: () => {
@@ -328,6 +380,7 @@ export class Room extends TypedEmitter<RoomEventMap> {
       capabilities: this.local.capabilities,
     });
     this.joined = true;
+    this.quality.start(); // begin adaptive-quality sampling + device profile
     return this;
   }
 
@@ -335,6 +388,7 @@ export class Room extends TypedEmitter<RoomEventMap> {
   async leave(reason?: string): Promise<void> {
     if (this.closed) return;
     this.closed = true;
+    this.quality.stop(); // stop adaptive-quality sampling
     // Stop any in-progress recording (uploads the finalize report).
     try {
       await this.recording.stopRecording();
@@ -389,6 +443,9 @@ export class Room extends TypedEmitter<RoomEventMap> {
       entry.pc.addTrack(track);
       await entry.manager.negotiate('track-added');
     }
+    // Adaptive quality: register the track, set up simulcast encodings on its
+    // senders (when supported), and apply the current tier. Never throws.
+    await this.quality.attachTrack(track);
     return publication;
   }
 
@@ -398,6 +455,7 @@ export class Room extends TypedEmitter<RoomEventMap> {
     if (!pub || !pub.track) return;
     const track = pub.track;
     pub.track = null;
+    this.quality.detachTrack(track);
     for (const entry of this.peers.values()) {
       const sender = entry.pc.getSenders().find((s) => s.track === track);
       if (sender) entry.pc.removeTrack(sender);
@@ -481,6 +539,18 @@ export class Room extends TypedEmitter<RoomEventMap> {
 
   getPeerConnection(participantId: string): RTCPeerConnection | undefined {
     return this.peers.get(participantId)?.pc;
+  }
+
+  /** All live peer connections (the adaptive-quality sampler polls their stats). */
+  getPeerConnections(): RTCPeerConnection[] {
+    return [...this.peers.values()].map((entry) => entry.pc);
+  }
+
+  /** All local senders across live peer connections (adaptive-quality reach). */
+  getSenders(): RTCRtpSender[] {
+    const senders: RTCRtpSender[] = [];
+    for (const entry of this.peers.values()) senders.push(...entry.manager.getSenders());
+    return senders;
   }
 
   /** The typed data channel for a peer (reactions/chat/control over SCTP). */
@@ -779,7 +849,11 @@ export class Room extends TypedEmitter<RoomEventMap> {
 
     // Re-publish existing local tracks onto the fresh connection.
     for (const publication of this.local.publications) {
-      if (publication.track) pc.addTrack(publication.track);
+      if (publication.track) {
+        pc.addTrack(publication.track);
+        // Adaptive quality: configure the new peer's sender too (never throws).
+        await this.quality.attachTrack(publication.track);
+      }
     }
 
     const entry: PeerEntry = { pc, manager, bus };

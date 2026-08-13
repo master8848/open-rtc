@@ -9,6 +9,9 @@
       "path": "../../protocol"
     },
     {
+      "path": "../quality"
+    },
+    {
       "path": "../test-utils"
     }
   ],

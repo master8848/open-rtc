@@ -66,7 +66,11 @@ export class FakeMediaStreamTrack implements MediaStreamTrack {
     };
   }
 
-  applyConstraints(_constraints?: MediaTrackConstraints): Promise<void> {
+  /** Constraints recorded by every `applyConstraints` call (quality tests assert on these). */
+  readonly applyConstraintsCalls: MediaTrackConstraints[] = [];
+
+  applyConstraints(constraints?: MediaTrackConstraints): Promise<void> {
+    this.applyConstraintsCalls.push(structuredClone(constraints ?? {}));
     return Promise.resolve();
   }
 

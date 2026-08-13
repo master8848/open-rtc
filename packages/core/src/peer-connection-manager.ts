@@ -106,6 +106,14 @@ export class PeerConnectionManager {
     return this.pc.iceConnectionState;
   }
 
+  /**
+   * All senders on this connection (exposed for the adaptive-quality
+   * controller, which reads/updates encodings via `setParameters`).
+   */
+  getSenders(): RTCRtpSender[] {
+    return this.pc.getSenders();
+  }
+
   // ------------------------------------------------------------ event wiring
 
   private attach(): void {

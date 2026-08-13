@@ -51,20 +51,21 @@ one line.
 
 ### `new Room(config)`
 
-| Option              | Default                      | What it does                                                 |
-| ------------------- | ---------------------------- | ------------------------------------------------------------ |
-| `roomId`            | —                            | room to join (matches the envelope's `roomId`)               |
-| `selfId`            | —                            | stable peer id — matches `Envelope.senderId`                 |
-| `displayName`       | —                            | announced to other participants                              |
-| `sessionId`         | random                       | per-join id — guards stale tabs/duplicates                   |
-| `transport`         | —                            | `SignalingTransport` (required)                              |
-| `peerFactory`       | platform `RTCPeerConnection` | inject fakes in tests                                        |
-| `iceServers`        | —                            | STUN/TURN servers for the peer connections                   |
-| `polite`            | `selfId < remoteId`          | politeness rule for perfect negotiation                      |
-| `autoRestartIce`    | —                            | restart ICE when a peer's connection state turns `failed`    |
-| `dataChannelName`   | `'vidcall'`                  | data channel label                                           |
-| `deviceProfile`     | —                            | adaptive-quality device capability                           |
-| `recordingEndpoint` | —                            | base URL for uploading recording chunks to `@vidcall/server` |
+| Option              | Default                      | What it does                                                                |
+| ------------------- | ---------------------------- | --------------------------------------------------------------------------- |
+| `roomId`            | —                            | room to join (matches the envelope's `roomId`)                              |
+| `selfId`            | —                            | stable peer id — matches `Envelope.senderId`                                |
+| `displayName`       | —                            | announced to other participants                                             |
+| `sessionId`         | random                       | per-join id — guards stale tabs/duplicates                                  |
+| `transport`         | —                            | `SignalingTransport` (required)                                             |
+| `peerFactory`       | platform `RTCPeerConnection` | inject fakes in tests                                                       |
+| `iceServers`        | —                            | STUN/TURN servers for the peer connections                                  |
+| `polite`            | `selfId < remoteId`          | politeness rule for perfect negotiation                                     |
+| `autoRestartIce`    | —                            | restart ICE when a peer's connection state turns `failed`                   |
+| `dataChannelName`   | `'vidcall'`                  | data channel label                                                          |
+| `deviceProfile`     | —                            | adaptive-quality device capability                                          |
+| `quality`           | auto (browsers only)         | `{ intervalMs, simulcast, enabled, … }` — local adaptive-quality controller |
+| `recordingEndpoint` | —                            | base URL for uploading recording chunks to `@vidcall/server`                |
 
 ### Events
 
@@ -98,6 +99,15 @@ one line.
   ```
 - `room.getStats()` — per-peer `RTCStatsSnapshot`s for `@vidcall/quality` or
   your own monitors.
+- `room.quality` — local adaptive-quality controller (docs/architecture.md D5):
+  samples `getStats()` every `intervalMs` (default 2s) while video is
+  published, feeds the `@vidcall/quality` policy ladder, and applies tier
+  changes via `setParameters` (simulcast) or `track.applyConstraints`
+  (single-encoding). Emits `quality:changed` and `quality:warning` on the
+  room: payloads carry `{ from, to, reason, tier, stats }` and
+  `{ code, message, level }` — codes `cpu-high`, `network-degraded`,
+  `uplink-starved`, `device-capped`, `recovered`, `manual`, `monitor-error`.
+  Inert in non-browser environments unless `quality: { enabled: true }` is set.
 
 ## Design
 
