@@ -13,6 +13,7 @@ export * from './data-channel-bus.ts';
 export * from './participants.ts';
 export * from './room.ts';
 export * from './devices.ts';
+export * from './controls/index.ts';
 export * from './recording/index.ts';
 
 export type { Envelope } from '@vidcall/protocol';
