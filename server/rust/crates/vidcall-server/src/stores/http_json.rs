@@ -80,15 +80,12 @@ pub struct HttpJsonStore {
 impl HttpJsonStore {
     /// Create a store from a config.
     pub fn new(cfg: HttpJsonConfig) -> Result<Self> {
-        let client = cfg
-            .client
-            .clone()
-            .unwrap_or_else(|| {
-                reqwest::Client::builder()
-                    .user_agent("vidcall-server/0.1 (HttpJsonStore)")
-                    .build()
-                    .expect("reqwest client build")
-            });
+        let client = cfg.client.clone().unwrap_or_else(|| {
+            reqwest::Client::builder()
+                .user_agent("vidcall-server/0.1 (HttpJsonStore)")
+                .build()
+                .expect("reqwest client build")
+        });
         Ok(Self { cfg, client })
     }
 
@@ -206,7 +203,8 @@ impl Store for HttpJsonStore {
     async fn put_room(&self, room: &Room) -> Result<()> {
         let body = serde_json::to_value(room)
             .map_err(|e| VidcallError::internal_error(format!("encode failed: {e}")))?;
-        self.put_json(&format!("rooms/{}", room.room_id), &body).await
+        self.put_json(&format!("rooms/{}", room.room_id), &body)
+            .await
     }
 
     async fn delete_room(&self, room_id: &str) -> Result<()> {
@@ -301,7 +299,11 @@ impl Store for HttpJsonStore {
         // Polling stream over the signals resource.
         let store = self.clone();
         let room_id = room_id.to_string();
-        Some(Box::new(polling_stream(store, room_id, self.cfg.poll_interval)))
+        Some(Box::new(polling_stream(
+            store,
+            room_id,
+            self.cfg.poll_interval,
+        )))
     }
 }
 
@@ -333,11 +335,7 @@ fn polling_stream(
                     return Some((signal, st));
                 }
                 tokio::time::sleep(st.interval).await;
-                match st
-                    .store
-                    .list_signals(&st.room_id, st.since)
-                    .await
-                {
+                match st.store.list_signals(&st.room_id, st.since).await {
                     Ok(signals) => {
                         for s in &signals {
                             if s.seq > st.since {

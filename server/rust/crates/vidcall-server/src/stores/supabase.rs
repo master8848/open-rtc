@@ -85,15 +85,12 @@ impl SupabaseStore {
     pub fn from_config(cfg: SupabaseConfig) -> Result<Self> {
         Url::parse(&cfg.url)
             .map_err(|e| VidcallError::internal_error(format!("invalid supabase url: {e}")))?;
-        let client = cfg
-            .client
-            .clone()
-            .unwrap_or_else(|| {
-                reqwest::Client::builder()
-                    .user_agent("vidcall-server/0.1 (SupabaseStore)")
-                    .build()
-                    .expect("reqwest client build")
-            });
+        let client = cfg.client.clone().unwrap_or_else(|| {
+            reqwest::Client::builder()
+                .user_agent("vidcall-server/0.1 (SupabaseStore)")
+                .build()
+                .expect("reqwest client build")
+        });
         Ok(Self { cfg, client })
     }
 
@@ -113,11 +110,10 @@ impl SupabaseStore {
             .header("Authorization", format!("Bearer {}", self.cfg.key))
             .build()
             .map_err(|e| VidcallError::internal_error(format!("request build failed: {e}")))?;
-        let resp = self
-            .client
-            .execute(req)
-            .await
-            .map_err(|e| VidcallError::internal_error(format!("supabase request failed: {e}")))?;
+        let resp =
+            self.client.execute(req).await.map_err(|e| {
+                VidcallError::internal_error(format!("supabase request failed: {e}"))
+            })?;
         if !resp.status().is_success() {
             let status = resp.status().as_u16();
             let body = resp.text().await.unwrap_or_default();
@@ -129,7 +125,12 @@ impl SupabaseStore {
     }
 
     /// GET a table row filtered by a column value; returns the first row.
-    async fn get_row(&self, table: &str, col: &str, value: &str) -> Result<Option<serde_json::Value>> {
+    async fn get_row(
+        &self,
+        table: &str,
+        col: &str,
+        value: &str,
+    ) -> Result<Option<serde_json::Value>> {
         let mut url = self.url(table)?;
         url.query_pairs_mut()
             .append_pair(col, &format!("eq.{value}"))
@@ -159,7 +160,8 @@ impl SupabaseStore {
 
     async fn delete_row(&self, table: &str, col: &str, value: &str) -> Result<()> {
         let mut url = self.url(table)?;
-        url.query_pairs_mut().append_pair(col, &format!("eq.{value}"));
+        url.query_pairs_mut()
+            .append_pair(col, &format!("eq.{value}"));
         self.send(self.client.delete(url)).await?;
         Ok(())
     }
@@ -175,7 +177,8 @@ impl SupabaseStore {
 }
 
 fn decode<T: serde::de::DeserializeOwned>(v: serde_json::Value) -> Result<T> {
-    serde_json::from_value(v).map_err(|e| VidcallError::internal_error(format!("decode failed: {e}")))
+    serde_json::from_value(v)
+        .map_err(|e| VidcallError::internal_error(format!("decode failed: {e}")))
 }
 
 fn opt<T: serde::de::DeserializeOwned>(v: serde_json::Value) -> Result<Option<T>> {
@@ -340,10 +343,18 @@ impl Store for SupabaseStore {
                     .and_then(serde_json::Value::as_str)
                     .unwrap_or(room_id)
                     .to_string();
-                let seq = row.get("seq").and_then(serde_json::Value::as_i64).unwrap_or(0);
-                let received_at = row.get("received_at").and_then(serde_json::Value::as_i64).unwrap_or(0);
+                let seq = row
+                    .get("seq")
+                    .and_then(serde_json::Value::as_i64)
+                    .unwrap_or(0);
+                let received_at = row
+                    .get("received_at")
+                    .and_then(serde_json::Value::as_i64)
+                    .unwrap_or(0);
                 let envelope = decode::<crate::protocol::Envelope>(
-                    row.get("envelope_json").cloned().unwrap_or(serde_json::Value::Null),
+                    row.get("envelope_json")
+                        .cloned()
+                        .unwrap_or(serde_json::Value::Null),
                 )?;
                 Ok(StoredSignal {
                     room_id,
@@ -381,12 +392,17 @@ impl Store for SupabaseStore {
             .await
             .map_err(|e| VidcallError::internal_error(format!("bad json: {e}")))?;
         rows.into_iter()
-            .map(|row| decode::<RecordingSession>(row.get("recording_json").cloned().unwrap_or(row)))
+            .map(|row| {
+                decode::<RecordingSession>(row.get("recording_json").cloned().unwrap_or(row))
+            })
             .collect()
     }
 
     async fn get_recording(&self, session_id: &str) -> Result<Option<RecordingSession>> {
-        match self.get_row("vidcall_recordings", "session_id", session_id).await? {
+        match self
+            .get_row("vidcall_recordings", "session_id", session_id)
+            .await?
+        {
             Some(row) => opt::<RecordingSession>(row.get("recording_json").cloned().unwrap_or(row)),
             None => Ok(None),
         }
@@ -395,7 +411,11 @@ impl Store for SupabaseStore {
     fn subscribe(&self, room_id: &str) -> Option<SignalStream> {
         let store = self.clone();
         let room_id = room_id.to_string();
-        Some(Box::new(polling_stream(store, room_id, self.cfg.poll_interval)))
+        Some(Box::new(polling_stream(
+            store,
+            room_id,
+            self.cfg.poll_interval,
+        )))
     }
 }
 

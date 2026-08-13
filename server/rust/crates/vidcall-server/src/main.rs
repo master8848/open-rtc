@@ -25,7 +25,9 @@ use axum::Router;
 use vidcall_server::http::{router_with_state, AppState};
 use vidcall_server::recording::{DiskRecordingStorage, RecordingStorage};
 use vidcall_server::store::Store;
-use vidcall_server::stores::{ConvexStore, HttpJsonStore, InMemoryStore, PostgresStore, SqliteStore, SupabaseStore};
+use vidcall_server::stores::{
+    ConvexStore, HttpJsonStore, InMemoryStore, PostgresStore, SqliteStore, SupabaseStore,
+};
 use vidcall_server::VidcallError;
 
 const USAGE: &str = r#"vidcall-server — vidcall backend sidecar (rooms, signaling relay, recordings)
@@ -105,8 +107,12 @@ fn parse_args() -> Result<Cli, String> {
         http_json_url: std::env::var("VIDCALL_HTTP_JSON_URL").ok(),
         recordings_dir: std::env::var("VIDCALL_RECORDINGS_DIR").ok(),
         poll_interval_ms: 250,
-        auth_secret: std::env::var("VIDCALL_AUTH_SECRET").ok().filter(|s| !s.is_empty()),
-        auth_admin_token: std::env::var("VIDCALL_AUTH_ADMIN_TOKEN").ok().filter(|s| !s.is_empty()),
+        auth_secret: std::env::var("VIDCALL_AUTH_SECRET")
+            .ok()
+            .filter(|s| !s.is_empty()),
+        auth_admin_token: std::env::var("VIDCALL_AUTH_ADMIN_TOKEN")
+            .ok()
+            .filter(|s| !s.is_empty()),
         help: false,
         version: false,
     };
@@ -116,15 +122,31 @@ fn parse_args() -> Result<Cli, String> {
             "-h" | "--help" => cli.help = true,
             "-V" | "--version" => cli.version = true,
             "--addr" => cli.addr = args.next().ok_or("--addr needs a value")?,
-            "--route-prefix" => cli.route_prefix = args.next().ok_or("--route-prefix needs a value")?,
+            "--route-prefix" => {
+                cli.route_prefix = args.next().ok_or("--route-prefix needs a value")?
+            }
             "--store" => cli.store = args.next().ok_or("--store needs a value")?,
-            "--sqlite-path" => cli.sqlite_path = args.next().ok_or("--sqlite-path needs a value")?,
-            "--database-url" => cli.database_url = Some(args.next().ok_or("--database-url needs a value")?),
-            "--convex-url" => cli.convex_url = Some(args.next().ok_or("--convex-url needs a value")?),
-            "--supabase-url" => cli.supabase_url = Some(args.next().ok_or("--supabase-url needs a value")?),
-            "--supabase-key" => cli.supabase_key = Some(args.next().ok_or("--supabase-key needs a value")?),
-            "--http-json-url" => cli.http_json_url = Some(args.next().ok_or("--http-json-url needs a value")?),
-            "--recordings-dir" => cli.recordings_dir = Some(args.next().ok_or("--recordings-dir needs a value")?),
+            "--sqlite-path" => {
+                cli.sqlite_path = args.next().ok_or("--sqlite-path needs a value")?
+            }
+            "--database-url" => {
+                cli.database_url = Some(args.next().ok_or("--database-url needs a value")?)
+            }
+            "--convex-url" => {
+                cli.convex_url = Some(args.next().ok_or("--convex-url needs a value")?)
+            }
+            "--supabase-url" => {
+                cli.supabase_url = Some(args.next().ok_or("--supabase-url needs a value")?)
+            }
+            "--supabase-key" => {
+                cli.supabase_key = Some(args.next().ok_or("--supabase-key needs a value")?)
+            }
+            "--http-json-url" => {
+                cli.http_json_url = Some(args.next().ok_or("--http-json-url needs a value")?)
+            }
+            "--recordings-dir" => {
+                cli.recordings_dir = Some(args.next().ok_or("--recordings-dir needs a value")?)
+            }
             "--poll-interval-ms" => {
                 cli.poll_interval_ms = args
                     .next()
@@ -132,7 +154,9 @@ fn parse_args() -> Result<Cli, String> {
                     .parse()
                     .map_err(|_| "invalid --poll-interval-ms".to_string())?
             }
-            "--auth-secret" => cli.auth_secret = Some(args.next().ok_or("--auth-secret needs a value")?),
+            "--auth-secret" => {
+                cli.auth_secret = Some(args.next().ok_or("--auth-secret needs a value")?)
+            }
             "--auth-admin-token" => {
                 cli.auth_admin_token = Some(args.next().ok_or("--auth-admin-token needs a value")?)
             }
@@ -174,8 +198,7 @@ fn main() -> ExitCode {
 async fn run(cli: Cli) -> Result<(), String> {
     tracing_subscriber::fmt()
         .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "info".into()),
+            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()),
         )
         .init();
 
@@ -185,11 +208,14 @@ async fn run(cli: Cli) -> Result<(), String> {
         None => None,
     };
 
-    let auth = cli.auth_secret.as_ref().map(|secret| vidcall_server::http::AuthConfig {
-        secret: secret.clone(),
-        admin_token: cli.auth_admin_token.clone(),
-        default_token_ttl_ms: None,
-    });
+    let auth = cli
+        .auth_secret
+        .as_ref()
+        .map(|secret| vidcall_server::http::AuthConfig {
+            secret: secret.clone(),
+            admin_token: cli.auth_admin_token.clone(),
+            default_token_ttl_ms: None,
+        });
     let state = AppState {
         store,
         recording_storage,
@@ -224,8 +250,7 @@ async fn build_store(cli: &Cli) -> Result<Arc<dyn Store>, String> {
     match cli.store.as_str() {
         "memory" => Ok(Arc::new(InMemoryStore::new())),
         "sqlite" => {
-            let store = SqliteStore::open(&cli.sqlite_path)
-                .map_err(|e: VidcallError| e.message)?;
+            let store = SqliteStore::open(&cli.sqlite_path).map_err(|e: VidcallError| e.message)?;
             store
                 .bootstrap()
                 .await

@@ -123,10 +123,9 @@ impl RecordingStorage for DiskRecordingStorage {
             let name = name.to_string_lossy();
             if let Some(idx) = name.strip_prefix("chunk-") {
                 if let Ok(i) = idx.parse::<u64>() {
-                    let meta = entry
-                        .metadata()
-                        .await
-                        .map_err(|e| VidcallError::recording_storage_error(format!("stat failed: {e}")))?;
+                    let meta = entry.metadata().await.map_err(|e| {
+                        VidcallError::recording_storage_error(format!("stat failed: {e}"))
+                    })?;
                     chunks = chunks.max(i + 1);
                     bytes += meta.len();
                 }
@@ -145,11 +144,14 @@ impl RecordingStorage for DiskRecordingStorage {
         };
         tokio::fs::write(
             dir.join("manifest.json"),
-            serde_json::to_vec_pretty(&manifest)
-                .map_err(|e| VidcallError::recording_storage_error(format!("manifest encode failed: {e}")))?,
+            serde_json::to_vec_pretty(&manifest).map_err(|e| {
+                VidcallError::recording_storage_error(format!("manifest encode failed: {e}"))
+            })?,
         )
         .await
-        .map_err(|e| VidcallError::recording_storage_error(format!("manifest write failed: {e}")))?;
+        .map_err(|e| {
+            VidcallError::recording_storage_error(format!("manifest write failed: {e}"))
+        })?;
         Ok(manifest)
     }
 
@@ -157,15 +159,22 @@ impl RecordingStorage for DiskRecordingStorage {
         let dir = self.session_dir(session_id)?;
         let raw = tokio::fs::read(dir.join("manifest.json"))
             .await
-            .map_err(|_| VidcallError::recording_storage_error(format!("Recording {session_id} is not finalized")))?;
-        let manifest: FinalizeManifest = serde_json::from_slice(&raw)
-            .map_err(|e| VidcallError::recording_storage_error(format!("manifest decode failed: {e}")))?;
+            .map_err(|_| {
+                VidcallError::recording_storage_error(format!(
+                    "Recording {session_id} is not finalized"
+                ))
+            })?;
+        let manifest: FinalizeManifest = serde_json::from_slice(&raw).map_err(|e| {
+            VidcallError::recording_storage_error(format!("manifest decode failed: {e}"))
+        })?;
         let mut out = Vec::with_capacity(manifest.bytes as usize);
         for i in 0..manifest.chunks {
             let path = chunk_path(&dir, i);
-            let data = tokio::fs::read(&path)
-                .await
-                .map_err(|_| VidcallError::recording_storage_error(format!("Missing chunk {i} for recording {session_id}")))?;
+            let data = tokio::fs::read(&path).await.map_err(|_| {
+                VidcallError::recording_storage_error(format!(
+                    "Missing chunk {i} for recording {session_id}"
+                ))
+            })?;
             out.extend_from_slice(&data);
         }
         Ok(out)
@@ -287,7 +296,10 @@ impl S3RecordingStorage {
         let signed = sign_v4(SignV4Options {
             method,
             url: url.clone(),
-            headers: vec![("content-type".to_string(), "application/octet-stream".to_string())],
+            headers: vec![(
+                "content-type".to_string(),
+                "application/octet-stream".to_string(),
+            )],
             body,
             access_key_id: self.cfg.access_key_id.clone(),
             secret_access_key: self.cfg.secret_access_key.clone(),
@@ -333,10 +345,7 @@ impl RecordingStorage for S3RecordingStorage {
             .map_err(|e| VidcallError::recording_storage_error(format!("s3 put failed: {e}")))?;
         if !resp.status().is_success() {
             let status = resp.status().as_u16();
-            let text = resp
-                .text()
-                .await
-                .unwrap_or_default();
+            let text = resp.text().await.unwrap_or_default();
             return Err(VidcallError::recording_storage_error(format!(
                 "s3 put failed ({status}) for {key}: {text}"
             )));
@@ -350,13 +359,10 @@ impl RecordingStorage for S3RecordingStorage {
         let mut bytes = 0u64;
         for i in 0..10_000u64 {
             let key = self.key_for(session_id, "chunk", Some(i))?;
-            let req = self
-                .signed_request("HEAD", &key, Vec::new())
-                .await?;
-            let resp = req
-                .send()
-                .await
-                .map_err(|e| VidcallError::recording_storage_error(format!("s3 head failed: {e}")))?;
+            let req = self.signed_request("HEAD", &key, Vec::new()).await?;
+            let resp = req.send().await.map_err(|e| {
+                VidcallError::recording_storage_error(format!("s3 head failed: {e}"))
+            })?;
             if !resp.status().is_success() {
                 break;
             }
@@ -380,16 +386,16 @@ impl RecordingStorage for S3RecordingStorage {
             finalized_at: crate::protocol::now_ms(),
         };
         let key = self.key_for(session_id, "manifest", None)?;
-        let body = serde_json::to_vec(&manifest)
-            .map_err(|e| VidcallError::recording_storage_error(format!("manifest encode failed: {e}")))?;
+        let body = serde_json::to_vec(&manifest).map_err(|e| {
+            VidcallError::recording_storage_error(format!("manifest encode failed: {e}"))
+        })?;
         let req = self
             .signed_request("PUT", &key, body.clone())
             .await?
             .body(body);
-        let resp = req
-            .send()
-            .await
-            .map_err(|e| VidcallError::recording_storage_error(format!("s3 manifest put failed: {e}")))?;
+        let resp = req.send().await.map_err(|e| {
+            VidcallError::recording_storage_error(format!("s3 manifest put failed: {e}"))
+        })?;
         if !resp.status().is_success() {
             let status = resp.status().as_u16();
             let text = resp.text().await.unwrap_or_default();
@@ -413,18 +419,16 @@ impl RecordingStorage for S3RecordingStorage {
                 resp.status().as_u16()
             )));
         }
-        let manifest: FinalizeManifest = resp
-            .json()
-            .await
-            .map_err(|e| VidcallError::recording_storage_error(format!("manifest decode failed: {e}")))?;
+        let manifest: FinalizeManifest = resp.json().await.map_err(|e| {
+            VidcallError::recording_storage_error(format!("manifest decode failed: {e}"))
+        })?;
         let mut out = Vec::with_capacity(manifest.bytes as usize);
         for i in 0..manifest.chunks {
             let chunk_key = self.key_for(session_id, "chunk", Some(i))?;
             let req = self.signed_request("GET", &chunk_key, Vec::new()).await?;
-            let resp = req
-                .send()
-                .await
-                .map_err(|e| VidcallError::recording_storage_error(format!("s3 get failed: {e}")))?;
+            let resp = req.send().await.map_err(|e| {
+                VidcallError::recording_storage_error(format!("s3 get failed: {e}"))
+            })?;
             if !resp.status().is_success() {
                 return Err(VidcallError::recording_storage_error(format!(
                     "s3 chunk {i} missing ({}) for {session_id}",
@@ -440,15 +444,16 @@ impl RecordingStorage for S3RecordingStorage {
 
     async fn delete(&self, session_id: &str) -> Result<()> {
         let manifest_key = self.key_for(session_id, "manifest", None)?;
-        let req = self.signed_request("DELETE", &manifest_key, Vec::new()).await?;
+        let req = self
+            .signed_request("DELETE", &manifest_key, Vec::new())
+            .await?;
         let _ = req.send().await;
         for i in 0..10_000u64 {
             let key = self.key_for(session_id, "chunk", Some(i))?;
             let head = self.signed_request("HEAD", &key, Vec::new()).await?;
-            let resp = head
-                .send()
-                .await
-                .map_err(|e| VidcallError::recording_storage_error(format!("s3 head failed: {e}")))?;
+            let resp = head.send().await.map_err(|e| {
+                VidcallError::recording_storage_error(format!("s3 head failed: {e}"))
+            })?;
             if !resp.status().is_success() {
                 break;
             }

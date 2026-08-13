@@ -92,15 +92,12 @@ impl ConvexStore {
         // Validate the URL early.
         Url::parse(&cfg.url)
             .map_err(|e| VidcallError::internal_error(format!("invalid convex url: {e}")))?;
-        let client = cfg
-            .client
-            .clone()
-            .unwrap_or_else(|| {
-                reqwest::Client::builder()
-                    .user_agent("vidcall-server/0.1 (ConvexStore)")
-                    .build()
-                    .expect("reqwest client build")
-            });
+        let client = cfg.client.clone().unwrap_or_else(|| {
+            reqwest::Client::builder()
+                .user_agent("vidcall-server/0.1 (ConvexStore)")
+                .build()
+                .expect("reqwest client build")
+        });
         Ok(Self { cfg, client })
     }
 
@@ -109,7 +106,12 @@ impl ConvexStore {
     }
 
     /// Call one Convex function; returns the `value` on success.
-    async fn call(&self, kind: &str, path: &str, args: serde_json::Value) -> Result<serde_json::Value> {
+    async fn call(
+        &self,
+        kind: &str,
+        path: &str,
+        args: serde_json::Value,
+    ) -> Result<serde_json::Value> {
         let url = format!("{}/api/{kind}", self.cfg.url.trim_end_matches('/'));
         let body = serde_json::json!({
             "path": path,
@@ -124,10 +126,7 @@ impl ConvexStore {
             .await
             .map_err(|e| VidcallError::internal_error(format!("convex request failed: {e}")))?;
         let status = resp.status().as_u16();
-        let json: serde_json::Value = resp
-            .json()
-            .await
-            .unwrap_or(serde_json::Value::Null);
+        let json: serde_json::Value = resp.json().await.unwrap_or(serde_json::Value::Null);
         if status != 200 {
             let message = json
                 .get("error")
@@ -143,7 +142,10 @@ impl ConvexStore {
                 "convex {kind} {path} failed: {json}"
             )));
         }
-        Ok(json.get("value").cloned().unwrap_or(serde_json::Value::Null))
+        Ok(json
+            .get("value")
+            .cloned()
+            .unwrap_or(serde_json::Value::Null))
     }
 
     async fn query(&self, path: &str, args: serde_json::Value) -> Result<serde_json::Value> {
@@ -171,36 +173,46 @@ fn opt<T: serde::de::DeserializeOwned>(v: serde_json::Value) -> Result<Option<T>
 #[async_trait]
 impl Store for ConvexStore {
     async fn get_room(&self, room_id: &str) -> Result<Option<Room>> {
-        opt(self.query(&self.fn_path("getRoom"), json!({ "roomId": room_id })).await?)
+        opt(self
+            .query(&self.fn_path("getRoom"), json!({ "roomId": room_id }))
+            .await?)
     }
 
     async fn put_room(&self, room: &Room) -> Result<()> {
         let value = serde_json::to_value(room)
             .map_err(|e| VidcallError::internal_error(format!("encode failed: {e}")))?;
-        self.mutation(&self.fn_path("putRoom"), json!({ "room": value })).await?;
+        self.mutation(&self.fn_path("putRoom"), json!({ "room": value }))
+            .await?;
         Ok(())
     }
 
     async fn delete_room(&self, room_id: &str) -> Result<()> {
-        self.mutation(&self.fn_path("deleteRoom"), json!({ "roomId": room_id })).await?;
+        self.mutation(&self.fn_path("deleteRoom"), json!({ "roomId": room_id }))
+            .await?;
         Ok(())
     }
 
-    async fn get_participant(&self, room_id: &str, participant_id: &str) -> Result<Option<Participant>> {
-        opt(
-            self.query(
+    async fn get_participant(
+        &self,
+        room_id: &str,
+        participant_id: &str,
+    ) -> Result<Option<Participant>> {
+        opt(self
+            .query(
                 &self.fn_path("getParticipant"),
                 json!({ "roomId": room_id, "participantId": participant_id }),
             )
-            .await?,
-        )
+            .await?)
     }
 
     async fn put_participant(&self, participant: &Participant) -> Result<()> {
         let value = serde_json::to_value(participant)
             .map_err(|e| VidcallError::internal_error(format!("encode failed: {e}")))?;
-        self.mutation(&self.fn_path("putParticipant"), json!({ "participant": value }))
-            .await?;
+        self.mutation(
+            &self.fn_path("putParticipant"),
+            json!({ "participant": value }),
+        )
+        .await?;
         Ok(())
     }
 
@@ -215,12 +227,12 @@ impl Store for ConvexStore {
 
     async fn list_participants(&self, room_id: &str) -> Result<Vec<Participant>> {
         let value = self
-            .query(&self.fn_path("listParticipants"), json!({ "roomId": room_id }))
+            .query(
+                &self.fn_path("listParticipants"),
+                json!({ "roomId": room_id }),
+            )
             .await?;
-        let items = value
-            .as_array()
-            .cloned()
-            .unwrap_or_default();
+        let items = value.as_array().cloned().unwrap_or_default();
         items.into_iter().map(decode::<Participant>).collect()
     }
 
@@ -251,7 +263,10 @@ impl Store for ConvexStore {
 
     async fn list_signals(&self, room_id: &str, since: i64) -> Result<Vec<StoredSignal>> {
         let value = self
-            .query(&self.fn_path("listSignals"), json!({ "roomId": room_id, "since": since }))
+            .query(
+                &self.fn_path("listSignals"),
+                json!({ "roomId": room_id, "since": since }),
+            )
             .await?;
         let items = value.as_array().cloned().unwrap_or_default();
         items.into_iter().map(decode::<StoredSignal>).collect()
@@ -267,23 +282,32 @@ impl Store for ConvexStore {
 
     async fn list_recordings(&self, room_id: &str) -> Result<Vec<RecordingSession>> {
         let value = self
-            .query(&self.fn_path("listRecordings"), json!({ "roomId": room_id }))
+            .query(
+                &self.fn_path("listRecordings"),
+                json!({ "roomId": room_id }),
+            )
             .await?;
         let items = value.as_array().cloned().unwrap_or_default();
         items.into_iter().map(decode::<RecordingSession>).collect()
     }
 
     async fn get_recording(&self, session_id: &str) -> Result<Option<RecordingSession>> {
-        opt(
-            self.query(&self.fn_path("getRecording"), json!({ "sessionId": session_id }))
-                .await?,
-        )
+        opt(self
+            .query(
+                &self.fn_path("getRecording"),
+                json!({ "sessionId": session_id }),
+            )
+            .await?)
     }
 
     fn subscribe(&self, room_id: &str) -> Option<SignalStream> {
         let store = self.clone();
         let room_id = room_id.to_string();
-        Some(Box::new(polling_stream(store, room_id, self.cfg.poll_interval)))
+        Some(Box::new(polling_stream(
+            store,
+            room_id,
+            self.cfg.poll_interval,
+        )))
     }
 }
 

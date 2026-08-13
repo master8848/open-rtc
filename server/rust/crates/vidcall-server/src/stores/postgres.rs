@@ -110,7 +110,10 @@ impl Store for PostgresStore {
     async fn get_room(&self, room_id: &str) -> Result<Option<Room>> {
         let client = self.client.lock().await;
         let rows = client
-            .query("SELECT room_json FROM vidcall_rooms WHERE room_id = $1", &[&room_id])
+            .query(
+                "SELECT room_json FROM vidcall_rooms WHERE room_id = $1",
+                &[&room_id],
+            )
             .await
             .map_err(|e| VidcallError::internal_error(format!("postgres query failed: {e}")))?;
         rows.first()
@@ -137,12 +140,16 @@ impl Store for PostgresStore {
 
     async fn delete_room(&self, room_id: &str) -> Result<()> {
         let client = self.client.lock().await;
-        for table in ["vidcall_rooms", "vidcall_participants", "vidcall_signals", "vidcall_recordings"] {
+        for table in [
+            "vidcall_rooms",
+            "vidcall_participants",
+            "vidcall_signals",
+            "vidcall_recordings",
+        ] {
             let sql = format!("DELETE FROM {table} WHERE room_id = $1");
-            client
-                .execute(&sql, &[&room_id])
-                .await
-                .map_err(|e| VidcallError::internal_error(format!("postgres delete failed: {e}")))?;
+            client.execute(&sql, &[&room_id]).await.map_err(|e| {
+                VidcallError::internal_error(format!("postgres delete failed: {e}"))
+            })?;
         }
         Ok(())
     }
@@ -258,8 +265,9 @@ impl Store for PostgresStore {
                 Ok(StoredSignal {
                     room_id: room_id.to_string(),
                     seq: r.get::<_, i64>(0),
-                    envelope: serde_json::from_value(r.get::<_, serde_json::Value>(1))
-                        .map_err(|e| VidcallError::internal_error(format!("postgres decode failed: {e}")))?,
+                    envelope: serde_json::from_value(r.get::<_, serde_json::Value>(1)).map_err(
+                        |e| VidcallError::internal_error(format!("postgres decode failed: {e}")),
+                    )?,
                     received_at: r.get::<_, i64>(2),
                 })
             })
@@ -345,41 +353,49 @@ fn polling_stream(poller: Poller) -> impl futures_util::Stream<Item = StoredSign
         poller: Poller,
         queue: VecDeque<StoredSignal>,
     }
-    futures_util::stream::unfold(State { poller, queue: VecDeque::new() }, |mut st| async move {
-        loop {
-            if let Some(signal) = st.queue.pop_front() {
-                return Some((signal, st));
-            }
-            tokio::time::sleep(st.poller.interval).await;
-            let client = st.poller.client.lock().await;
-            let rows = client
-                .query(
-                    "SELECT seq, envelope_json, received_at FROM vidcall_signals
+    futures_util::stream::unfold(
+        State {
+            poller,
+            queue: VecDeque::new(),
+        },
+        |mut st| async move {
+            loop {
+                if let Some(signal) = st.queue.pop_front() {
+                    return Some((signal, st));
+                }
+                tokio::time::sleep(st.poller.interval).await;
+                let client = st.poller.client.lock().await;
+                let rows = client
+                    .query(
+                        "SELECT seq, envelope_json, received_at FROM vidcall_signals
                      WHERE room_id = $1 AND seq > $2 ORDER BY seq",
-                    &[&st.poller.room_id, &st.poller.since],
-                )
-                .await;
-            match rows {
-                Ok(rows) => {
-                    for r in &rows {
-                        let seq: i64 = r.get(0);
-                        if seq > st.poller.since {
-                            st.poller.since = seq;
-                        }
-                        if let Ok(envelope) = serde_json::from_value(r.get::<_, serde_json::Value>(1)) {
-                            st.queue.push_back(StoredSignal {
-                                room_id: st.poller.room_id.clone(),
-                                seq,
-                                envelope,
-                                received_at: r.get::<_, i64>(2),
-                            });
+                        &[&st.poller.room_id, &st.poller.since],
+                    )
+                    .await;
+                match rows {
+                    Ok(rows) => {
+                        for r in &rows {
+                            let seq: i64 = r.get(0);
+                            if seq > st.poller.since {
+                                st.poller.since = seq;
+                            }
+                            if let Ok(envelope) =
+                                serde_json::from_value(r.get::<_, serde_json::Value>(1))
+                            {
+                                st.queue.push_back(StoredSignal {
+                                    room_id: st.poller.room_id.clone(),
+                                    seq,
+                                    envelope,
+                                    received_at: r.get::<_, i64>(2),
+                                });
+                            }
                         }
                     }
-                }
-                Err(e) => {
-                    tracing::warn!(error = %e, "postgres feed poll failed");
+                    Err(e) => {
+                        tracing::warn!(error = %e, "postgres feed poll failed");
+                    }
                 }
             }
-        }
-    })
+        },
+    )
 }

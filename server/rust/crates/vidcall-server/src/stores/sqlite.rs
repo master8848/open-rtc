@@ -101,8 +101,7 @@ impl SqliteStore {
         .map_err(|e| VidcallError::internal_error(format!("sqlite task failed: {e}")))??;
         Ok(())
     }
-
-  }
+}
 
 /// Run a synchronous rusqlite closure on the blocking pool (the connection is
 /// behind a Mutex, so concurrent callers serialize on SQLite itself).
@@ -158,8 +157,11 @@ impl Store for SqliteStore {
     async fn delete_room(&self, room_id: &str) -> Result<()> {
         let room_id = room_id.to_string();
         with_conn(&self.db, move |conn| {
-            conn.execute("DELETE FROM vidcall_rooms WHERE room_id = ?1", params![room_id])
-                .map_err(|e| VidcallError::internal_error(format!("sqlite delete failed: {e}")))?;
+            conn.execute(
+                "DELETE FROM vidcall_rooms WHERE room_id = ?1",
+                params![room_id],
+            )
+            .map_err(|e| VidcallError::internal_error(format!("sqlite delete failed: {e}")))?;
             conn.execute(
                 "DELETE FROM vidcall_participants WHERE room_id = ?1",
                 params![room_id],
@@ -244,10 +246,12 @@ impl Store for SqliteStore {
                 .map_err(|e| VidcallError::internal_error(format!("sqlite read failed: {e}")))?;
             let mut out: Vec<Participant> = Vec::new();
             for row in rows {
-                let json = row
-                    .map_err(|e| VidcallError::internal_error(format!("sqlite read failed: {e}")))?;
-                let p: Participant = serde_json::from_str(&json)
-                    .map_err(|e| VidcallError::internal_error(format!("sqlite decode failed: {e}")))?;
+                let json = row.map_err(|e| {
+                    VidcallError::internal_error(format!("sqlite read failed: {e}"))
+                })?;
+                let p: Participant = serde_json::from_str(&json).map_err(|e| {
+                    VidcallError::internal_error(format!("sqlite decode failed: {e}"))
+                })?;
                 out.push(p);
             }
             out.sort_by(|a, b| {
@@ -306,15 +310,21 @@ impl Store for SqliteStore {
                 .map_err(|e| VidcallError::internal_error(format!("sqlite read failed: {e}")))?;
             let rows = stmt
                 .query_map(params![room_id, since], |r| {
-                    Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?, r.get::<_, i64>(2)?))
+                    Ok((
+                        r.get::<_, i64>(0)?,
+                        r.get::<_, String>(1)?,
+                        r.get::<_, i64>(2)?,
+                    ))
                 })
                 .map_err(|e| VidcallError::internal_error(format!("sqlite read failed: {e}")))?;
             let mut out = Vec::new();
             for row in rows {
-                let (seq, json, received_at) = row
-                    .map_err(|e| VidcallError::internal_error(format!("sqlite read failed: {e}")))?;
-                let envelope = serde_json::from_str(&json)
-                    .map_err(|e| VidcallError::internal_error(format!("sqlite decode failed: {e}")))?;
+                let (seq, json, received_at) = row.map_err(|e| {
+                    VidcallError::internal_error(format!("sqlite read failed: {e}"))
+                })?;
+                let envelope = serde_json::from_str(&json).map_err(|e| {
+                    VidcallError::internal_error(format!("sqlite decode failed: {e}"))
+                })?;
                 out.push(StoredSignal {
                     room_id: room_id.clone(),
                     seq,
@@ -357,10 +367,12 @@ impl Store for SqliteStore {
                 .map_err(|e| VidcallError::internal_error(format!("sqlite read failed: {e}")))?;
             let mut out = Vec::new();
             for row in rows {
-                let json = row
-                    .map_err(|e| VidcallError::internal_error(format!("sqlite read failed: {e}")))?;
-                let r: RecordingSession = serde_json::from_str(&json)
-                    .map_err(|e| VidcallError::internal_error(format!("sqlite decode failed: {e}")))?;
+                let json = row.map_err(|e| {
+                    VidcallError::internal_error(format!("sqlite read failed: {e}"))
+                })?;
+                let r: RecordingSession = serde_json::from_str(&json).map_err(|e| {
+                    VidcallError::internal_error(format!("sqlite decode failed: {e}"))
+                })?;
                 out.push(r);
             }
             Ok(out)
@@ -420,6 +432,8 @@ fn optional_row(result: Result<String, rusqlite::Error>) -> Result<Option<String
     match result {
         Ok(v) => Ok(Some(v)),
         Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
-        Err(e) => Err(VidcallError::internal_error(format!("sqlite read failed: {e}"))),
+        Err(e) => Err(VidcallError::internal_error(format!(
+            "sqlite read failed: {e}"
+        ))),
     }
 }

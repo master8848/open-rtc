@@ -85,8 +85,11 @@ pub trait Store: Send + Sync + 'static {
     async fn put_signal(&self, signal: SignalInput) -> crate::error::Result<StoredSignal>;
 
     /// Signals with `seq > since`, ordered ascending by seq.
-    async fn list_signals(&self, room_id: &str, since: i64)
-        -> crate::error::Result<Vec<StoredSignal>>;
+    async fn list_signals(
+        &self,
+        room_id: &str,
+        since: i64,
+    ) -> crate::error::Result<Vec<StoredSignal>>;
 
     // ---- recordings ------------------------------------------------------
 
@@ -94,8 +97,10 @@ pub trait Store: Send + Sync + 'static {
 
     async fn list_recordings(&self, room_id: &str) -> crate::error::Result<Vec<RecordingSession>>;
 
-    async fn get_recording(&self, session_id: &str)
-        -> crate::error::Result<Option<RecordingSession>>;
+    async fn get_recording(
+        &self,
+        session_id: &str,
+    ) -> crate::error::Result<Option<RecordingSession>>;
 
     // ---- change feed (WS relay / cross-node fan-out) ---------------------
 

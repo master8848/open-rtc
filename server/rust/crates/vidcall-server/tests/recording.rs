@@ -94,11 +94,11 @@ fn sigv4_authorization_header_structure() {
     assert!(auth.contains("Credential=AKIDEXAMPLE/20150830/us-east-1/s3/aws4_request"));
     // Empty-body GET: the payload hash header is added for PUT/POST (and any
     // request with a body), mirroring packages/server/src/aws-sigv4.ts.
-    assert!(auth.contains("SignedHeaders=host;x-amz-date"), "auth: {auth}");
-    let sig = auth
-        .split("Signature=")
-        .nth(1)
-        .expect("signature present");
+    assert!(
+        auth.contains("SignedHeaders=host;x-amz-date"),
+        "auth: {auth}"
+    );
+    let sig = auth.split("Signature=").nth(1).expect("signature present");
     assert_eq!(sig.len(), 64, "signature must be 64 hex chars");
     assert!(sig.chars().all(|c| c.is_ascii_hexdigit()));
 
@@ -115,7 +115,13 @@ fn sigv4_authorization_header_structure() {
         service: "s3".to_string(),
         amz_date: Some("20150830T123600Z".to_string()),
     });
-    let auth2 = again.headers.iter().find(|(k, _)| k == "authorization").unwrap().1.clone();
+    let auth2 = again
+        .headers
+        .iter()
+        .find(|(k, _)| k == "authorization")
+        .unwrap()
+        .1
+        .clone();
     assert_eq!(auth, auth2);
 
     // A different body changes the signature (payload hash is signed).
@@ -134,7 +140,13 @@ fn sigv4_authorization_header_structure() {
             amz_date: Some("20150830T123600Z".to_string()),
         }
     });
-    let auth3 = other.headers.iter().find(|(k, _)| k == "authorization").unwrap().1.clone();
+    let auth3 = other
+        .headers
+        .iter()
+        .find(|(k, _)| k == "authorization")
+        .unwrap()
+        .1
+        .clone();
     assert_ne!(auth, auth3, "payload must be signed");
 }
 
@@ -151,7 +163,11 @@ fn sigv4_put_payload_hash_header() {
         service: "s3".to_string(),
         amz_date: Some("20240101T000000Z".to_string()),
     });
-    let headers: HashMap<&str, &str> = signed.headers.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect();
+    let headers: HashMap<&str, &str> = signed
+        .headers
+        .iter()
+        .map(|(k, v)| (k.as_str(), v.as_str()))
+        .collect();
     assert!(headers.contains_key("x-amz-content-sha256"));
     assert!(headers.contains_key("x-amz-date"));
     assert!(headers.contains_key("host"));
@@ -170,49 +186,52 @@ async fn spawn_mock_s3() -> (String, ObjectStore) {
     let objects2 = objects.clone();
     let app = Router::new().route(
         "/{*path}",
-        any(move |method: Method, axum::extract::Path(path): axum::extract::Path<String>, body: axum::body::Bytes| {
-            let objects = objects2.clone();
-            async move {
-                let key = path.trim_start_matches('/').to_string();
-                let status = match method {
-                    Method::PUT | Method::POST => {
-                        objects.lock().unwrap().insert(key, body.to_vec());
-                        StatusCode::OK
-                    }
-                    Method::GET | Method::HEAD => {
-                        let found = objects.lock().unwrap().get(&key).cloned();
-                        match found {
-                            Some(bytes) => {
-                                // Real S3 HEAD returns Content-Length and an
-                                // empty body; the storage client reads the
-                                // length to compute the manifest bytes.
-                                let len = bytes.len().to_string();
-                                let mut resp =
-                                    axum::response::Response::new(Body::from(bytes));
-                                resp.headers_mut().insert(
-                                    axum::http::header::CONTENT_LENGTH,
-                                    axum::http::HeaderValue::from_str(&len).unwrap(),
-                                );
-                                if method == Method::HEAD {
-                                    *resp.body_mut() = Body::empty();
-                                }
-                                return resp;
-                            }
-                            None => StatusCode::NOT_FOUND,
+        any(
+            move |method: Method,
+                  axum::extract::Path(path): axum::extract::Path<String>,
+                  body: axum::body::Bytes| {
+                let objects = objects2.clone();
+                async move {
+                    let key = path.trim_start_matches('/').to_string();
+                    let status = match method {
+                        Method::PUT | Method::POST => {
+                            objects.lock().unwrap().insert(key, body.to_vec());
+                            StatusCode::OK
                         }
-                    }
-                    Method::DELETE => {
-                        objects.lock().unwrap().remove(&key);
-                        StatusCode::NO_CONTENT
-                    }
-                    _ => StatusCode::METHOD_NOT_ALLOWED,
-                };
-                axum::response::Response::builder()
-                    .status(status)
-                    .body(Body::empty())
-                    .unwrap()
-            }
-        }),
+                        Method::GET | Method::HEAD => {
+                            let found = objects.lock().unwrap().get(&key).cloned();
+                            match found {
+                                Some(bytes) => {
+                                    // Real S3 HEAD returns Content-Length and an
+                                    // empty body; the storage client reads the
+                                    // length to compute the manifest bytes.
+                                    let len = bytes.len().to_string();
+                                    let mut resp = axum::response::Response::new(Body::from(bytes));
+                                    resp.headers_mut().insert(
+                                        axum::http::header::CONTENT_LENGTH,
+                                        axum::http::HeaderValue::from_str(&len).unwrap(),
+                                    );
+                                    if method == Method::HEAD {
+                                        *resp.body_mut() = Body::empty();
+                                    }
+                                    return resp;
+                                }
+                                None => StatusCode::NOT_FOUND,
+                            }
+                        }
+                        Method::DELETE => {
+                            objects.lock().unwrap().remove(&key);
+                            StatusCode::NO_CONTENT
+                        }
+                        _ => StatusCode::METHOD_NOT_ALLOWED,
+                    };
+                    axum::response::Response::builder()
+                        .status(status)
+                        .body(Body::empty())
+                        .unwrap()
+                }
+            },
+        ),
     );
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
@@ -250,8 +269,16 @@ async fn s3_storage_round_trip_against_mock() {
 
     // Path-style addressing: the mock sees `bucket/prefix/...` keys.
     let keys: Vec<String> = objects.lock().unwrap().keys().cloned().collect();
-    assert!(keys.iter().any(|k| k == "recordings/v1/rec-s3-001/chunk-000000"), "keys: {keys:?}");
-    assert!(keys.iter().any(|k| k == "recordings/v1/rec-s3-001/manifest.json"), "keys: {keys:?}");
+    assert!(
+        keys.iter()
+            .any(|k| k == "recordings/v1/rec-s3-001/chunk-000000"),
+        "keys: {keys:?}"
+    );
+    assert!(
+        keys.iter()
+            .any(|k| k == "recordings/v1/rec-s3-001/manifest.json"),
+        "keys: {keys:?}"
+    );
 
     storage.delete(session).await.unwrap();
     assert!(storage.read_all(session).await.is_err());

@@ -65,7 +65,10 @@ async fn postgres_passes_shared_suite() {
         return;
     };
     let url = url.trim().to_string();
-    assert!(!url.is_empty(), "VIDCALL_TEST_POSTGRES_URL must not be empty");
+    assert!(
+        !url.is_empty(),
+        "VIDCALL_TEST_POSTGRES_URL must not be empty"
+    );
     run_store_test_suite(StoreHarness {
         name: "postgres",
         create_store: Box::new(move || {
@@ -94,8 +97,8 @@ async fn all_store_types_construct() {
     store.bootstrap().await.unwrap();
     let _ = ConvexStore::new("https://example.convex.cloud").unwrap();
     let _ = SupabaseStore::new("https://example.supabase.co", "test-key").unwrap();
-    let _ = HttpJsonStore::new(
-        vidcall_server::stores::HttpJsonConfig::new("https://example.test/api"),
-    )
+    let _ = HttpJsonStore::new(vidcall_server::stores::HttpJsonConfig::new(
+        "https://example.test/api",
+    ))
     .unwrap();
 }

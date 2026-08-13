@@ -34,7 +34,7 @@ use axum::response::IntoResponse;
 use axum::routing::{delete, get, post};
 use axum::{Json, Router};
 use bytes::Bytes;
-use serde::{Deserialize, de::DeserializeOwned};
+use serde::{de::DeserializeOwned, Deserialize};
 
 use crate::auth::{issue_token, verify_token, TokenClaims, TokenRole, DEFAULT_TOKEN_TTL_SECONDS};
 use crate::core::{
@@ -127,17 +127,47 @@ fn build_router(prefix: &str, state: Arc<AppState>) -> Router {
     Router::new()
         .route(&format!("{prefix}/auth/token"), post(auth_token_handler))
         .route(&format!("{prefix}/rooms"), post(create_room_handler))
-        .route(&format!("{prefix}/rooms/{{room_id}}/join"), post(join_handler).fallback(fallback))
-        .route(&format!("{prefix}/rooms/{{room_id}}/leave"), post(leave_handler).fallback(fallback))
-        .route(&format!("{prefix}/rooms/{{room_id}}/signal"), post(signal_handler).fallback(fallback))
-        .route(&format!("{prefix}/rooms/{{room_id}}/close"), post(close_room_handler).fallback(fallback))
-        .route(&format!("{prefix}/rooms/{{room_id}}"), delete(delete_room_handler).fallback(fallback))
-        .route(&format!("{prefix}/rooms/{{room_id}}/state"), get(state_handler).fallback(fallback))
-        .route(&format!("{prefix}/rooms/{{room_id}}/recordings"), get(recordings_handler).fallback(fallback))
-        .route(&format!("{prefix}/recordings/{{session_id}}/chunks"), post(chunks_handler).fallback(fallback))
-        .route(&format!("{prefix}/recordings/{{session_id}}/finalize"), post(finalize_handler).fallback(fallback))
+        .route(
+            &format!("{prefix}/rooms/{{room_id}}/join"),
+            post(join_handler).fallback(fallback),
+        )
+        .route(
+            &format!("{prefix}/rooms/{{room_id}}/leave"),
+            post(leave_handler).fallback(fallback),
+        )
+        .route(
+            &format!("{prefix}/rooms/{{room_id}}/signal"),
+            post(signal_handler).fallback(fallback),
+        )
+        .route(
+            &format!("{prefix}/rooms/{{room_id}}/close"),
+            post(close_room_handler).fallback(fallback),
+        )
+        .route(
+            &format!("{prefix}/rooms/{{room_id}}"),
+            delete(delete_room_handler).fallback(fallback),
+        )
+        .route(
+            &format!("{prefix}/rooms/{{room_id}}/state"),
+            get(state_handler).fallback(fallback),
+        )
+        .route(
+            &format!("{prefix}/rooms/{{room_id}}/recordings"),
+            get(recordings_handler).fallback(fallback),
+        )
+        .route(
+            &format!("{prefix}/recordings/{{session_id}}/chunks"),
+            post(chunks_handler).fallback(fallback),
+        )
+        .route(
+            &format!("{prefix}/recordings/{{session_id}}/finalize"),
+            post(finalize_handler).fallback(fallback),
+        )
         .route(&format!("{prefix}/ws"), get(crate::ws::ws_handler))
-        .route(&format!("{prefix}/{{*path}}"), axum::routing::any(not_found_handler))
+        .route(
+            &format!("{prefix}/{{*path}}"),
+            axum::routing::any(not_found_handler),
+        )
         .layer(DefaultBodyLimit::max(64 * 1024 * 1024))
         .with_state(state)
 }
@@ -314,10 +344,16 @@ async fn auth_token_handler(
         .and_then(|v| v.to_str().ok())
         .map(str::to_string);
     if role == TokenRole::Admin {
-        if auth.admin_token.as_deref() != admin_token.as_deref() {
-            return Err(VidcallError::forbidden(
-                "Admin tokens require a valid adminToken header",
-            ));
+        // Mirrors the TS sibling: admin issuance requires an adminToken to
+        // be configured AND presented — `!auth.adminToken || adminToken !==
+        // auth.adminToken` → forbidden.
+        match (auth.admin_token.as_deref(), admin_token.as_deref()) {
+            (Some(expected), Some(given)) if expected == given => {}
+            _ => {
+                return Err(VidcallError::forbidden(
+                    "Admin tokens require a valid adminToken header",
+                ))
+            }
         }
     } else if auth.admin_token.is_some() && auth.admin_token.as_deref() != admin_token.as_deref() {
         return Err(VidcallError::unauthorized(
@@ -365,7 +401,11 @@ async fn create_room_handler(
         },
     )
     .await?;
-    Ok((StatusCode::CREATED, Json(serde_json::json!({ "room": room }))).into_response())
+    Ok((
+        StatusCode::CREATED,
+        Json(serde_json::json!({ "room": room })),
+    )
+        .into_response())
 }
 
 async fn join_handler(
@@ -418,8 +458,13 @@ async fn join_handler(
         display_name,
         metadata,
     };
-    let result =
-        join_room(&*state.store, &room_id, input.clone(), JoinRoomOptions::default()).await?;
+    let result = join_room(
+        &*state.store,
+        &room_id,
+        input.clone(),
+        JoinRoomOptions::default(),
+    )
+    .await?;
     // Broadcast the join so WS peers learn about the newcomer (delivered to
     // the post-join roster, mirroring the WS relay's fan-out).
     state.hub.broadcast(
@@ -553,7 +598,9 @@ async fn delete_room_handler(
     // optional `deleteRoom?`), so unlike the TS sibling there is no
     // `not_implemented` path here.
     state.store.delete_room(&room_id).await?;
-    Ok(Json(serde_json::json!({ "roomId": room_id, "deleted": true })))
+    Ok(Json(
+        serde_json::json!({ "roomId": room_id, "deleted": true }),
+    ))
 }
 
 async fn state_handler(
@@ -633,12 +680,15 @@ async fn chunks_handler(
         None => 0,
     };
     storage.save_chunk(&session_id, &body, index).await?;
-    Ok((StatusCode::CREATED, Json(serde_json::json!({
-        "sessionId": session_id,
-        "index": index,
-        "bytes": body.len(),
-    })))
-    .into_response())
+    Ok((
+        StatusCode::CREATED,
+        Json(serde_json::json!({
+            "sessionId": session_id,
+            "index": index,
+            "bytes": body.len(),
+        })),
+    )
+        .into_response())
 }
 
 async fn finalize_handler(

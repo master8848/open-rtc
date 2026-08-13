@@ -29,9 +29,7 @@ async fn spawn_server() -> TestServer {
     spawn_server_with_state(None).await
 }
 
-async fn spawn_server_with_state(
-    state: Option<vidcall_server::http::AppState>,
-) -> TestServer {
+async fn spawn_server_with_state(state: Option<vidcall_server::http::AppState>) -> TestServer {
     let app = match state {
         Some(s) => router_with_state("/v1", s),
         None => router(InMemoryStore::new()),
@@ -47,9 +45,8 @@ async fn spawn_server_with_state(
     }
 }
 
-type WsClient = tokio_tungstenite::WebSocketStream<
-    tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
->;
+type WsClient =
+    tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
 
 /// Ensure the room exists via the REST API (join requires an existing
 /// room, mirroring `requireRoom` in the TS sibling).
@@ -90,7 +87,10 @@ async fn connect_and_join(server: &TestServer, room_id: &str, sender_id: &str) -
     .unwrap();
     // The joiner's first message is the `joined` ack.
     let joined = recv_json(&mut ws).await;
-    assert_eq!(joined["type"], "joined", "expected joined ack, got: {joined}");
+    assert_eq!(
+        joined["type"], "joined",
+        "expected joined ack, got: {joined}"
+    );
     assert_eq!(joined["room"]["roomId"], room_id);
     ws
 }
@@ -165,7 +165,9 @@ async fn peer_addressed_and_presence_broadcast() {
     // Alice → carol offer: only carol receives it.
     let mut offer = envelope("offer", room, "alice", json!({"sdp": "v=0"}));
     offer["targetSenderId"] = json!("carol");
-    bob.send(Message::Text(offer.to_string().into())).await.unwrap();
+    bob.send(Message::Text(offer.to_string().into()))
+        .await
+        .unwrap();
 
     // carol receives the offer; alice and bob must not.
     let got = recv_json(&mut carol).await;
@@ -207,7 +209,9 @@ async fn explicit_leave_and_disconnect_auto_leave() {
 
     // Bob leaves explicitly (reason travels in the leave payload).
     bob.send(Message::Text(
-        envelope("leave", room, "bob", json!({"reason": "bye"})).to_string().into(),
+        envelope("leave", room, "bob", json!({"reason": "bye"}))
+            .to_string()
+            .into(),
     ))
     .await
     .unwrap();
@@ -344,5 +348,107 @@ async fn rest_mutations_fan_out_to_ws_sockets() {
     let leave = recv_json(&mut alice).await;
     assert_eq!(leave["type"], "leave");
     assert_eq!(leave["senderId"], "bob");
+    server.app_handle.abort();
+}
+
+#[tokio::test]
+async fn guarded_mode_join_requires_token() {
+    // Mirror of the TS `ws: guarded mode` test: with `AppState.auth` set,
+    // joins need a valid `?token=` scoped to the room and bound to the
+    // sender; failures get an error envelope + a 4401 close.
+    let state = vidcall_server::http::AppState {
+        store: std::sync::Arc::new(InMemoryStore::new()),
+        recording_storage: None,
+        hub: std::sync::Arc::new(vidcall_server::ws::RoomHub::new()),
+        auth: Some(vidcall_server::http::AuthConfig {
+            secret: "ws-test-secret".to_string(),
+            admin_token: None,
+            default_token_ttl_ms: None,
+        }),
+    };
+    let server = spawn_server_with_state(Some(state)).await;
+    let room = "sec-room";
+    ensure_room(&server, room).await;
+
+    let join = |url: &str| {
+        let url = url.to_string();
+        async move {
+            let (mut ws, _) = tokio_tungstenite::connect_async(&url).await.unwrap();
+            ws.send(Message::Text(
+                envelope("join", room, "alice", json!({ "displayName": "Alice" }))
+                    .to_string()
+                    .into(),
+            ))
+            .await
+            .unwrap();
+            let err = recv_json(&mut ws).await;
+            assert_eq!(err["type"], "error");
+            let code = err["payload"]["code"].as_str().unwrap().to_string();
+            // Auth failure closes the socket with 4401 (application range).
+            match tokio::time::timeout(TIMEOUT, ws.next()).await {
+                Ok(Some(Ok(Message::Close(frame)))) => {
+                    assert_eq!(frame.map(|f| u16::from(f.code)), Some(4401));
+                }
+                other => panic!("expected 4401 close, got: {other:?}"),
+            }
+            code
+        }
+    };
+
+    // No token → unauthorized.
+    let url = format!("ws://{}/v1/ws?roomId={room}", server.addr);
+    assert_eq!(join(&url).await, "unauthorized");
+
+    // Token for another room → forbidden.
+    let wrong_room = vidcall_server::auth::issue_token(
+        "ws-test-secret",
+        vidcall_server::auth::IssueTokenOptions {
+            room_id: "elsewhere".to_string(),
+            participant_id: "alice".to_string(),
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    let url = format!(
+        "ws://{}/v1/ws?roomId={room}&token={wrong_room}",
+        server.addr
+    );
+    assert_eq!(join(&url).await, "forbidden");
+
+    // Token bound to another sender → forbidden.
+    let wrong_pid = vidcall_server::auth::issue_token(
+        "ws-test-secret",
+        vidcall_server::auth::IssueTokenOptions {
+            room_id: room.to_string(),
+            participant_id: "bob".to_string(),
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    let url = format!("ws://{}/v1/ws?roomId={room}&token={wrong_pid}", server.addr);
+    assert_eq!(join(&url).await, "forbidden");
+
+    // Valid token → joined ack.
+    let valid = vidcall_server::auth::issue_token(
+        "ws-test-secret",
+        vidcall_server::auth::IssueTokenOptions {
+            room_id: room.to_string(),
+            participant_id: "alice".to_string(),
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    let url = format!("ws://{}/v1/ws?roomId={room}&token={valid}", server.addr);
+    let (mut ws, _) = tokio_tungstenite::connect_async(&url).await.unwrap();
+    ws.send(Message::Text(
+        envelope("join", room, "alice", json!({ "displayName": "Alice" }))
+            .to_string()
+            .into(),
+    ))
+    .await
+    .unwrap();
+    let joined = recv_json(&mut ws).await;
+    assert_eq!(joined["type"], "joined");
+    assert_eq!(joined["room"]["roomId"], room);
     server.app_handle.abort();
 }

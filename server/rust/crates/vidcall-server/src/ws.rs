@@ -28,7 +28,9 @@ use futures_util::{SinkExt, StreamExt};
 use tokio::sync::broadcast;
 
 use crate::auth::verify_token;
-use crate::core::{build_leave_envelope, handle_signal_envelope, join_room, leave_room, ParticipantInput};
+use crate::core::{
+    build_leave_envelope, handle_signal_envelope, join_room, leave_room, ParticipantInput,
+};
 use crate::error::{Result, VidcallError};
 use crate::http::AppState;
 use crate::protocol::{create_envelope, Envelope};
@@ -113,8 +115,7 @@ impl RoomHub {
         recipients: Option<&std::collections::HashSet<String>>,
     ) {
         let msg = Arc::new(BroadcastMsg {
-            envelope_json: serde_json::to_string(envelope)
-                .unwrap_or_else(|_| "{}".to_string()),
+            envelope_json: serde_json::to_string(envelope).unwrap_or_else(|_| "{}".to_string()),
             sender_id: envelope.sender_id.clone(),
             recipients: recipients.cloned(),
         });
@@ -362,7 +363,10 @@ async fn handle_message(
     let parsed: serde_json::Value = match serde_json::from_str(&text) {
         Ok(v) => v,
         Err(_) => {
-            send(out_tx, &error_envelope("unknown", "invalid_json", "Message is not valid JSON"));
+            send(
+                out_tx,
+                &error_envelope("unknown", "invalid_json", "Message is not valid JSON"),
+            );
             return Ok(true);
         }
     };
@@ -373,7 +377,14 @@ async fn handle_message(
                 .get("roomId")
                 .and_then(serde_json::Value::as_str)
                 .unwrap_or("unknown");
-            send(out_tx, &error_envelope(rid, "invalid_envelope", "Envelope failed protocol validation"));
+            send(
+                out_tx,
+                &error_envelope(
+                    rid,
+                    "invalid_envelope",
+                    "Envelope failed protocol validation",
+                ),
+            );
             return Ok(true);
         }
     };
@@ -381,11 +392,22 @@ async fn handle_message(
     if !*joined {
         // First message must be a join for the room the client connected with.
         if envelope.r#type != "join" {
-            send(out_tx, &error_envelope(&envelope.room_id, "must_join", "Send a join envelope first"));
+            send(
+                out_tx,
+                &error_envelope(&envelope.room_id, "must_join", "Send a join envelope first"),
+            );
             return Ok(true);
         }
         return handle_join(
-            state, out_tx, room_id, token, my_sender_id, my_session_id, socket_id, joined, envelope,
+            state,
+            out_tx,
+            room_id,
+            token,
+            my_sender_id,
+            my_session_id,
+            socket_id,
+            joined,
+            envelope,
         )
         .await;
     }
@@ -393,7 +415,11 @@ async fn handle_message(
     if envelope.room_id != room_id {
         send(
             out_tx,
-            &error_envelope(&envelope.room_id, "room_mismatch", &format!("Socket is bound to room {room_id}")),
+            &error_envelope(
+                &envelope.room_id,
+                "room_mismatch",
+                &format!("Socket is bound to room {room_id}"),
+            ),
         );
         return Ok(true);
     }
@@ -427,7 +453,10 @@ async fn handle_message(
                 *joined = false;
             }
             Err(err) => {
-                send(out_tx, &error_envelope(&room_id, err_code(&err), &err.message));
+                send(
+                    out_tx,
+                    &error_envelope(&room_id, err_code(&err), &err.message),
+                );
             }
         }
         return Ok(true);
@@ -443,7 +472,10 @@ async fn handle_message(
             Ok(true)
         }
         Err(err) => {
-            send(out_tx, &error_envelope(&room_id, err_code(&err), &err.message));
+            send(
+                out_tx,
+                &error_envelope(&room_id, err_code(&err), &err.message),
+            );
             Ok(true)
         }
     }
@@ -499,7 +531,10 @@ async fn handle_join(
     // `?token=` is missing/invalid, scoped to another room, or bound to
     // another sender.
     if let Err(err) = authenticate_socket(state, token.as_deref(), room_id, &envelope.sender_id) {
-        send(out_tx, &error_envelope(room_id, err_code(&err), &err.message));
+        send(
+            out_tx,
+            &error_envelope(room_id, err_code(&err), &err.message),
+        );
         send_close(out_tx, 4401, err.code);
         return Ok(false);
     }
@@ -519,7 +554,10 @@ async fn handle_join(
             let delivery = match handle_signal_envelope(&*state.store, envelope).await {
                 Ok(d) => d,
                 Err(err) => {
-                    send(out_tx, &error_envelope(room_id, err_code(&err), &err.message));
+                    send(
+                        out_tx,
+                        &error_envelope(room_id, err_code(&err), &err.message),
+                    );
                     return Ok(true);
                 }
             };
@@ -545,7 +583,10 @@ async fn handle_join(
             Ok(true)
         }
         Err(err) => {
-            send(out_tx, &error_envelope(room_id, err_code(&err), &err.message));
+            send(
+                out_tx,
+                &error_envelope(room_id, err_code(&err), &err.message),
+            );
             Ok(true)
         }
     }

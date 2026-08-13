@@ -12,7 +12,6 @@
 //!  - signal relay   (persist + compute recipients per protocol envelope)
 //!  - recording sessions (metadata only; bytes live in `RecordingStorage`)
 
-
 use crate::error::{Result, VidcallError};
 use crate::protocol::{create_envelope, now_ms, Envelope};
 use crate::store::Store;
@@ -107,13 +106,8 @@ async fn require_room<S: Store + ?Sized>(store: &S, room_id: &str) -> Result<Roo
 // ---------------------------------------------------------------------------
 
 /// Create a room. Fails with `room_already_exists` when the id is taken.
-pub async fn create_room<S: Store + ?Sized>(
-    store: &S,
-    opts: CreateRoomOptions,
-) -> Result<Room> {
-    let room_id = opts
-        .room_id
-        .unwrap_or_else(random_id);
+pub async fn create_room<S: Store + ?Sized>(store: &S, opts: CreateRoomOptions) -> Result<Room> {
+    let room_id = opts.room_id.unwrap_or_else(random_id);
     if store.get_room(&room_id).await?.is_some() {
         return Err(VidcallError::room_already_exists(&room_id));
     }
@@ -172,7 +166,9 @@ pub async fn join_room<S: Store + ?Sized>(
         return Err(VidcallError::room_closed(room_id));
     }
 
-    let existing = store.get_participant(room_id, &input.participant_id).await?;
+    let existing = store
+        .get_participant(room_id, &input.participant_id)
+        .await?;
     if existing.is_some() && !opts.upsert {
         return Err(VidcallError::participant_already_joined(
             room_id,
@@ -468,11 +464,21 @@ pub fn build_join_envelope(room_id: &str, input: &ParticipantInput) -> Envelope 
         }
         _ => None,
     };
-    create_envelope("join", room_id, &input.participant_id, &input.session_id, payload)
+    create_envelope(
+        "join",
+        room_id,
+        &input.participant_id,
+        &input.session_id,
+        payload,
+    )
 }
 
 /// Build the protocol `leave` envelope for a participant (relay helper).
-pub fn build_leave_envelope(room_id: &str, participant: &Participant, reason: Option<&str>) -> Envelope {
+pub fn build_leave_envelope(
+    room_id: &str,
+    participant: &Participant,
+    reason: Option<&str>,
+) -> Envelope {
     let payload = reason.map(|r| serde_json::json!({ "reason": r }));
     create_envelope(
         "leave",

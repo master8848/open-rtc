@@ -78,8 +78,10 @@ fn canonical_headers(headers: &[(String, String)]) -> (String, String) {
             format!("{k}:{value}")
         })
         .collect::<Vec<_>>()
-        .join("
-");
+        .join(
+            "
+",
+        );
     let signed = keys.join(";");
     (canonical, signed)
 }
@@ -143,8 +145,10 @@ pub fn sign_v4(opts: SignV4Options) -> SignedRequest {
         &signed,
         &payload_hash,
     ]
-    .join("
-");
+    .join(
+        "
+",
+    );
 
     let scope = format!("{date_stamp}/{}/{}/aws4_request", opts.region, opts.service);
     let string_to_sign = [
@@ -153,10 +157,15 @@ pub fn sign_v4(opts: SignV4Options) -> SignedRequest {
         &scope,
         &sha256_hex(canonical_request.as_bytes()),
     ]
-    .join("
-");
+    .join(
+        "
+",
+    );
 
-    let k_date = hmac_sha256(format!("AWS4{}", opts.secret_access_key).as_bytes(), date_stamp.as_bytes());
+    let k_date = hmac_sha256(
+        format!("AWS4{}", opts.secret_access_key).as_bytes(),
+        date_stamp.as_bytes(),
+    );
     let k_region = hmac_sha256(&k_date, opts.region.as_bytes());
     let k_service = hmac_sha256(&k_region, opts.service.as_bytes());
     let k_signing = hmac_sha256(&k_service, b"aws4_request");

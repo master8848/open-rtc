@@ -80,9 +80,7 @@ impl Store for InMemoryStore {
         inner.signals.remove(room_id);
         inner.signal_seqs.remove(room_id);
         inner.feeds.remove(room_id);
-        inner
-            .recordings
-            .retain(|_, r| r.room_id != room_id);
+        inner.recordings.retain(|_, r| r.room_id != room_id);
         Ok(())
     }
 

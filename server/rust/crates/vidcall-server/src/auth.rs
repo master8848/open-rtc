@@ -78,8 +78,8 @@ fn b64url_decode(input: &str) -> Option<Vec<u8>> {
 }
 
 fn hmac_sha256(data: &[u8], secret: &[u8]) -> Vec<u8> {
-    let mut mac = <Hmac<Sha256> as KeyInit>::new_from_slice(secret)
-        .expect("hmac accepts any key length");
+    let mut mac =
+        <Hmac<Sha256> as KeyInit>::new_from_slice(secret).expect("hmac accepts any key length");
     mac.update(data);
     mac.finalize().into_bytes().to_vec()
 }
@@ -118,10 +118,7 @@ pub fn issue_token(secret: &str, opts: IssueTokenOptions) -> Result<String> {
     require_nonempty(&opts.room_id, "roomId")?;
     require_nonempty(&opts.participant_id, "participantId")?;
     let role = opts.role.unwrap_or(TokenRole::Participant);
-    let now_sec = opts
-        .now
-        .unwrap_or_else(crate::protocol::now_ms)
-        / 1000;
+    let now_sec = opts.now.unwrap_or_else(crate::protocol::now_ms) / 1000;
     let exp = opts.exp.unwrap_or(now_sec + DEFAULT_TOKEN_TTL_SECONDS);
 
     // TS sibling serializes with JSON.stringify insertion order — keep the
@@ -168,18 +165,16 @@ pub fn verify_token(secret: &str, token: &str) -> Result<TokenClaims> {
         ));
     }
 
-    let header: serde_json::Value = serde_json::from_slice(
-        &b64url_decode(h).ok_or_else(|| {
+    let header: serde_json::Value =
+        serde_json::from_slice(&b64url_decode(h).ok_or_else(|| {
             VidcallError::unauthorized("Malformed token: invalid base64url or JSON")
-        })?,
-    )
-    .map_err(|_| VidcallError::unauthorized("Malformed token: invalid base64url or JSON"))?;
-    let payload: serde_json::Value = serde_json::from_slice(
-        &b64url_decode(p).ok_or_else(|| {
+        })?)
+        .map_err(|_| VidcallError::unauthorized("Malformed token: invalid base64url or JSON"))?;
+    let payload: serde_json::Value =
+        serde_json::from_slice(&b64url_decode(p).ok_or_else(|| {
             VidcallError::unauthorized("Malformed token: invalid base64url or JSON")
-        })?,
-    )
-    .map_err(|_| VidcallError::unauthorized("Malformed token: invalid base64url or JSON"))?;
+        })?)
+        .map_err(|_| VidcallError::unauthorized("Malformed token: invalid base64url or JSON"))?;
 
     if header.get("alg").and_then(serde_json::Value::as_str) != Some("HS256") {
         return Err(VidcallError::unauthorized(format!(
@@ -213,7 +208,11 @@ pub fn verify_token(secret: &str, token: &str) -> Result<TokenClaims> {
     let role = match payload.get("role").and_then(serde_json::Value::as_str) {
         Some("participant") => TokenRole::Participant,
         Some("admin") => TokenRole::Admin,
-        _ => return Err(VidcallError::unauthorized("Malformed token: role must be \"participant\" or \"admin\"")),
+        _ => {
+            return Err(VidcallError::unauthorized(
+                "Malformed token: role must be \"participant\" or \"admin\"",
+            ))
+        }
     };
     let exp = payload
         .get("exp")
