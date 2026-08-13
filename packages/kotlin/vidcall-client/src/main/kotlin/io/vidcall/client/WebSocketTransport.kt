@@ -89,7 +89,14 @@ class WebSocketTransport(
 
                 override fun onMessage(webSocket: WebSocket, text: String) {
                     try {
-                        listener?.onMessage(json.decodeFromString(Envelope.serializer(), text))
+                        // Tolerant decode per schema.json wire rules: unknown `type`
+                        // values are ignored + logged (forward compatibility — an
+                        // additive protocol evolution must not wedge a client);
+                        // malformed frames still surface as a failure.
+                        val envelope = Protocol.decodeEnvelopeOrNull(text)
+                        if (envelope != null) {
+                            listener?.onMessage(envelope)
+                        }
                     } catch (e: Exception) {
                         listener?.onFailure(IOException("invalid envelope frame", e))
                     }

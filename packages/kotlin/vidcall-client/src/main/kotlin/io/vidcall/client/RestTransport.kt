@@ -9,6 +9,7 @@ import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -39,7 +40,7 @@ class RestTransport(
 ) : SignalingTransport {
 
     @Serializable
-    private data class RelayMessage(val id: Long, val envelope: Envelope)
+    private data class RelayMessage(val id: Long, val envelope: JsonObject)
 
     @Serializable
     private data class RelayResponse(val messages: List<RelayMessage> = emptyList())
@@ -93,7 +94,14 @@ class RestTransport(
                             for (message in parsed.messages) {
                                 if (!running) break
                                 afterSeq = maxOf(afterSeq, message.id)
-                                listener?.onMessage(message.envelope)
+                                // Tolerant decode per schema.json wire rules: unknown
+                                // `type` values are ignored + logged (forward
+                                // compatibility), so one future-type envelope in a
+                                // batch cannot wedge the poll loop; the cursor still
+                                // advances past it.
+                                val text = json.encodeToString(JsonObject.serializer(), message.envelope)
+                                val envelope = Protocol.decodeEnvelopeOrNull(text) ?: continue
+                                listener?.onMessage(envelope)
                             }
                         }
                     }
