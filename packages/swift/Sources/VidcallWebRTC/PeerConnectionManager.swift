@@ -493,12 +493,13 @@ private final class SignalingSerialQueue: @unchecked Sendable {
     private var running = false
 
     /// Enqueues `body` for serial execution. The returned future completes
-    /// with `body`'s result (or error) once its turn arrives.
+    /// with `body`'s result (or error) once its turn arrives. If the queue is
+    /// torn down before the op starts, the future fails fast.
     func enqueue<T>(_ body: @escaping () async throws -> T) async throws -> T {
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<T, Error>) in
             lock.lock()
             pending.append { [weak self] in
-                guard let self else {
+                guard self != nil else {
                     continuation.resume(throwing: VidcallError.notConnected)
                     return
                 }
@@ -525,10 +526,16 @@ private final class SignalingSerialQueue: @unchecked Sendable {
         lock.unlock()
         Task {
             await op()
-            lock.lock()
-            running = false
-            lock.unlock()
-            pump()
+            completeOp()
         }
+    }
+
+    /// Marks the queue idle and starts the next op (synchronous — the lock is
+    /// never touched from the async `Task` body above).
+    private func completeOp() {
+        lock.lock()
+        running = false
+        lock.unlock()
+        pump()
     }
 }

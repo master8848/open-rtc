@@ -25,7 +25,7 @@ against it.
 | `backend-firebase` | L1 | 11 | ✅ green |
 | `backend-appwrite` | L1 | 11 | ✅ green |
 | `backend-sqlite` | L1 | 19 | ✅ green |
-| `packages/swift` | L0/L2 | 19 | ✅ green (local `swift test`) |
+| `packages/swift` | L0/L2 | 41 (42 with the WebRTC binary target enabled) | ✅ green (local `swift test`; real-WebRTC smoke test env-gated) |
 | `packages/dart` | L0/L2 | 29 | ✅ green (verified in-session) |
 | `packages/kotlin` | L0/L2 | 30 | ✅ agent-verified (JDK 21 + Gradle 8.14.5); local re-run needs JDK — see below |
 
