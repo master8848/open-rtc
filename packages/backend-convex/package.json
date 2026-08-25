@@ -31,8 +31,8 @@
     "@vidcall/transport": "0.1.0"
   },
   "devDependencies": {
-    "@types/node": "22.19.1",
-    "typescript": "5.9.3",
+    "@types/node": "22.20.1",
+    "typescript": "7.0.2",
     "vitest": "4.1.10"
   }
 }

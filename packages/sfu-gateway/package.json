@@ -31,8 +31,8 @@
     "@vidcall/protocol": "0.1.0"
   },
   "devDependencies": {
-    "@types/node": "22.19.1",
+    "@types/node": "22.20.1",
     "mediasoup": "3.23.1",
-    "typescript": "5.9.3"
+    "typescript": "7.0.2"
   }
 }
