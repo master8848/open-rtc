@@ -1,7 +1,7 @@
 {
   "name": "@mbsks/openrtc-backend-supabase",
   "version": "0.1.0",
-  "description": "vidcall signaling backend adapter for Supabase Realtime (broadcast + presence) — the default backend.",
+  "description": "vidcall signaling backend adapter for Supabase Realtime (broadcast + presence) \u2014 the default backend.",
   "author": "Saurav Sanjel <jobarsanjel2@gmail.com>",
   "license": "MIT",
   "type": "module",
@@ -10,12 +10,14 @@
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "development": "./src/index.ts",
       "default": "./dist/index.js"
-    }
+    },
+    "./package.json": "./package.json"
   },
   "files": [
-    "dist",
-    "src"
+    "dist"
   ],
   "sideEffects": false,
   "engines": {

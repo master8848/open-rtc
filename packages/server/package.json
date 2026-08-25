@@ -10,59 +10,68 @@
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
       "development": "./src/index.ts",
       "default": "./dist/index.js"
     },
     "./shared-tests": {
       "types": "./dist/shared-tests.d.ts",
+      "import": "./dist/shared-tests.js",
       "development": "./src/shared-tests.ts",
       "default": "./dist/shared-tests.js"
     },
     "./express": {
       "types": "./dist/express.d.ts",
+      "import": "./dist/express.js",
       "development": "./src/express.ts",
       "default": "./dist/express.js"
     },
     "./fastify": {
       "types": "./dist/fastify.d.ts",
+      "import": "./dist/fastify.js",
       "development": "./src/fastify.ts",
       "default": "./dist/fastify.js"
     },
     "./stores/sqlite": {
       "types": "./dist/stores/SqliteStore.d.ts",
+      "import": "./dist/stores/SqliteStore.js",
       "development": "./src/stores/SqliteStore.ts",
       "default": "./dist/stores/SqliteStore.js"
     },
     "./stores/postgres": {
       "types": "./dist/stores/PostgresStore.d.ts",
+      "import": "./dist/stores/PostgresStore.js",
       "development": "./src/stores/PostgresStore.ts",
       "default": "./dist/stores/PostgresStore.js"
     },
     "./stores/mysql": {
       "types": "./dist/stores/MysqlStore.d.ts",
+      "import": "./dist/stores/MysqlStore.js",
       "development": "./src/stores/MysqlStore.ts",
       "default": "./dist/stores/MysqlStore.js"
     },
     "./stores/redis": {
       "types": "./dist/stores/RedisStore.d.ts",
+      "import": "./dist/stores/RedisStore.js",
       "development": "./src/stores/RedisStore.ts",
       "default": "./dist/stores/RedisStore.js"
     },
     "./relays/redis": {
       "types": "./dist/relays/redis-relay.d.ts",
+      "import": "./dist/relays/redis-relay.js",
       "development": "./src/relays/redis-relay.ts",
       "default": "./dist/relays/redis-relay.js"
     },
     "./relays/postgres-notify": {
       "types": "./dist/relays/postgres-notify-relay.d.ts",
+      "import": "./dist/relays/postgres-notify-relay.js",
       "development": "./src/relays/postgres-notify-relay.ts",
       "default": "./dist/relays/postgres-notify-relay.js"
     },
     "./package.json": "./package.json"
   },
   "files": [
-    "dist",
-    "src"
+    "dist"
   ],
   "sideEffects": false,
   "engines": {

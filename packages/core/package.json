@@ -6,17 +6,126 @@
   "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",
-  "types": "./src/index.ts",
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
       "development": "./src/index.ts",
       "default": "./dist/index.js"
-    }
+    },
+    "./devices": {
+      "types": "./dist/devices.d.ts",
+      "import": "./dist/devices.js",
+      "development": "./src/devices.ts",
+      "default": "./dist/devices.js"
+    },
+    "./e2ee": {
+      "types": "./dist/e2ee.d.ts",
+      "import": "./dist/e2ee.js",
+      "development": "./src/e2ee.ts",
+      "default": "./dist/e2ee.js"
+    },
+    "./controls": {
+      "types": "./dist/controls/index.d.ts",
+      "import": "./dist/controls/index.js",
+      "development": "./src/controls/index.ts",
+      "default": "./dist/controls/index.js"
+    },
+    "./controls/ControlsManager": {
+      "types": "./dist/controls/ControlsManager.d.ts",
+      "import": "./dist/controls/ControlsManager.js",
+      "development": "./src/controls/ControlsManager.ts",
+      "default": "./dist/controls/ControlsManager.js"
+    },
+    "./media/media-transport": {
+      "types": "./dist/media/media-transport.d.ts",
+      "import": "./dist/media/media-transport.js",
+      "development": "./src/media/media-transport.ts",
+      "default": "./dist/media/media-transport.js"
+    },
+    "./media/mesh-transport": {
+      "types": "./dist/media/mesh-transport.d.ts",
+      "import": "./dist/media/mesh-transport.js",
+      "development": "./src/media/mesh-transport.ts",
+      "default": "./dist/media/mesh-transport.js"
+    },
+    "./media/sfu-transport": {
+      "types": "./dist/media/sfu-transport.d.ts",
+      "import": "./dist/media/sfu-transport.js",
+      "development": "./src/media/sfu-transport.ts",
+      "default": "./dist/media/sfu-transport.js"
+    },
+    "./media/processor": {
+      "types": "./dist/media/processor.d.ts",
+      "import": "./dist/media/processor.js",
+      "development": "./src/media/processor.ts",
+      "default": "./dist/media/processor.js"
+    },
+    "./media/topology": {
+      "types": "./dist/media/topology.d.ts",
+      "import": "./dist/media/topology.js",
+      "development": "./src/media/topology.ts",
+      "default": "./dist/media/topology.js"
+    },
+    "./media/active-speaker": {
+      "types": "./dist/media/active-speaker.d.ts",
+      "import": "./dist/media/active-speaker.js",
+      "development": "./src/media/active-speaker.ts",
+      "default": "./dist/media/active-speaker.js"
+    },
+    "./recording/encryption": {
+      "types": "./dist/recording/encryption.d.ts",
+      "import": "./dist/recording/encryption.js",
+      "development": "./src/recording/encryption.ts",
+      "default": "./dist/recording/encryption.js"
+    },
+    "./recording/media-recorder-recording-hook": {
+      "types": "./dist/recording/media-recorder-recording-hook.d.ts",
+      "import": "./dist/recording/media-recorder-recording-hook.js",
+      "development": "./src/recording/media-recorder-recording-hook.ts",
+      "default": "./dist/recording/media-recorder-recording-hook.js"
+    },
+    "./recording/recording-hook": {
+      "types": "./dist/recording/recording-hook.d.ts",
+      "import": "./dist/recording/recording-hook.js",
+      "development": "./src/recording/recording-hook.ts",
+      "default": "./dist/recording/recording-hook.js"
+    },
+    "./recording/recording-uploader": {
+      "types": "./dist/recording/recording-uploader.d.ts",
+      "import": "./dist/recording/recording-uploader.js",
+      "development": "./src/recording/recording-uploader.ts",
+      "default": "./dist/recording/recording-uploader.js"
+    },
+    "./recording/room-recording-facade": {
+      "types": "./dist/recording/room-recording-facade.d.ts",
+      "import": "./dist/recording/room-recording-facade.js",
+      "development": "./src/recording/room-recording-facade.ts",
+      "default": "./dist/recording/room-recording-facade.js"
+    },
+    "./recording/composite-recording-hook": {
+      "types": "./dist/recording/composite-recording-hook.d.ts",
+      "import": "./dist/recording/composite-recording-hook.js",
+      "development": "./src/recording/composite-recording-hook.ts",
+      "default": "./dist/recording/composite-recording-hook.js"
+    },
+    "./recording/sfu-egress": {
+      "types": "./dist/recording/sfu-egress.d.ts",
+      "import": "./dist/recording/sfu-egress.js",
+      "development": "./src/recording/sfu-egress.ts",
+      "default": "./dist/recording/sfu-egress.js"
+    },
+    "./recording/index": {
+      "types": "./dist/recording/index.d.ts",
+      "import": "./dist/recording/index.js",
+      "development": "./src/recording/index.ts",
+      "default": "./dist/recording/index.js"
+    },
+    "./package.json": "./package.json"
   },
   "files": [
-    "dist",
-    "src"
+    "dist"
   ],
   "sideEffects": false,
   "engines": {

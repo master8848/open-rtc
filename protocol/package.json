@@ -5,17 +5,18 @@
   "license": "MIT",
   "type": "module",
   "main": "./dist/types.js",
-  "types": "./types.ts",
+  "types": "./dist/types.d.ts",
   "exports": {
     ".": {
-      "types": "./types.ts",
+      "types": "./dist/types.d.ts",
+      "import": "./dist/types.js",
       "development": "./types.ts",
       "default": "./dist/types.js"
-    }
+    },
+    "./package.json": "./package.json"
   },
   "files": [
-    "dist",
-    "types.ts"
+    "dist"
   ],
   "sideEffects": false,
   "engines": {

@@ -10,13 +10,20 @@
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
       "development": "./src/index.ts",
       "default": "./dist/index.js"
-    }
+    },
+    "./mediasoup": {
+      "types": "./dist/mediasoup-adapter.d.ts",
+      "import": "./dist/mediasoup-adapter.js",
+      "development": "./src/mediasoup-adapter.ts",
+      "default": "./dist/mediasoup-adapter.js"
+    },
+    "./package.json": "./package.json"
   },
   "files": [
-    "dist",
-    "src"
+    "dist"
   ],
   "sideEffects": false,
   "engines": {
