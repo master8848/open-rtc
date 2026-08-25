@@ -2,6 +2,7 @@
   "name": "@vidcall/server",
   "version": "0.1.0",
   "description": "vidcall server component: ROOM/SESSION state, signaling relay and recording storage that any app backend can host (Express/Fastify natively; Django/Laravel/Rails via REST/WS). Function-based Store interface works with any database.",
+  "author": "Saurav Sanjel <jobarsanjel2@gmail.com>",
   "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",

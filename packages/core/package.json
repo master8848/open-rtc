@@ -2,6 +2,7 @@
   "name": "@vidcall/core",
   "version": "0.1.0",
   "description": "vidcall mesh engine: Room, PeerConnectionManager (perfect negotiation, trickle ICE, renegotiation, ICE restart), SignalingTransport interface, DataChannelBus. Zero runtime dependencies.",
+  "author": "Saurav Sanjel <jobarsanjel2@gmail.com>",
   "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",

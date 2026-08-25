@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "description": "JS/TS video-calling library: mesh WebRTC engine, adaptive quality, pluggable signaling backends, shared wire protocol.",
+  "author": "Saurav Sanjel <jobarsanjel2@gmail.com>",
   "license": "MIT",
   "type": "module",
   "workspaces": [

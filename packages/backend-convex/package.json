@@ -2,6 +2,7 @@
   "name": "@vidcall/backend-convex",
   "version": "0.1.0",
   "description": "vidcall signaling backend adapter for Convex (mutations + live queries; signals table + presence table pattern).",
+  "author": "Saurav Sanjel <jobarsanjel2@gmail.com>",
   "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",

@@ -1,7 +1,8 @@
 {
   "name": "@vidcall/backend-supabase",
   "version": "0.1.0",
-  "description": "vidcall signaling backend adapter for Supabase Realtime (broadcast + presence) \u2014 the default backend.",
+  "description": "vidcall signaling backend adapter for Supabase Realtime (broadcast + presence) — the default backend.",
+  "author": "Saurav Sanjel <jobarsanjel2@gmail.com>",
   "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",

@@ -2,6 +2,7 @@
   "name": "@vidcall/react",
   "version": "0.1.0",
   "description": "vidcall React bindings: useSyncExternalStore hooks over @vidcall/core's Room snapshot layer (useRoomState, useParticipants, useJoin). StrictMode-safe.",
+  "author": "Saurav Sanjel <jobarsanjel2@gmail.com>",
   "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",

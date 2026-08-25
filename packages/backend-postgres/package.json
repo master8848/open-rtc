@@ -2,6 +2,7 @@
   "name": "@vidcall/backend-postgres",
   "version": "0.1.0",
   "description": "vidcall signaling backend adapter for PostgreSQL LISTEN/NOTIFY (dedicated client, 7 KB chunker, heartbeat presence).",
+  "author": "Saurav Sanjel <jobarsanjel2@gmail.com>",
   "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",

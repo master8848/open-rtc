@@ -17,6 +17,7 @@ members = ["crates/vidcall-server"]
 version = "0.1.0"
 edition = "2021"
 license = "MIT"
+authors = ["Saurav Sanjel <jobarsanjel2@gmail.com>"]
 repository = "https://github.com/vidcall/vidcall"
 description = "vidcall backend as a lightweight Rust sidecar: rooms, signaling relay, recording storage over HTTP/WS"
 keywords = ["webrtc", "signaling", "sidecar", "realtime", "video"]
