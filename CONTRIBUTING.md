@@ -87,24 +87,30 @@ implementations in the same change.
 
 ## Local development
 
-Requires Node ≥ 18.18. Dependencies are exact-pinned npm workspaces.
+Requires [Bun](https://bun.sh) ≥ 1.2 as the package manager and Node ≥ 18.18
+(the test suites run on the `node:test` runner). Dependencies are exact-pinned
+workspaces; **`bun.lock` is the source of truth** and `package-lock.json` is no
+longer maintained.
 
 ```sh
-npm ci                 # install
-npm run build          # tsc -b across workspace projects
-npm test               # L1 TS suites (core, quality, test-utils, server, sfu-gateway)
-npm run typecheck      # tsconfig.test.json project-wide type check
-npm run lint           # oxlint + oxfmt --check
-npm run format         # oxfmt (write pass)
+bun install             # install
+bun run build           # tsc -b across workspace projects
+bun run test            # L1 TS suites (core, quality, test-utils, server, sfu-gateway)
+bun run typecheck       # tsconfig.test.json project-wide type check
+bun run lint            # oxlint + oxfmt --check
+bun run format          # oxfmt (write pass)
 
 # Backend adapters (each runs the shared transport adapter suite via vitest)
-for p in packages/backend-*; do (cd "$p" && npm run test); done
+for p in packages/backend-*; do (cd "$p" && bun run test); done
 
 # Non-JS toolchains (each has its own README with prerequisites)
 (cd packages/dart   && dart pub get && dart test)
 (cd packages/swift  && swift test)
 (cd packages/kotlin && ./gradlew test)
 ```
+
+Script names are unchanged (`test`, `build`, `typecheck`, …) — only the runner
+moved from npm to Bun (`bun run <script>`).
 
 ## Changelog & releases
 
@@ -116,7 +122,7 @@ independent versioning); the root package is private and never released.
 **Every PR that changes published behavior must include a changeset.** Run
 
 ```sh
-npm run changeset
+bun run changeset
 ```
 
 and pick affected packages and bump types (patch for fixes, minor for
@@ -126,10 +132,10 @@ that don't affect published packages (docs, CI, examples) need no changeset.
 When maintainers are ready to release:
 
 ```sh
-npm run version   # changeset version — consumes pending changesets:
+bun run version   # changeset version — consumes pending changesets:
                   #   bumps package versions, updates internal dependency ranges,
                   #   and writes each released package's CHANGELOG.md
-npm run release   # npm run build && changeset publish — builds and publishes
+bun run release   # bun run build && changeset publish — builds and publishes
 ```
 
 `changeset version` updates **package-level** changelogs only; the root

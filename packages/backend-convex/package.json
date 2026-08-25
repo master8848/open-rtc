@@ -28,6 +28,7 @@
   },
   "dependencies": {
     "convex": "1.42.3",
+    "@vidcall/protocol": "0.1.0",
     "@vidcall/transport": "0.1.0"
   },
   "devDependencies": {

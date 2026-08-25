@@ -22,7 +22,7 @@
     "lint": "oxlint protocol packages/core packages/quality packages/test-utils packages/transport packages/server packages/sfu-gateway packages/react && oxfmt --check protocol packages/core packages/quality packages/test-utils packages/transport packages/server packages/sfu-gateway packages/react package.json tsconfig.base.json tsconfig.json tsconfig.test.json .oxlintrc.json .oxfmtrc.json",
     "format": "oxfmt protocol packages/core packages/quality packages/test-utils packages/transport packages/server packages/sfu-gateway packages/react package.json tsconfig.base.json tsconfig.json tsconfig.test.json .oxlintrc.json .oxfmtrc.json",
     "version": "changeset version",
-    "release": "npm run build && changeset publish",
+    "release": "bun run build && changeset publish",
     "test:server": "node --conditions=development --test \"packages/server/test/*.test.ts\"",
     "test:server:pg": "VIDCALL_TEST_POSTGRES_URL=postgres://vidcall:vidcall@127.0.0.1:5433/vidcall_test node --conditions=development --test packages/server/test/PostgresStore.test.ts",
     "test:server:mysql": "VIDCALL_TEST_MYSQL_URL=mysql://vidcall:vidcall@127.0.0.1:3307/vidcall_test node --conditions=development --test packages/server/test/MysqlStore.test.ts"

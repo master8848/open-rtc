@@ -27,6 +27,7 @@
   },
   "dependencies": {
     "pg": "8.22.0",
+    "@vidcall/protocol": "0.1.0",
     "@vidcall/transport": "0.1.0"
   },
   "devDependencies": {

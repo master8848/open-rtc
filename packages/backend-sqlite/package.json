@@ -27,6 +27,7 @@
   },
   "dependencies": {
     "@libsql/client": "0.17.4",
+    "@vidcall/protocol": "0.1.0",
     "@vidcall/transport": "0.1.0"
   },
   "devDependencies": {

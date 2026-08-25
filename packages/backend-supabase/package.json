@@ -27,6 +27,7 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "2.110.9",
+    "@vidcall/protocol": "0.1.0",
     "@vidcall/transport": "0.1.0"
   },
   "devDependencies": {
