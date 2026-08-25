@@ -53,6 +53,7 @@ import {
 import { errors, isVidcallError, VidcallError } from './errors.ts';
 import type { Services } from './services.ts';
 import { issueTurnCredentials, toIceServers } from './turn.ts';
+import { timingSafeEqual } from 'node:crypto';
 
 /** Everything a handler needs to answer one request, framework-agnostic. */
 export interface RouteContext {
@@ -87,7 +88,8 @@ export interface Route {
 // ---------------------------------------------------------------------------
 
 function asRecord(v: unknown): Record<string, unknown> | undefined {
-  return typeof v === 'object' && v !== null ? (v as Record<string, unknown>) : undefined;
+  if (typeof v !== 'object' || v === null || Array.isArray(v)) return undefined;
+  return v as Record<string, unknown>;
 }
 
 function asString(v: unknown): string | undefined {
@@ -108,7 +110,10 @@ function requireString(v: unknown, key: string): string {
 /** Extract the bearer token from an `Authorization` header. */
 function bearerToken(header: string | undefined): string {
   if (!header) throw errors.unauthorized('Missing Authorization header (Bearer <token>)');
-  const match = /^Bearer\s+(.+)$/i.exec(header.trim());
+  const trimmed = header.trim();
+  // Prevent overly long Authorization headers from being processed (DoS).
+  if (trimmed.length > 8192) throw errors.unauthorized('Authorization header too long');
+  const match = /^Bearer\s+(.+)$/i.exec(trimmed);
   if (!match) throw errors.unauthorized('Authorization header must use the Bearer scheme');
   return match[1]!;
 }
@@ -186,9 +191,20 @@ function checkCaps(claims: TokenClaims, required: Partial<Record<'publish' | 'su
 async function createRoomHandler(services: Services, ctx: RouteContext): Promise<RouteResult> {
   const body = asRecord(ctx.body) ?? {};
   const policy = asRecord(body.policy) as import('./types.ts').RoomPolicy | undefined;
+  const rawRoomId = asString(body.roomId);
+  if (rawRoomId !== undefined && !/^[a-zA-Z0-9._-]{1,128}$/.test(rawRoomId)) {
+    throw errors.invalidRequest('roomId must match /^[a-zA-Z0-9._-]{1,128}$/');
+  }
+  let maxParticipants: number | undefined;
+  if (body.maxParticipants !== undefined) {
+    if (typeof body.maxParticipants !== 'number' || !Number.isInteger(body.maxParticipants) || body.maxParticipants < 1 || body.maxParticipants > 1000) {
+      throw errors.invalidRequest('maxParticipants must be an integer 1..1000');
+    }
+    maxParticipants = body.maxParticipants;
+  }
   const room = await createRoom(services.store, {
-    roomId: asString(body.roomId),
-    maxParticipants: typeof body.maxParticipants === 'number' ? body.maxParticipants : undefined,
+    roomId: rawRoomId,
+    maxParticipants,
     metadata: asRecord(body.metadata),
     ...(policy ? { policy } : {}),
     ...(services.now ? { now: services.now() } : {}),
@@ -331,7 +347,13 @@ async function authTokenHandler(services: Services, ctx: RouteContext): Promise<
   if (!auth) throw errors.authNotConfigured();
   const body = asRecord(ctx.body) ?? {};
   const roomId = requireString(body.roomId, 'roomId');
+  if (!/^[a-zA-Z0-9._-]{1,128}$/.test(roomId)) {
+    throw errors.invalidRequest('roomId must match /^[a-zA-Z0-9._-]{1,128}$/');
+  }
   const participantId = requireString(body.participantId, 'participantId');
+  if (participantId.length > 128 || participantId.includes(':')) {
+    throw errors.invalidRequest('participantId must be <=128 chars and not contain ":"');
+  }
   let role = 'participant' as 'participant' | 'admin';
   if (body.role !== undefined) {
     if (body.role !== 'participant' && body.role !== 'admin') {
@@ -340,11 +362,19 @@ async function authTokenHandler(services: Services, ctx: RouteContext): Promise<
     role = body.role;
   }
   const adminToken = ctx.header('adminToken') ?? ctx.header('x-admin-token');
+  const adminTokenOk = (() => {
+    if (!auth.adminToken) return false;
+    if (typeof adminToken !== 'string') return false;
+    const a = Buffer.from(auth.adminToken, 'utf8');
+    const b = Buffer.from(adminToken, 'utf8');
+    if (a.length !== b.length) return false;
+    return timingSafeEqual(a, b);
+  })();
   if (role === 'admin') {
-    if (!auth.adminToken || adminToken !== auth.adminToken) {
+    if (!auth.adminToken || !adminTokenOk) {
       throw errors.forbidden('Admin tokens require a valid adminToken header');
     }
-  } else if (auth.adminToken && adminToken !== auth.adminToken) {
+  } else if (auth.adminToken && !adminTokenOk) {
     throw errors.unauthorized('Missing or invalid adminToken header');
   }
   let exp: number | undefined;
@@ -599,9 +629,13 @@ async function turnCredentialsHandler(services: Services, ctx: RouteContext): Pr
   const auth = services.auth;
   if (!auth) throw errors.authNotConfigured();
   const claims = verifyWithRotation(auth, bearerToken(ctx.header('authorization')));
+  // TURN username format is `expiry:participantId` — forbid `:` inside participantId to keep parsing unambiguous.
+  if (claims.participantId.includes(':')) {
+    throw errors.invalidRequest('participantId must not contain ":" (TURN username delimiter)');
+  }
   const creds = issueTurnCredentials(services.turn, claims.participantId);
   const iceServers = toIceServers(creds);
-  return { status: 200, body: { iceServers, ttlSec: services.turn.ttlSec ?? 86400, username: creds.username } };
+  return { status: 200, body: { iceServers, ttlSec: services.turn.ttlSec ?? 86400, username: creds.username, _note: undefined }, headers: { 'cache-control': 'no-store' } };
 }
 
 async function revokeHandler(services: Services, ctx: RouteContext): Promise<RouteResult> {
@@ -743,7 +777,13 @@ export function matchPattern(pattern: string, path: string): Record<string, stri
   for (let i = 0; i < ps.length; i++) {
     const p = ps[i]!;
     if (p.startsWith(':')) {
-      params[p.slice(1)] = decodeURIComponent(ss[i]!);
+      let decoded: string;
+      try {
+        decoded = decodeURIComponent(ss[i]!);
+      } catch {
+        return null;
+      }
+      params[p.slice(1)] = decoded;
     } else if (p !== ss[i]) {
       return null;
     }
@@ -835,8 +875,18 @@ async function respond(
   const isSdp = contentType.includes('application/sdp');
   if (rawBody.length > 0 && !contentType.includes('application/octet-stream') && !isSdp) {
     try {
-      body = JSON.parse(rawBody.toString('utf8'));
-    } catch {
+      const parsed: unknown = JSON.parse(rawBody.toString('utf8'));
+      // Prototype pollution guard: reject payloads that set dangerous keys at the top level.
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        for (const k of Object.keys(parsed as Record<string, unknown>)) {
+          if (k === '__proto__' || k === 'constructor' || k === 'prototype') {
+            throw errors.invalidRequest('Unsafe object key');
+          }
+        }
+      }
+      body = parsed;
+    } catch (e) {
+      if (e instanceof VidcallError) throw e;
       malformedJson = true;
     }
   } else if (isSdp) {
@@ -854,12 +904,13 @@ async function respond(
   const result = malformedJson
     ? { status: 400, body: { error: { code: 'invalid_request', message: 'Malformed JSON body' } } }
     : await dispatch(services, ctx);
-  // For SDP responses, send body as-is
+  // For SDP responses, send body as-is with no-store to avoid caching signaling.
   const isSdpResponse = result.headers?.['content-type'] === 'application/sdp';
   if (isSdpResponse) {
     const sdpBody = typeof result.body === 'string' ? result.body : String(result.body);
     res.writeHead(result.status, {
       'content-type': 'application/sdp',
+      'cache-control': 'no-store',
       ...(result.headers ?? {}),
     });
     res.end(sdpBody);

@@ -211,6 +211,10 @@ export function verifyToken(secret: string, token: string): TokenClaims {
       `Token expired at ${new Date(claims.exp * 1000).toISOString()}`,
     );
   }
+  // Reject tokens issued in the future (clock skew tolerance 60s).
+  if (typeof claims.iat === 'number' && claims.iat > nowSec + 60) {
+    throw new AuthError('unauthorized', 'Token issued in the future (iat > now)');
+  }
 
   // Optional claims (backwards compatible, validated when present).
   let jti: string | undefined;
@@ -283,20 +287,21 @@ export function verifyTokenWithRotation(
     throw new TypeError('secrets must be a non-empty array');
   }
   let lastErr: unknown;
+  let expiredErr: AuthError | null = null;
   for (const secret of secrets) {
     try {
       return verifyToken(secret, token);
     } catch (err) {
-      lastErr = err;
-      // Keep the strongest signal: token_expired / forbidden win over unauthorized.
       if (err instanceof AuthError && err.code === 'token_expired') {
-        // Still try other secrets for token_expired: a rotation should not hide revocation.
+        expiredErr = err;
+        lastErr = err;
         continue;
       }
       if (err instanceof AuthError && err.code === 'forbidden') throw err;
-      // unauthorized (bad sig) — try next secret
+      lastErr = err;
     }
   }
+  if (expiredErr) throw expiredErr;
   throw lastErr instanceof Error ? lastErr : new AuthError('unauthorized', 'Token verification failed');
 }
 

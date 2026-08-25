@@ -49,6 +49,9 @@ export function issueTurnCredentials(
   if (typeof participantId !== 'string' || participantId.length === 0) {
     throw new TypeError('participantId must be a non-empty string');
   }
+  if (participantId.includes(':')) {
+    throw new TypeError('participantId must not contain ":" (TURN username delimiter)');
+  }
   const ttl = config.ttlSec ?? 86400;
   if (typeof ttl !== 'number' || !Number.isFinite(ttl) || ttl <= 0) {
     throw new TypeError('turn.ttlSec must be a positive number');

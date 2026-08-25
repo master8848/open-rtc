@@ -4,7 +4,7 @@
  * `services.webhooks = [{ url, secret, events }]` — HMAC `X-Vidcall-Signature`.
  */
 
-import { createHmac } from 'node:crypto';
+import { createHmac, timingSafeEqual } from 'node:crypto';
 
 export interface WebhookConfig {
   url: string;
@@ -41,9 +41,8 @@ export async function dispatchWebhooks(configs: WebhookConfig[] | undefined, evt
 
 export function verifyWebhookSignature(body: string, signature: string, secret: string): boolean {
   const expected = signBody(body, secret);
-  // constant-time compare
-  if (expected.length !== signature.length) return false;
-  let diff = 0;
-  for (let i = 0; i < expected.length; i++) diff |= expected.charCodeAt(i) ^ signature.charCodeAt(i);
-  return diff === 0;
+  const a = Buffer.from(expected, 'utf8');
+  const b = Buffer.from(signature, 'utf8');
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(a, b);
 }
