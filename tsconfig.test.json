@@ -13,6 +13,8 @@
     "packages/quality/test/**/*.ts",
     "packages/test-utils/src/**/*.ts",
     "packages/test-utils/test/**/*.ts",
+    "packages/transport/src/**/*.ts",
+    "packages/transport/test/**/*.ts",
     "packages/server/src/**/*.ts",
     "packages/server/test/**/*.ts",
     "packages/sfu-gateway/src/**/*.ts",
