@@ -43,6 +43,21 @@
       "development": "./src/stores/MysqlStore.ts",
       "default": "./dist/stores/MysqlStore.js"
     },
+    "./stores/redis": {
+      "types": "./dist/stores/RedisStore.d.ts",
+      "development": "./src/stores/RedisStore.ts",
+      "default": "./dist/stores/RedisStore.js"
+    },
+    "./relays/redis": {
+      "types": "./dist/relays/redis-relay.d.ts",
+      "development": "./src/relays/redis-relay.ts",
+      "default": "./dist/relays/redis-relay.js"
+    },
+    "./relays/postgres-notify": {
+      "types": "./dist/relays/postgres-notify-relay.d.ts",
+      "development": "./src/relays/postgres-notify-relay.ts",
+      "default": "./dist/relays/postgres-notify-relay.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [
@@ -79,8 +94,10 @@
     "better-sqlite3": "13.0.1",
     "express": "5.2.1",
     "fastify": "5.10.0",
+    "ioredis": "5.8.2",
     "mysql2": "3.23.2",
-    "pg": "8.22.0"
+    "pg": "8.22.0",
+    "redis": "5.10.0"
   },
   "peerDependenciesMeta": {
     "better-sqlite3": {
@@ -90,6 +107,12 @@
       "optional": true
     },
     "fastify": {
+      "optional": true
+    },
+    "ioredis": {
+      "optional": true
+    },
+    "redis": {
       "optional": true
     },
     "mysql2": {

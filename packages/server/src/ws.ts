@@ -108,7 +108,7 @@ export interface WebSocketRelayOptions {
 }
 
 export interface WebSocketRelay {
-  hub: RoomHub;
+  hub: Relay;
   /** All live sockets (diagnostics/tests). */
   clients: Set<WebSocket>;
   /** Close every connection and stop accepting upgrades. */
@@ -129,10 +129,12 @@ export function attachWebSocketRelay(
     noServer: true,
     maxPayload: opts.maxPayloadBytes ?? 8 * 1024 * 1024,
   });
-  const hub = new RoomHub();
+  const hub: Relay = opts.relay ?? new RoomHub();
   // The hub doubles as Services.relay so REST mutations (HTTP join/leave/
   // signal) fan out to the same connected sockets. Requires the caller to
   // pass the SAME services object it gave the HTTP router.
+  // When a pluggable relay (RedisRelay / PostgresNotifyRelay) is supplied
+  // it wraps the local RoomHub internally, so we store whatever was chosen.
   services.relay = hub;
   const clients = new Set<WebSocket>();
   /** Raw `?token=` query value per socket (verified at join, auth mode). */
@@ -241,7 +243,7 @@ function authenticateSocket(
 
 async function handleMessage(
   services: Services,
-  hub: RoomHub,
+  hub: Relay,
   socket: WebSocket,
   raw: string,
   tokens: WeakMap<WebSocket, string>,
@@ -267,7 +269,7 @@ async function handleMessage(
     return;
   }
 
-  const meta = hub.metaFor(socket);
+  const meta = hub.metaFor?.(socket);
 
   if (!meta?.roomId) {
     // First message must be a join for the roomId the client connected with.
@@ -311,7 +313,7 @@ async function handleMessage(
 
 async function handleJoin(
   services: Services,
-  hub: RoomHub,
+  hub: Relay,
   socket: WebSocket,
   envelope: Envelope & { type: 'join' },
   tokens: WeakMap<WebSocket, string>,
@@ -409,8 +411,8 @@ async function handleJoin(
   }
 }
 
-async function handleClose(services: Services, hub: RoomHub, socket: WebSocket): Promise<void> {
-  const meta = hub.metaFor(socket);
+async function handleClose(services: Services, hub: Relay, socket: WebSocket): Promise<void> {
+  const meta = hub.metaFor?.(socket);
   if (!meta?.roomId || !meta.senderId) return;
   const roomId = meta.roomId;
   const participant = await services.store.getParticipant(roomId, meta.senderId).catch(() => null);

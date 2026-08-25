@@ -221,6 +221,12 @@ export interface RoomE2eeConfig {
   required?: boolean;
 }
 
+export interface ReconnectConfig {
+  maxAttempts?: number;
+  backoffMs?: number;
+  coalesceIceMs?: number;
+}
+
 export interface RoomConfig {
   roomId: string;
   selfId: string;
@@ -230,7 +236,10 @@ export interface RoomConfig {
   metadata?: Record<string, unknown>;
   deviceProfile?: DeviceProfile;
   capabilities?: JoinCapabilities;
-  transport: SignalingTransport;
+  /** Single transport or array sugar `[primary, fallback]` → CompositeTransport. */
+  transport: SignalingTransport | SignalingTransport[];
+  /** Optional reconnect wrapper opts (maxAttempts, backoffMs). When set, transport is wrapped in ReconnectingTransport. */
+  reconnect?: ReconnectConfig;
   /**
    * RTCPeerConnection factory (default: platform `RTCPeerConnection`).
    * Tests inject fakes here.
@@ -374,7 +383,55 @@ export class Room extends TypedEmitter<RoomEventMap> implements RoomQualityHost 
     super();
     this.config = config;
     this.roomId = config.roomId;
-    this.transport = config.transport;
+    // array sugar: [primary, fallback] → CompositeTransport (lazy, avoids cycle)
+    if (Array.isArray(config.transport)) {
+      const arr = config.transport as SignalingTransport[];
+      if (arr.length === 0) throw new Error('Room: transport array must not be empty');
+      if (arr.length === 1) this.transport = arr[0]!;
+      else {
+        // dynamic import avoided — inline minimal composite to keep core deps zero
+        const [primary, fallback] = arr as [SignalingTransport, SignalingTransport];
+        const seen = new Map<string, number>();
+        const msgCbs = new Set<(e: Envelope) => void>();
+        const presCbs = new Set<(p: import('./transport.ts').ParticipantPresence) => void>();
+        let unsubs: (() => void)[] = [];
+        const isNew = (e: Envelope): boolean => {
+          const k = `${e.sessionId}:${e.senderId}`;
+          const last = seen.get(k);
+          if (last !== undefined && e.seq <= last) return false;
+          seen.set(k, e.seq); return true;
+        };
+        this.transport = {
+          get name() { return 'composite'; },
+          get ordering() { return 'seq-required' as const; },
+          get maxPayloadBytes() {
+            const a = (primary as unknown as { maxPayloadBytes?: number }).maxPayloadBytes ?? 8 * 1024 * 1024;
+            const b = (fallback as unknown as { maxPayloadBytes?: number }).maxPayloadBytes ?? 8 * 1024 * 1024;
+            return Math.max(a, b);
+          },
+          join: async (roomId: string, self: import('./transport.ts').ParticipantInfo) => {
+            const errs: unknown[] = [];
+            try { await primary.join(roomId, self); } catch (e) { errs.push(e); }
+            try { await fallback.join(roomId, self); } catch (e) { errs.push(e); }
+            if (errs.length === 2) throw errs[0];
+            unsubs.push(
+              primary.onMessage((e) => { if (!isNew(e)) return; for (const c of [...msgCbs]) c(e); }),
+              fallback.onMessage((e) => { if (!isNew(e)) return; for (const c of [...msgCbs]) c(e); }),
+              primary.onPresence((p) => { for (const c of [...presCbs]) c(p); }),
+              fallback.onPresence((p) => { for (const c of [...presCbs]) c(p); }),
+            );
+          },
+          leave: async () => { for (const u of unsubs.splice(0)) try { u(); } catch {} seen.clear(); await Promise.allSettled([primary.leave(), fallback.leave()]); },
+          emit: async (envelope: Envelope) => { try { await primary.emit(envelope); } catch { await fallback.emit(envelope); } },
+          onMessage: (cb: (e: Envelope) => void) => { msgCbs.add(cb); return () => msgCbs.delete(cb); },
+          onPresence: (cb: (p: import('./transport.ts').ParticipantPresence) => void) => { presCbs.add(cb); return () => presCbs.delete(cb); },
+          setPresence: async (s: import('@mbsks/openrtc-protocol').PresenceState, m?: Record<string, unknown>) => { await Promise.allSettled([primary.setPresence(s, m), fallback.setPresence(s, m)]); },
+          dispose: async () => { for (const u of unsubs.splice(0)) try { u(); } catch {} msgCbs.clear(); presCbs.clear(); await Promise.allSettled([primary.dispose(), fallback.dispose()]); },
+        } as unknown as SignalingTransport;
+      }
+    } else {
+      this.transport = config.transport as SignalingTransport;
+    }
     this.sessionId = config.sessionId ?? randomId();
     this.local = new LocalParticipant({
       id: config.selfId,

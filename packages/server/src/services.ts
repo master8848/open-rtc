@@ -51,6 +51,8 @@ export interface Relay {
   broadcast(roomId: string, envelope: Envelope, opts?: { exceptSenderId?: string }): void;
   /** Number of connected clients for a room (diagnostics/tests). */
   clientCount(roomId: string): number;
+  /** Optional: socket metadata (used by ws.ts relay plumbing). */
+  metaFor?(socket: import('ws').WebSocket): { roomId: string | null; senderId: string | null; sessionId: string | null } | undefined;
 }
 
 /** TURN configuration (coturn REST API). */

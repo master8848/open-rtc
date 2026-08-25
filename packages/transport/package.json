@@ -22,6 +22,21 @@
       "types": "./dist/shared-tests.d.ts",
       "development": "./src/shared-tests.ts",
       "default": "./dist/shared-tests.js"
+    },
+    "./composite": {
+      "types": "./dist/composite.d.ts",
+      "development": "./src/composite.ts",
+      "default": "./dist/composite.js"
+    },
+    "./reconnecting": {
+      "types": "./dist/reconnecting.d.ts",
+      "development": "./src/reconnecting.ts",
+      "default": "./dist/reconnecting.js"
+    },
+    "./web-transport": {
+      "types": "./dist/web-transport.d.ts",
+      "development": "./src/web-transport.ts",
+      "default": "./dist/web-transport.js"
     }
   },
   "files": [
