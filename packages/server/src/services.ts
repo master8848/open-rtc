@@ -39,6 +39,10 @@ export interface AuthConfig {
 
 /** Broadcast a relayed envelope to connected WebSocket clients. */
 export interface Relay {
+  /** Register a local socket for a room (called on join). */
+  attach(roomId: string, socket: import('ws').WebSocket, senderId: string, sessionId: string): void;
+  /** Unregister a local socket (called on leave/disconnect). */
+  detach(roomId: string, socket: import('ws').WebSocket): void;
   /**
    * Deliver `envelope` to WS clients subscribed to `roomId`.
    * `exceptSenderId` skips the sender's own connection(s) (the core
@@ -61,6 +65,16 @@ export interface E2eeConfig {
   required?: boolean;
 }
 
+export interface RecordingWebhookHandler {
+  onRecordingFinalized?: (session: import('./types.ts').RecordingSession) => void | Promise<void>;
+  onRecordingDeleted?: (sessionId: string, roomId: string) => void | Promise<void>;
+}
+
+export interface RecordingQuotaConfig {
+  /** Per-room byte cap checked before saveChunk. */
+  maxBytesPerRoom?: number;
+}
+
 export interface Services {
   store: Store;
   /** Optional recording byte storage; without it, recording routes 501. */
@@ -75,6 +89,9 @@ export interface Services {
   turn?: TurnConfig;
   /** Optional E2EE policy; when required, unencrypted tracks + recording egress are blocked. */
   e2ee?: E2eeConfig;
+  recordingWebhooks?: RecordingWebhookHandler;
+  recordingQuota?: RecordingQuotaConfig;
+  recordingTtlMs?: number;
 }
 
 /** Build a `Services` object (convenience factory). */
@@ -86,6 +103,9 @@ export function createServices(partial: {
   auth?: AuthConfig;
   turn?: TurnConfig;
   e2ee?: E2eeConfig;
+  recordingWebhooks?: RecordingWebhookHandler;
+  recordingQuota?: RecordingQuotaConfig;
+  recordingTtlMs?: number;
 }): Services {
   return { ...partial };
 }

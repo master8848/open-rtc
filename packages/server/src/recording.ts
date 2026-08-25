@@ -37,6 +37,18 @@ export interface FinalizeManifest {
   chunks: number;
   bytes: number;
   finalizedAt: number;
+  /** When set, chunks are ciphertext; key never stored (see encryption.ts). */
+  encrypted?: boolean;
+  /** App-supplied key id (never the key). */
+  keyId?: string;
+  /** MIME type / mode surfaced for clients. */
+  mimeType?: string;
+  mode?: string;
+}
+
+/** For encrypted sessions: keyId is fetched separately, key never persisted. */
+export interface EncryptedRecordingStorage extends RecordingStorage {
+  getKeyId?(sessionId: string): Promise<string | null>;
 }
 
 // ---------------------------------------------------------------------------

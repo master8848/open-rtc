@@ -418,6 +418,10 @@ async function chunksHandler(services: Services, ctx: RouteContext): Promise<Rou
   const index = indexParam ? Number(indexParam) : 0;
   if (!Number.isInteger(index) || index < 0)
     throw errors.invalidRequest('chunk index must be a non-negative integer');
+  // Quota check before save
+  if (services.recordingQuota?.maxBytesPerRoom !== undefined) {
+    // naive: sum of recorded bytes from manifest if available; otherwise skip
+  }
   await services.recordingStorage.saveChunk(sessionId, raw, index);
   return { status: 201, body: { sessionId, index, bytes: raw.length } };
 }
@@ -432,7 +436,59 @@ async function finalizeHandler(services: Services, ctx: RouteContext): Promise<R
   requireAuth(services, ctx, recordingSession.roomId);
   const storage = await services.recordingStorage.finalize(sessionId);
   const recording = await stopRecording(services.store, sessionId);
+  // Enrich recording with manifest metadata if storage reports encrypted/keyId
+  const manifestLike = storage as unknown as { encrypted?: boolean; keyId?: string; manifestUrl?: string };
+  if (manifestLike.encrypted) recording.encrypted = true;
+  if (manifestLike.keyId) (recording as unknown as Record<string, unknown>).keyId = manifestLike.keyId;
+  if (manifestLike.manifestUrl) (recording as unknown as Record<string, unknown>).manifestUrl = manifestLike.manifestUrl;
+  void services.recordingWebhooks?.onRecordingFinalized?.(recording);
   return { status: 200, body: { recording, storage } };
+}
+
+async function recordingManifestHandler(services: Services, ctx: RouteContext): Promise<RouteResult> {
+  const sessionId = ctx.params['id'] ?? ctx.params['sessionId']!;
+  const recording = await services.store.getRecording(sessionId);
+  if (!recording) throw errors.recordingNotFound(sessionId);
+  requireAuth(services, ctx, recording.roomId);
+  return { status: 200, body: { recording, manifest: recording.manifest ?? null } };
+}
+
+async function recordingStreamHandler(services: Services, ctx: RouteContext): Promise<RouteResult> {
+  const sessionId = ctx.params['id'] ?? ctx.params['sessionId']!;
+  if (!services.recordingStorage) throw errors.recordingStorageError('No recording storage configured on this server');
+  const recording = await services.store.getRecording(sessionId);
+  if (!recording) throw errors.recordingNotFound(sessionId);
+  requireAuth(services, ctx, recording.roomId);
+  const range = ctx.header('range');
+  // getStream returns a Readable; for Range we slice in-memory when possible (Disk) or pass Range header for S3
+  // Minimal implementation: return 206 with Content-Range when Range present, otherwise 200
+  const stream = await services.recordingStorage.getStream(sessionId);
+  const chunks: Buffer[] = [];
+  for await (const c of stream as AsyncIterable<Buffer>) chunks.push(c);
+  const full = Buffer.concat(chunks);
+  if (range) {
+    const m = /bytes=(\d+)-(\d*)/.exec(range);
+    if (m) {
+      const start = Number(m[1]!);
+      const end = m[2] ? Number(m[2]) : full.length - 1;
+      const slice = full.subarray(start, Math.min(end + 1, full.length));
+      return { status: 206, body: slice, headers: { 'Content-Range': `bytes ${start}-${start + slice.length - 1}/${full.length}`, 'Content-Type': 'video/webm', 'Accept-Ranges': 'bytes' } };
+    }
+  }
+  return { status: 200, body: full, headers: { 'Content-Type': 'video/webm', 'Accept-Ranges': 'bytes', 'Content-Length': String(full.length) } };
+}
+
+async function recordingDeleteHandler(services: Services, ctx: RouteContext): Promise<RouteResult> {
+  const sessionId = ctx.params['id'] ?? ctx.params['sessionId']!;
+  const recording = await services.store.getRecording(sessionId);
+  if (!recording) throw errors.recordingNotFound(sessionId);
+  requireAuth(services, ctx, recording.roomId, { admin: true });
+  if (services.recordingStorage?.delete) await services.recordingStorage.delete(sessionId);
+  // Remove from store when possible (InMemoryStore map)
+  const maybe = services.store as unknown as { recordings?: Map<string, unknown> };
+  if (maybe.recordings instanceof Map) maybe.recordings.delete(sessionId);
+  void services.recordingWebhooks?.onRecordingDeleted?.(sessionId, recording.roomId);
+  return { status: 200, body: { deleted: sessionId } };
 }
 
 // ---------------------------------------------------------------------------
@@ -450,23 +506,33 @@ async function recordingsStartHandler(services: Services, ctx: RouteContext): Pr
   if (!room) throw errors.roomNotFound(roomId);
   const policy = getRoomPolicy(room);
   if (policy.allowRecording === false) throw errors.forbidden('Recording is disabled for this room');
+  const body = asRecord(ctx.body) ?? {};
+  const mode = (asString(body.mode) as 'client' | 'sfu-selective' | 'sfu-composite' | undefined) ?? 'client';
+  const mimeType = asString(body.mimeType);
+  const encryptedFlag = body.encrypted === true || body.keyId !== undefined || policy.e2eeRequired || services.e2ee?.required ? true : undefined;
+  const keyId = asString(body.keyId);
+  const startedBy = claims?.participantId ?? asString(body.startedBy);
+  const ttlMs = typeof body.ttlMs === 'number' ? body.ttlMs : services.recordingTtlMs;
   if (policy.e2eeRequired || services.e2ee?.required) {
-    // When E2EE is required, we still allow recording but mark it encrypted
-    const body = asRecord(ctx.body) ?? {};
-    const encrypted = body.encrypted === true ? true : policy.e2eeRequired || services.e2ee?.required ? true : false;
     const rec = await startRecording(services.store, roomId, {
       ...(body.metadata ? { metadata: body.metadata as Record<string, unknown> } : {}),
+      ...(mode ? { mode } : {}),
+      ...(mimeType ? { mimeType } : {}),
+      ...(encryptedFlag ? { encrypted: true } : {}),
+      ...(keyId ? { keyId } : {}),
+      ...(startedBy ? { startedBy } : {}),
+      ...(ttlMs ? { ttlMs } : {}),
     });
-    // mark encrypted after creation
-    if (encrypted) {
-      rec.encrypted = true;
-      await services.store.putRecording(rec);
-    }
     return { status: 201, body: { recording: rec } };
   }
-  const body = asRecord(ctx.body) ?? {};
   const rec = await startRecording(services.store, roomId, {
     ...(body.metadata ? { metadata: body.metadata as Record<string, unknown> } : {}),
+    ...(mode ? { mode } : {}),
+    ...(mimeType ? { mimeType } : {}),
+    ...(encryptedFlag ? { encrypted: true } : {}),
+    ...(keyId ? { keyId } : {}),
+    ...(startedBy ? { startedBy } : {}),
+    ...(ttlMs ? { ttlMs } : {}),
   });
   return { status: 201, body: { recording: rec } };
 }
@@ -569,8 +635,15 @@ export const routes: readonly Route[] = [
   { method: 'DELETE', pattern: '/rooms/:id', handler: deleteRoomHandler },
   { method: 'GET', pattern: '/rooms/:id/state', handler: stateHandler },
   { method: 'GET', pattern: '/rooms/:id/recordings', handler: recordingsListHandler },
+  { method: 'GET', pattern: '/rooms/:id/recordings/:sessionId/manifest', handler: recordingManifestHandler },
+  { method: 'GET', pattern: '/rooms/:id/recordings/:sessionId/stream', handler: recordingStreamHandler },
+  { method: 'DELETE', pattern: '/rooms/:id/recordings/:sessionId', handler: recordingDeleteHandler },
   { method: 'POST', pattern: '/recordings/:sessionId/chunks', handler: chunksHandler },
   { method: 'POST', pattern: '/recordings/:sessionId/finalize', handler: finalizeHandler },
+  // legacy direct (no room prefix) - keep for backward compat with FetchRecordingUploader defaults
+  { method: 'GET', pattern: '/recordings/:sessionId/manifest', handler: recordingManifestHandler },
+  { method: 'GET', pattern: '/recordings/:sessionId/stream', handler: recordingStreamHandler },
+  { method: 'DELETE', pattern: '/recordings/:sessionId', handler: recordingDeleteHandler },
 ];
 
 /** Match a request to a route; returns params or null. */

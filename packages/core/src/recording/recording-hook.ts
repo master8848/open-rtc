@@ -56,6 +56,18 @@ export interface RecordingChunk {
   kind?: RecordingStreamKind;
 }
 
+/** Recording mode (unified surface per 02-recording.md). */
+export type RecordingMode = 'client' | 'sfu-selective' | 'sfu-composite';
+
+/** Layout for SFU composite egress. */
+export type RecordingLayout = 'grid' | 'spotlight' | { custom: Record<string, unknown> };
+
+/** Egress options for SFU composite mode. */
+export interface RecordingEgressOptions {
+  hls?: boolean;
+  rtmpUrl?: string;
+}
+
 /** Emitted when a recording (or one of its streams) stops. */
 export interface RecordingStoppedEvent {
   /** Complete recording as a single Blob (single-stream hooks). */
@@ -72,6 +84,13 @@ export interface RecordingStoppedEvent {
   streamId?: string;
   label?: string;
   kind?: RecordingStreamKind;
+  /** Encryption metadata (when session was encrypted) — surfaced in recording:stopped. */
+  encrypted?: boolean;
+  keyId?: string;
+  /** Manifest URL (when server finalization reported one). */
+  manifestUrl?: string;
+  /** Recording mode for the session. */
+  mode?: RecordingMode;
 }
 
 /** Emitted when a recorder or upload fails. */

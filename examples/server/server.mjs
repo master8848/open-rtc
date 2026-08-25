@@ -15,8 +15,24 @@ import { createExpressRouter } from '@mbsks/openrtc-server/express';
 
 // SQL-backed stores live behind subpath exports with optional drivers, e.g.:
 //   import { SqliteStore } from '@mbsks/openrtc-server/stores/sqlite';  // + npm i better-sqlite3
+import { DiskRecordingStorage } from '@mbsks/openrtc-server/recording';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { mkdtemp } from 'node:fs/promises';
+const dir = await mkdtemp(path.join(tmpdir(), 'vidcall-'));
 const store = new InMemoryStore();
-const services = createServices({ store }); // add recordingStorage for recordings
+const services = createServices({
+  store,
+  recordingStorage: new DiskRecordingStorage({ dir }), // zero-infra client mode: InMemoryStore+Disk; swap to S3RecordingStorage for prod
+  recordingTtlMs: 7 * 24 * 60 * 60 * 1000,
+  recordingWebhooks: {
+    onRecordingFinalized: (r) => console.log('[webhook] recording.finalized', r.sessionId),
+    onRecordingDeleted: (id) => console.log('[webhook] recording.deleted', id),
+  },
+});
+// TTL cron: run periodically (example: every hour) — also set S3 lifecycle as second layer
+// setInterval(() => void import('@mbsks/openrtc-server').then(m => m.expireRecordings?.(store, { onDelete: (id) => services.recordingStorage?.delete?.(id) })), 60 * 60 * 1000);
+// Range download: GET /rooms/:id/recordings/:sid/stream supports Range header (see http.ts recordingStreamHandler)
 
 const app = express();
 app.use('/vidcall', createExpressRouter(services));

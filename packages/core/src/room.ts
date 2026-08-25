@@ -286,6 +286,14 @@ export interface RoomConfig {
   topology?: TopologyConfig;
   sfuGateway?: SfuGatewayLike;
   mediaTransport?: MediaTransport;
+  /** Recording (unified surface per 02-recording.md; keeps backward compat with recordingEndpoint). */
+  recording?: {
+    mode?: 'client' | 'sfu-selective' | 'sfu-composite';
+    endpoint?: string;
+    mimeType?: string;
+    timesliceMs?: number;
+    encryption?: { key: CryptoKey; keyId?: string } | false;
+  };
   debug?: (message: string, data?: unknown) => void;
 }
 
@@ -375,15 +383,17 @@ export class Room extends TypedEmitter<RoomEventMap> implements RoomQualityHost 
       deviceProfile: config.deviceProfile,
       capabilities: config.capabilities,
     });
+    const recEndpoint = config.recording?.endpoint ?? config.recordingEndpoint;
     this.recording = new RoomRecordingFacade({
       roomId: this.roomId,
       sessionId: this.sessionId,
-      uploader: config.recordingEndpoint
+      uploader: recEndpoint
         ? new FetchRecordingUploader({
-            endpoint: config.recordingEndpoint,
+            endpoint: recEndpoint,
             fetchImpl: config.recordingFetchImpl,
           })
         : undefined,
+      timesliceMs: config.recording?.timesliceMs,
       mediaRecorderCtor: config.recordingMediaRecorderCtor,
       debug: this.debug,
     });

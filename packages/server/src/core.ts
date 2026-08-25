@@ -70,6 +70,12 @@ export interface StartRecordingOptions {
   /** Explicit session id; server generates one when omitted. */
   sessionId?: string;
   metadata?: Record<string, unknown>;
+  mode?: 'client' | 'sfu-selective' | 'sfu-composite';
+  mimeType?: string;
+  encrypted?: boolean;
+  keyId?: string;
+  startedBy?: string;
+  ttlMs?: number;
   /** Clock override (tests). */
   now?: number;
   sessionIdFactory?: () => string;
@@ -405,11 +411,18 @@ export async function startRecording(
 ): Promise<RecordingSession> {
   await requireRoom(store, roomId);
   const sessionId = opts.sessionId ?? (opts.sessionIdFactory ?? randomId)();
+  const t = nowMs(opts.now);
   const recording: RecordingSession = {
     sessionId,
     roomId,
-    startedAt: nowMs(opts.now),
+    startedAt: t,
     status: 'recording',
+    ...(opts.mode ? { mode: opts.mode } : {}),
+    ...(opts.mimeType ? { mimeType: opts.mimeType } : {}),
+    ...(opts.encrypted ? { encrypted: true as const } : {}),
+    ...(opts.keyId ? { keyId: opts.keyId } : {}),
+    ...(opts.startedBy ? { startedBy: opts.startedBy } : {}),
+    ...(opts.ttlMs ? { expiresAt: t + opts.ttlMs } : {}),
     ...(opts.metadata !== undefined ? { metadata: opts.metadata } : {}),
   };
   await store.putRecording(recording);
@@ -447,6 +460,23 @@ export async function getRecordings(store: Store, roomId: string): Promise<Recor
   await requireRoom(store, roomId);
   const all = await store.listRecordings(roomId);
   return [...all].sort((a, b) => b.startedAt - a.startedAt);
+}
+
+/** Expire recordings past expiresAt (TTL). Uses store scan; InMemoryStore exposes recordings map. */
+export async function expireRecordings(store: Store, opts: { now?: number; onDelete?: (sessionId: string) => Promise<void> } = {}): Promise<string[]> {
+  const t = nowMs(opts.now);
+  const maybe = store as unknown as { recordings?: Map<string, RecordingSession> };
+  if (!(maybe.recordings instanceof Map)) return [];
+  const expired: string[] = [];
+  for (const [sid, rec] of [...maybe.recordings.entries()]) {
+    if (rec.expiresAt !== undefined && rec.expiresAt <= t) {
+      await store.putRecording({ ...rec, status: 'finalized' as const, stoppedAt: t });
+      if (opts.onDelete) await opts.onDelete(sid);
+      maybe.recordings.delete(sid);
+      expired.push(sid);
+    }
+  }
+  return expired;
 }
 
 /** Build the protocol `join` envelope for a participant (relay helper). */

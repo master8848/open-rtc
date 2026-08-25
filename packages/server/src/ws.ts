@@ -103,6 +103,8 @@ export interface WebSocketRelayOptions {
   path?: string;
   /** Per-message payload cap; default 8 MiB (SDP/ICE are a few KB). */
   maxPayloadBytes?: number;
+  /** Optional pluggable relay (e.g. RedisRelay, PostgresNotifyRelay). When omitted a local RoomHub is used. */
+  relay?: Relay;
 }
 
 export interface WebSocketRelay {

@@ -8,3 +8,5 @@ export * from './media-recorder-recording-hook.ts';
 export * from './composite-recording-hook.ts';
 export * from './recording-uploader.ts';
 export * from './room-recording-facade.ts';
+export * from './encryption.ts';
+export * from './sfu-egress.ts';

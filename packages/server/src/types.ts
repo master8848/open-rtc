@@ -88,8 +88,20 @@ export interface RecordingSession {
   /** Epoch ms when the recording was stopped/finalized. */
   stoppedAt?: number;
   status: RecordingStatus;
+  /** Recording mode (unified surface: client | sfu-selective | sfu-composite). */
+  mode?: 'client' | 'sfu-selective' | 'sfu-composite';
+  /** MIME type for the session (e.g. video/webm;codecs=vp8,opus). */
+  mimeType?: string;
   /** True when this session's bytes are ciphertext (E2EE mode; key never stored). */
   encrypted?: boolean;
+  /** App-supplied key id (never the key itself). */
+  keyId?: string;
+  /** Who started the recording (participantId). */
+  startedBy?: string;
+  /** Finalize manifest (chunks, bytes, finalizedAt, encrypted, keyId). */
+  manifest?: import('./recording.ts').FinalizeManifest;
+  /** Epoch ms when this recording expires (TTL). */
+  expiresAt?: number;
   /** App-defined metadata (uploader identity, mime type, ...). */
   metadata?: Record<string, unknown>;
 }
