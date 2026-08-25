@@ -10,19 +10,19 @@ policies defined here.
 
 ## Repository layout
 
-| Path | What lives there |
-|---|---|
-| `packages/core` | Framework-agnostic mesh WebRTC engine (zero runtime deps) |
-| `packages/quality` | Adaptive-quality policy engine (pure functions over stats snapshots) |
-| `packages/transport` | Client signaling transports + shared adapter test suite |
-| `packages/backend-*` | Signaling backend adapters (Supabase, Convex, Postgres, SQLite, Firebase, Appwrite) |
-| `packages/server` | Reference TS signaling server (pluggable stores) |
-| `packages/sfu-gateway` | Optional SFU path (mediasoup) |
-| `packages/{kotlin,swift,dart}` | Native client bindings speaking the same protocol |
-| `protocol/` | Wire schema (`schema.json`), types, and canonical fixtures — single source of truth |
-| `server/rust` | Optional Rust sidecar relay |
-| `examples/` | Vanilla JS, React, and server examples |
-| `integrations/` | Per-stack integration guides |
+| Path                           | What lives there                                                                    |
+| ------------------------------ | ----------------------------------------------------------------------------------- |
+| `packages/core`                | Framework-agnostic mesh WebRTC engine (zero runtime deps)                           |
+| `packages/quality`             | Adaptive-quality policy engine (pure functions over stats snapshots)                |
+| `packages/transport`           | Client signaling transports + shared adapter test suite                             |
+| `packages/backend-*`           | Signaling backend adapters (Supabase, Convex, Postgres, SQLite, Firebase, Appwrite) |
+| `packages/server`              | Reference TS signaling server (pluggable stores)                                    |
+| `packages/sfu-gateway`         | Optional SFU path (mediasoup)                                                       |
+| `packages/{kotlin,swift,dart}` | Native client bindings speaking the same protocol                                   |
+| `protocol/`                    | Wire schema (`schema.json`), types, and canonical fixtures — single source of truth |
+| `server/rust`                  | Optional Rust sidecar relay                                                         |
+| `examples/`                    | Vanilla JS, React, and server examples                                              |
+| `integrations/`                | Per-stack integration guides                                                        |
 
 ## Engineering policies
 
@@ -87,10 +87,12 @@ implementations in the same change.
 
 ## Local development
 
-Requires [Bun](https://bun.sh) ≥ 1.2 as the package manager and Node ≥ 18.18
-(the test suites run on the `node:test` runner). Dependencies are exact-pinned
-workspaces; **`bun.lock` is the source of truth** and `package-lock.json` is no
-longer maintained.
+Tool versions are pinned in [`mise.toml`](mise.toml) — install
+[mise](https://mise.jdx.dev) and run `mise install` to get the exact Bun/Node
+versions the repo is tested with. In short: [Bun](https://bun.sh) is the
+package manager (`bun.lock` is the source of truth; `package-lock.json` is no
+longer maintained) and Node runs the test suites (`node:test` runner).
+Dependencies are exact-pinned workspaces.
 
 ```sh
 bun install             # install

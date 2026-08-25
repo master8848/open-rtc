@@ -1,0 +1,10 @@
+# Toolchain pins for the vidcall monorepo.
+#
+# After cloning, run:
+#   mise install
+#
+# bun is the package manager (bun.lock is the source of truth).
+# node remains the test runtime (the suites run on node:test/vitest).
+[tools]
+bun = "1.4.0"
+node = "22.22.2"
