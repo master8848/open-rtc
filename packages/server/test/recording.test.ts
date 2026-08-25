@@ -224,3 +224,17 @@ test('s3: missing chunks error on finalize', async () => {
     await s3.close();
   }
 });
+
+test('sigv4: default amzDate is compact YYYYMMDDTHHMMSSZ (no millis)', () => {
+  const req = signV4({
+    method: 'PUT',
+    url: 'https://example-bucket.s3.us-east-1.amazonaws.com/recordings/rec-1/chunk-000000',
+    body: Buffer.from('hello'),
+    accessKeyId: 'AKIDEXAMPLE',
+    secretAccessKey: 'SECRETEXAMPLE',
+    region: 'us-east-1',
+    service: 's3',
+  });
+  const date = req.headers['x-amz-date']!;
+  assert.match(date, /^\d{8}T\d{6}Z$/);
+});

@@ -71,7 +71,13 @@ function sha256Hex(data: Buffer | string): string {
 /** Sign a request; returns headers ready to attach to a fetch() call. */
 export function signV4(opts: SignV4Options): SignedRequest {
   const url = new URL(opts.url);
-  const amzDate = opts.amzDate ?? new Date().toISOString().replace(/[-:]|\\.\d{3}Z$/g, '');
+  // ISO `2026-08-25T09:16:59.789Z` → SigV4 compact `20260825T091659Z`.
+  const amzDate =
+    opts.amzDate ??
+    new Date()
+      .toISOString()
+      .replace(/\.\d{3}Z$/, 'Z')
+      .replace(/[-:]/g, '');
   const dateStamp = amzDate.slice(0, 8);
 
   const host = url.host;
