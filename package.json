@@ -12,7 +12,7 @@
   "scripts": {
     "build": "tsc -b",
     "clean": "tsc -b --clean",
-    "test": "node --conditions=development --test \"packages/core/test/*.test.ts\" \"packages/quality/test/*.test.ts\" \"packages/test-utils/test/*.test.ts\" \"packages/server/test/*.test.ts\" \"packages/sfu-gateway/test/*.test.ts\"",
+    "test": "node --conditions=development --test \"protocol/test/*.test.ts\" \"packages/core/test/*.test.ts\" \"packages/quality/test/*.test.ts\" \"packages/test-utils/test/*.test.ts\" \"packages/server/test/*.test.ts\" \"packages/sfu-gateway/test/*.test.ts\"",
     "test:sfu": "node --conditions=development --test \"packages/sfu-gateway/test/*.test.ts\"",
     "test:sfu:integration": "VIDCALL_MEDIASOUP_INTEGRATION=1 node --conditions=development --test packages/sfu-gateway/test/integration.mediasoup.test.ts",
     "test:transport": "cd packages/transport && vitest run",
