@@ -55,6 +55,12 @@ import { FetchRecordingUploader } from './recording/recording-uploader.ts';
 import { RoomRecordingFacade } from './recording/room-recording-facade.ts';
 import { RoomDevicesFacade } from './devices.ts';
 import type { MediaDevicesLike } from './devices.ts';
+import {
+  ObservableStore,
+  buildRoomSnapshot,
+  roomSnapshotsEqual,
+  type RoomSnapshot,
+} from './store.ts';
 
 // ------------------------------------------------------------------ events
 
@@ -146,6 +152,23 @@ export type RoomEventMap = {
 export interface PublishOptions {
   source?: TrackPublication['source'];
   metadata?: Record<string, unknown>;
+}
+
+export interface JoinOptions {
+  /**
+   * Cancellation for an in-flight join (docs/reviews/perspective-tanstack.md
+   * roadmap #8). When the signal aborts, `join()` stops at the next step,
+   * rolls back any subscriptions it registered and releases the transport
+   * session again — the room stays unjoined and `join()` may be retried
+   * (e.g. a React `<StrictMode>` double-mount). Already-joined rooms ignore
+   * the signal. Rejected with `signal.reason` (default: an AbortError).
+   */
+  signal?: AbortSignal;
+}
+
+export interface MediaSubscribeOptions {
+  /** Restrict the handle to one track kind (default: all kinds). */
+  kind?: 'audio' | 'video';
 }
 
 export interface TrackSubscription {
@@ -288,7 +311,16 @@ export class Room extends TypedEmitter<RoomEventMap> implements RoomQualityHost 
   private readonly unsubscribers: (() => void)[] = [];
   private seq = 0;
   private joined = false;
+  private joining = false;
   private closed = false;
+  /** Serializes concurrent `join()` calls so retries start after settle. */
+  private joinChain: Promise<unknown> = Promise.resolve();
+  private readonly snapshotStore: ObservableStore<RoomSnapshot>;
+  /**
+   * Fast path for emitter-only users: with zero snapshot subscribers we only
+   * mark dirty and rebuild lazily on the next `getSnapshot()`.
+   */
+  private snapshotDirty = false;
 
   constructor(config: RoomConfig) {
     super();
@@ -352,35 +384,104 @@ export class Room extends TypedEmitter<RoomEventMap> implements RoomQualityHost 
     });
     // Re-emit device-change events on the room so apps can use room.on(...).
     this.devices.on('devices:changed', () => this.emit('devices:changed'));
+    // Snapshot layer: rebuild + notify whenever tracked state mutates. Events
+    // that do not affect the snapshot (reaction/chat/error/...) are
+    // deliberately not wired — unrelated updates never notify subscribers.
+    this.snapshotStore = new ObservableStore<RoomSnapshot>(this.buildSnapshot(), (error) => {
+      this.debug('room:snapshot-listener-error', error);
+      this.emit('error', error instanceof Error ? error : new Error(String(error)));
+    });
+    const invalidate = () => this.invalidateSnapshot();
+    for (const event of [
+      'participant-joined',
+      'participant-left',
+      'participant-updated',
+      'connection-state',
+      'track',
+      'track-unpublished',
+      'quality:changed',
+      'devices:changed',
+    ] as const) {
+      this.on(event, invalidate);
+    }
   }
 
   // -------------------------------------------------------------- join/leave
 
-  /** Join the room: subscribe to signaling + presence, announce ourselves. */
-  async join(): Promise<this> {
+  /**
+   * Join the room: subscribe to signaling + presence, announce ourselves.
+   *
+   * Concurrent `join()` calls are serialized: each waits for the previous
+   * attempt to settle before running (a retried join after an aborted one
+   * starts clean). Pass `options.signal` to cancel an in-flight join — see
+   * `JoinOptions`.
+   */
+  async join(options: JoinOptions = {}): Promise<this> {
+    const result = this.joinChain.then(
+      () => this.runJoin(options.signal),
+      () => this.runJoin(options.signal),
+    );
+    this.joinChain = result.then(
+      () => {},
+      () => {},
+    );
+    return result;
+  }
+
+  private async runJoin(signal?: AbortSignal): Promise<this> {
     if (this.joined) return this;
     if (this.closed) throw new Error('Room is closed');
-    const info: ParticipantInfo = {
-      id: this.local.id,
-      displayName: this.local.displayName,
-      metadata: this.local.metadata,
+    const checkAborted = (): void => {
+      if (signal?.aborted) throw signal.reason ?? new Error('Room.join aborted');
     };
-    await this.transport.join(this.roomId, info);
-    this.unsubscribers.push(
-      this.transport.onMessage((envelope) => {
-        this.handleEnvelope(envelope).catch((err) => this.reportError(err));
-      }),
-      this.transport.onPresence((presence) => this.handlePresence(presence)),
-    );
-    await this.transport.setPresence('online', this.local.metadata);
-    await this.emitEnvelope('join', {
-      displayName: this.local.displayName,
-      metadata: this.local.metadata,
-      deviceProfile: this.local.deviceProfile,
-      capabilities: this.local.capabilities,
-    });
+    checkAborted();
+    this.joining = true;
+    this.invalidateSnapshot();
+    const subscribedFrom = this.unsubscribers.length;
+    let transportJoined = false;
+    try {
+      const info: ParticipantInfo = {
+        id: this.local.id,
+        displayName: this.local.displayName,
+        metadata: this.local.metadata,
+      };
+      transportJoined = true;
+      await this.transport.join(this.roomId, info);
+      checkAborted();
+      this.unsubscribers.push(
+        this.transport.onMessage((envelope) => {
+          this.handleEnvelope(envelope).catch((err) => this.reportError(err));
+        }),
+        this.transport.onPresence((presence) => this.handlePresence(presence)),
+      );
+      await this.transport.setPresence('online', this.local.metadata);
+      checkAborted();
+      await this.emitEnvelope('join', {
+        displayName: this.local.displayName,
+        metadata: this.local.metadata,
+        deviceProfile: this.local.deviceProfile,
+        capabilities: this.local.capabilities,
+      });
+      checkAborted();
+    } catch (err) {
+      // Roll back what this attempt did so a retry (or StrictMode remount)
+      // starts from a clean slate.
+      this.unsubscribers.splice(subscribedFrom);
+      if (transportJoined && !this.closed) {
+        try {
+          await this.transport.leave();
+        } catch {
+          /* best effort */
+        }
+      }
+      this.joining = false;
+      this.invalidateSnapshot();
+      throw err;
+    }
     this.joined = true;
+    this.joining = false;
     this.quality.start(); // begin adaptive-quality sampling + device profile
+    this.invalidateSnapshot();
     return this;
   }
 
@@ -388,6 +489,8 @@ export class Room extends TypedEmitter<RoomEventMap> implements RoomQualityHost 
   async leave(reason?: string): Promise<void> {
     if (this.closed) return;
     this.closed = true;
+    this.joining = false;
+    this.invalidateSnapshot();
     this.quality.stop(); // stop adaptive-quality sampling
     // Stop any in-progress recording (uploads the finalize report).
     try {
@@ -438,6 +541,7 @@ export class Room extends TypedEmitter<RoomEventMap> implements RoomQualityHost 
       metadata: options.metadata,
     };
     this.local.addPublication(publication);
+    this.invalidateSnapshot();
     for (const participantId of this.remoteById.keys()) {
       const entry = await this.ensurePeer(participantId);
       entry.pc.addTrack(track);
@@ -455,6 +559,7 @@ export class Room extends TypedEmitter<RoomEventMap> implements RoomQualityHost 
     if (!pub || !pub.track) return;
     const track = pub.track;
     pub.track = null;
+    this.invalidateSnapshot();
     this.quality.detachTrack(track);
     for (const entry of this.peers.values()) {
       const sender = entry.pc.getSenders().find((s) => s.track === track);
@@ -470,14 +575,35 @@ export class Room extends TypedEmitter<RoomEventMap> implements RoomQualityHost 
    */
   async subscribe(
     participantId: string,
-    options: { kind?: 'audio' | 'video' } = {},
-  ): Promise<TrackSubscription> {
-    const participant = this.remoteById.get(participantId);
-    if (!participant) throw new Error(`Room: unknown participant '${participantId}'`);
-    const matching = () =>
-      participant.publications.filter((p) => !options.kind || p.kind === options.kind);
-    return {
-      participantId,
+    options?: MediaSubscribeOptions,
+  ): Promise<TrackSubscription>;
+  /**
+   * Subscribe to snapshot changes; returns an unsubscribe function. The
+   * listener runs after every tracked mutation that actually changed the
+   * snapshot (see `getSnapshot()`). Listener errors are isolated: they are
+   * reported via the room's debug logger and the `'error'` event instead of
+   * breaking other listeners or the emitting code path.
+   *
+   * The two `subscribe` forms are distinguished by argument type (function =
+   * snapshot store, string = media control handle) so the pre-existing media
+   * API stays source-compatible.
+   */
+  subscribe(listener: () => void): () => void;
+  subscribe(
+    participantIdOrListener: string | (() => void),
+    options?: MediaSubscribeOptions,
+  ): Promise<TrackSubscription> | (() => void) {
+    if (typeof participantIdOrListener === 'function') {
+      return this.snapshotStore.subscribe(participantIdOrListener);
+    }
+    const participant = this.remoteById.get(participantIdOrListener);
+    const kind = options?.kind;
+    if (!participant) {
+      throw new Error(`Room: unknown participant '${participantIdOrListener}'`);
+    }
+    const matching = () => participant.publications.filter((p) => !kind || p.kind === kind);
+    return Promise.resolve({
+      participantId: participantIdOrListener,
       get publication(): TrackPublication | undefined {
         return matching()[0];
       },
@@ -487,13 +613,16 @@ export class Room extends TypedEmitter<RoomEventMap> implements RoomQualityHost 
       close(): void {
         /* mesh: no decoder resources to release */
       },
-    };
+    });
   }
 
   // -------------------------------------------------------------- presence
 
   async setPresence(state: PresenceState, metadata?: Record<string, unknown>): Promise<void> {
-    if (metadata !== undefined) this.local.setMetadata(metadata);
+    if (metadata !== undefined) {
+      this.local.setMetadata(metadata);
+      this.invalidateSnapshot();
+    }
     await this.transport.setPresence(state, metadata ?? this.local.metadata);
     await this.emitEnvelope('presence', { state, metadata });
   }
@@ -566,10 +695,65 @@ export class Room extends TypedEmitter<RoomEventMap> implements RoomQualityHost 
     return this.closed;
   }
 
+  // ------------------------------------------------------- snapshot / store
+
+  /**
+   * The current immutable room state. Returns the same object reference until
+   * tracked state (roster, presence/connection per participant, local
+   * publications, join lifecycle, quality tier) actually changes — safe as a
+   * `useSyncExternalStore` snapshot. (Snapshot *subscriptions* share the
+   * `subscribe()` name with media handles — see the overloads above.)
+   */
+  getSnapshot(): RoomSnapshot {
+    if (this.snapshotDirty) this.refreshSnapshot();
+    return this.snapshotStore.getSnapshot();
+  }
+
   // ------------------------------------------------------------- internals
 
   private get debug(): (message: string, data?: unknown) => void {
     return this.config.debug ?? (() => {});
+  }
+
+  /** Current lifecycle status for the snapshot. */
+  private snapshotStatus(): RoomSnapshot['status'] {
+    if (this.closed) return 'closed';
+    if (this.joined) return 'joined';
+    return this.joining ? 'joining' : 'new';
+  }
+
+  private buildSnapshot(): RoomSnapshot {
+    return buildRoomSnapshot({
+      roomId: this.roomId,
+      selfId: this.local.id,
+      status: this.snapshotStatus(),
+      qualityTierId: this.quality.currentTierId,
+      local: this.local,
+      remotes: [...this.remoteById.values()],
+    });
+  }
+
+  /**
+   * Called after every tracked mutation. With subscribers attached the next
+   * snapshot is built immediately and pushed (unless it is structurally equal
+   * to the current one — duplicate events never cause redundant notifies);
+   * otherwise we only mark dirty for a lazy rebuild on `getSnapshot()`.
+   */
+  private invalidateSnapshot(): void {
+    if (this.snapshotStore.listenerCount === 0) {
+      this.snapshotDirty = true;
+      return;
+    }
+    this.refreshSnapshot();
+  }
+
+  private refreshSnapshot(): void {
+    this.snapshotDirty = false;
+    const previous = this.snapshotStore.getSnapshot();
+    const next = this.buildSnapshot();
+    // Keep the old reference when nothing actually changed so UI bindings
+    // stay referentially stable.
+    this.snapshotStore.set(roomSnapshotsEqual(previous, next) ? previous : next);
   }
 
   private nextSeq(): number {

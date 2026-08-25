@@ -12,6 +12,7 @@ export * from './peer-connection-manager.ts';
 export * from './data-channel-bus.ts';
 export * from './participants.ts';
 export * from './room.ts';
+export * from './store.ts';
 export * from './devices.ts';
 export * from './controls/index.ts';
 export * from './room-quality.ts';
