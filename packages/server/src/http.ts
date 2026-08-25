@@ -39,7 +39,7 @@ import {
   stopRecording,
 } from './core.ts';
 import { DEFAULT_TOKEN_TTL_SECONDS, issueToken, verifyToken, type TokenClaims } from './auth.ts';
-import { errors, isVidcallError } from './errors.ts';
+import { errors, isVidcallError, VidcallError } from './errors.ts';
 import type { Services } from './services.ts';
 
 /** Everything a handler needs to answer one request, framework-agnostic. */
@@ -446,6 +446,31 @@ async function handleNodeRequest(
   res: http.ServerResponse,
   maxBodyBytes: number,
 ): Promise<void> {
+  try {
+    await respond(services, req, res, maxBodyBytes);
+  } catch (err) {
+    // Never let a request rejection crash the process (e.g. oversized body,
+    // malformed stream): answer with the error envelope instead.
+    const vidcall = isVidcallError(err) ? err : errors.internalError('Unexpected server error');
+    if (!res.headersSent) {
+      res.writeHead(vidcall.status, {
+        'content-type': 'application/json; charset=utf-8',
+        // The client may still be mid-upload (paused stream); close after.
+        connection: 'close',
+      });
+    }
+    res.end(JSON.stringify(vidcall.toJSON()), () => {
+      if (!req.complete) req.destroy();
+    });
+  }
+}
+
+async function respond(
+  services: Services,
+  req: http.IncomingMessage,
+  res: http.ServerResponse,
+  maxBodyBytes: number,
+): Promise<void> {
   const url = new URL(req.url ?? '/', 'http://localhost');
   const rawBody = await readBody(req, maxBodyBytes);
   let body: unknown;
@@ -485,8 +510,10 @@ function readBody(req: http.IncomingMessage, maxBytes: number): Promise<Buffer> 
     req.on('data', (c: Buffer) => {
       total += c.length;
       if (total > maxBytes) {
-        reject(errors.invalidRequest('Request body too large'));
-        req.destroy();
+        // Stop buffering and let the caller answer 413 while the socket is
+        // still alive; the response handler tears the connection down after.
+        req.pause();
+        reject(new VidcallError('invalid_request', 'Request body too large', 413));
         return;
       }
       chunks.push(c);

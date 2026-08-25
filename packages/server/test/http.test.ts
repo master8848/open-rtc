@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { AddressInfo } from 'node:net';
-import { createNodeServer } from '../src/http.ts';
+import { createNodeServer, type NodeServerOptions } from '../src/http.ts';
 import { createServices } from '../src/services.ts';
 import { InMemoryStore } from '../src/stores/InMemoryStore.ts';
 import { DiskRecordingStorage } from '../src/recording.ts';
@@ -15,8 +15,9 @@ import path from 'node:path';
 async function withServer(
   services: ReturnType<typeof createServices>,
   fn: (base: string) => Promise<void>,
+  opts: NodeServerOptions = {},
 ): Promise<void> {
-  const server = createNodeServer(services);
+  const server = createNodeServer(services, opts);
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
   const { port } = server.address() as AddressInfo;
   const base = `http://127.0.0.1:${port}`;
@@ -283,4 +284,34 @@ test('http: signal from a non-member is rejected', async () => {
       'participant_not_found',
     );
   });
+});
+
+test('http: oversized body answers 413 instead of crashing the server', async () => {
+  const store = new InMemoryStore();
+  const services = createServices({ store });
+
+  await withServer(
+    services,
+    async (base) => {
+      const res = await fetch(`${base}/rooms`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ roomId: 'x'.repeat(2048) }),
+      });
+      assert.equal(res.status, 413);
+      assert.equal(
+        ((await res.json()) as { error: { code: string } }).error.code,
+        'invalid_request',
+      );
+
+      // The process must still be alive and serving.
+      const ok = await fetch(`${base}/rooms`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ roomId: 'after' }),
+      });
+      assert.equal(ok.status, 201);
+    },
+    { maxBodyBytes: 1024 },
+  );
 });
