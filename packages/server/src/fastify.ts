@@ -38,6 +38,14 @@ export function createFastifyPlugin(services: Services): FastifyPluginCallback {
       const result = await dispatch(services, fastifyContext(req));
       return reply.code(result.status).send(result.body);
     });
+    app.post('/auth/revoke', async (req, reply) => {
+      const result = await dispatch(services, fastifyContext(req));
+      return reply.code(result.status).send(result.body);
+    });
+    app.get('/turn/credentials', async (req, reply) => {
+      const result = await dispatch(services, fastifyContext(req));
+      return reply.code(result.status).send(result.body);
+    });
     app.post('/rooms', async (req, reply) => {
       const result = await dispatch(services, fastifyContext(req));
       return reply.code(result.status).send(result.body);
@@ -55,6 +63,18 @@ export function createFastifyPlugin(services: Services): FastifyPluginCallback {
       return reply.code(result.status).send(result.body);
     });
     app.post('/rooms/:id/close', async (req, reply) => {
+      const result = await dispatch(services, fastifyContext(req));
+      return reply.code(result.status).send(result.body);
+    });
+    app.post('/rooms/:id/policy', async (req, reply) => {
+      const result = await dispatch(services, fastifyContext(req));
+      return reply.code(result.status).send(result.body);
+    });
+    app.post('/rooms/:id/moderate', async (req, reply) => {
+      const result = await dispatch(services, fastifyContext(req));
+      return reply.code(result.status).send(result.body);
+    });
+    app.post('/rooms/:id/recordings/start', async (req, reply) => {
       const result = await dispatch(services, fastifyContext(req));
       return reply.code(result.status).send(result.body);
     });

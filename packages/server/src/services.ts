@@ -25,6 +25,8 @@ import type { Store } from './store.ts';
 export interface AuthConfig {
   /** HMAC-SHA256 signing key. Never ship this to clients. */
   secret: string;
+  /** Optional previous secrets for key rotation (tries each). */
+  previousSecrets?: string[];
   /**
    * Optional shared secret for `POST /auth/token`. When set, token issuance
    * requires an `adminToken` header; `role: 'admin'` always requires it.
@@ -47,6 +49,18 @@ export interface Relay {
   clientCount(roomId: string): number;
 }
 
+/** TURN configuration (coturn REST API). */
+export interface TurnConfig {
+  secret: string;
+  urls: string[];
+  ttlSec?: number;
+}
+
+/** E2EE configuration (SFU + recording). */
+export interface E2eeConfig {
+  required?: boolean;
+}
+
 export interface Services {
   store: Store;
   /** Optional recording byte storage; without it, recording routes 501. */
@@ -57,6 +71,10 @@ export interface Services {
   now?: () => number;
   /** Optional HMAC auth; when set, room routes require tokens (see AuthConfig). */
   auth?: AuthConfig;
+  /** Optional TURN config; when set, GET /turn/credentials is live. */
+  turn?: TurnConfig;
+  /** Optional E2EE policy; when required, unencrypted tracks + recording egress are blocked. */
+  e2ee?: E2eeConfig;
 }
 
 /** Build a `Services` object (convenience factory). */
@@ -66,6 +84,8 @@ export function createServices(partial: {
   relay?: Relay;
   now?: () => number;
   auth?: AuthConfig;
+  turn?: TurnConfig;
+  e2ee?: E2eeConfig;
 }): Services {
   return { ...partial };
 }

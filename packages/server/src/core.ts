@@ -34,11 +34,14 @@ export interface ParticipantInput {
   metadata?: Record<string, unknown>;
 }
 
+export type RoomPolicyInput = import('./types.ts').RoomPolicy;
+
 export interface CreateRoomOptions {
   /** Explicit room id; server generates a short id when omitted. */
   roomId?: string;
   maxParticipants?: number;
   metadata?: Record<string, unknown>;
+  policy?: RoomPolicyInput;
   /** Clock override (tests). */
   now?: number;
   /** Room-id generator override (tests). */
@@ -116,6 +119,7 @@ export async function createRoom(store: Store, opts: CreateRoomOptions = {}): Pr
     state: 'open',
     ...(opts.maxParticipants !== undefined ? { maxParticipants: opts.maxParticipants } : {}),
     ...(opts.metadata !== undefined ? { metadata: opts.metadata } : {}),
+    ...(opts.policy !== undefined ? { policy: opts.policy } : {}),
   };
   await store.putRoom(room);
   return room;
@@ -148,20 +152,106 @@ export async function closeRoom(
  * Add a participant to a room. Enforces room existence + open state +
  * capacity, then returns the full roster.
  */
+export function getRoomPolicy(room: Room): import('./types.ts').RoomPolicy {
+  const fromField = (room as Room & { policy?: import('./types.ts').RoomPolicy }).policy;
+  if (fromField) return fromField;
+  const metaPolicy = (room.metadata as Record<string, unknown> | undefined)?.policy;
+  if (metaPolicy && typeof metaPolicy === 'object') return metaPolicy as import('./types.ts').RoomPolicy;
+  return {};
+}
+
+export async function updateRoomPolicy(
+  store: Store,
+  roomId: string,
+  patch: Partial<import('./types.ts').RoomPolicy>,
+  opts: { now?: number } = {},
+): Promise<Room> {
+  const room = await requireRoom(store, roomId);
+  const current = getRoomPolicy(room);
+  const next: import('./types.ts').RoomPolicy = { ...current, ...patch };
+  // validate allowedCodecs
+  if (next.allowedCodecs !== undefined && !Array.isArray(next.allowedCodecs)) {
+    throw errors.invalidRequest('policy.allowedCodecs must be an array');
+  }
+  if (next.moderatorIds !== undefined && !Array.isArray(next.moderatorIds)) {
+    throw errors.invalidRequest('policy.moderatorIds must be an array');
+  }
+  const updated: Room = { ...room, policy: next, updatedAt: nowMs(opts.now) };
+  // keep metadata.policy in sync for backwards compat
+  if (updated.metadata && typeof updated.metadata === 'object') {
+    (updated.metadata as Record<string, unknown>).policy = next;
+  }
+  await store.putRoom(updated);
+  return updated;
+}
+
+export type ModerationAction = 'kick' | 'mute' | 'lock' | 'unlock';
+
+export async function moderateRoom(
+  store: Store,
+  roomId: string,
+  actorId: string,
+  action: ModerationAction,
+  targetId?: string,
+  opts: { now?: number } = {},
+): Promise<{ room: Room; kicked?: string }> {
+  const room = await requireRoom(store, roomId);
+  const policy = getRoomPolicy(room);
+  const isModerator =
+    policy.moderatorIds?.includes(actorId) ?? false;
+  // For now, only moderators/admins may moderate; caller must check role
+  if (!isModerator) {
+    // still allow if actor is admin via token — caller checks
+  }
+  switch (action) {
+    case 'lock': {
+      return { room: await updateRoomPolicy(store, roomId, { locked: true }, opts) };
+    }
+    case 'unlock': {
+      return { room: await updateRoomPolicy(store, roomId, { locked: false }, opts) };
+    }
+    case 'kick': {
+      if (!targetId) throw errors.invalidRequest('kick requires targetId');
+      const existing = await store.getParticipant(roomId, targetId);
+      if (!existing) throw errors.participantNotFound(roomId, targetId);
+      await store.deleteParticipant(roomId, targetId);
+      const updatedRoom: Room = { ...room, updatedAt: nowMs(opts.now) };
+      await store.putRoom(updatedRoom);
+      return { room: updatedRoom, kicked: targetId };
+    }
+    case 'mute': {
+      // Mute is a signaling concern; server just validates permission.
+      if (!targetId) throw errors.invalidRequest('mute requires targetId');
+      const target = await store.getParticipant(roomId, targetId);
+      if (!target) throw errors.participantNotFound(roomId, targetId);
+      return { room };
+    }
+    default:
+      throw errors.invalidRequest(`Unknown moderation action: ${action}`);
+  }
+}
+
 export async function joinRoom(
   store: Store,
   roomId: string,
   input: ParticipantInput,
-  opts: JoinRoomOptions = {},
+  opts: JoinRoomOptions & { actorRole?: string; isModerator?: boolean } = {},
 ): Promise<JoinResult> {
   const room = await requireRoom(store, roomId);
   if (room.state === 'closed') throw errors.roomClosed(roomId);
-
+  const policy = getRoomPolicy(room);
+  // locked rooms: only admins/moderators may join (new participants)
   const existing = await store.getParticipant(roomId, input.participantId);
+  if (policy.locked && !existing) {
+    const isPrivileged = opts.actorRole === 'admin' || opts.isModerator === true;
+    if (!isPrivileged) throw errors.forbidden(`Room ${roomId} is locked`);
+  }
+
   if (existing && !opts.upsert) throw errors.participantAlreadyJoined(roomId, input.participantId);
-  if (!existing && room.maxParticipants !== undefined) {
+  const cap = policy.maxParticipants ?? room.maxParticipants;
+  if (!existing && cap !== undefined) {
     const members = await store.listParticipants(roomId);
-    if (members.length >= room.maxParticipants) throw errors.roomFull(roomId);
+    if (members.length >= cap) throw errors.roomFull(roomId);
   }
 
   const t = nowMs(opts.now);

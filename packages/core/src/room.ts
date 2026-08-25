@@ -43,6 +43,7 @@ import type {
   RoomQualityHost,
 } from './room-quality.ts';
 import type { ParticipantInfo, SignalingTransport } from './transport.ts';
+import { SFrameProcessor, detectE2eeSupport } from './e2ee.ts';
 import type { MediaRecorderConstructor } from './recording/media-recorder-recording-hook.ts';
 import type {
   RecordingChunk,
@@ -145,6 +146,12 @@ export type RoomEventMap = {
   'recording:blob-chunk': [RecordingChunk];
   /** The platform reported a change in connected media devices (see `room.devices`). */
   'devices:changed': [];
+  /** E2EE events (see `room.e2ee`). */
+  'e2ee:key-rotated': [];
+  'e2ee:error': [Error];
+  'e2ee:warning': [{ code: string; message: string }];
+  /** Auth failure (WS 4401 mapped): token expired/invalid. */
+  'auth:error': [Error];
 };
 
 // ------------------------------------------------------------------ config
@@ -188,6 +195,22 @@ export interface RoomDevicesConfig {
   mediaDevices?: MediaDevicesLike | null;
 }
 
+export interface RoomAuthConfig {
+  /** Current token (used for `Authorization`/WS `?token=` and TURN fetch). */
+  token?: string;
+  /** Called when the server signals auth failure (4401). Should return a fresh token. */
+  onTokenExpired?: () => string | Promise<string>;
+  /** Optional TURN credentials fetcher (e.g. fetch('/turn/credentials')). */
+  getTurnCredentials?: () => Promise<RTCIceServer[]>;
+}
+
+export interface RoomE2eeConfig {
+  /** App-provided key (raw bytes or CryptoKey). When present, E2EE is enabled. */
+  key: CryptoKey | Uint8Array;
+  /** When true, refuse to publish/join without a working transform. */
+  required?: boolean;
+}
+
 export interface RoomConfig {
   roomId: string;
   selfId: string;
@@ -203,7 +226,7 @@ export interface RoomConfig {
    * Tests inject fakes here.
    */
   peerFactory?: (participantId: string) => RTCPeerConnection;
-  iceServers?: RTCIceServer[];
+  iceServers?: RTCIceServer[] | (() => RTCIceServer[] | Promise<RTCIceServer[]>);
   /** Politeness rule for perfect negotiation. Default: `selfId < remoteId`. */
   polite?: boolean | ((selfId: string, remoteId: string) => boolean);
   /** Auto-restart ICE when a peer's iceConnectionState turns 'failed'. */
@@ -246,6 +269,10 @@ export interface RoomConfig {
    * ```
    */
   quality?: RoomQualityConfig;
+  /** Auth (token + refresh hook + TURN). */
+  auth?: RoomAuthConfig;
+  /** E2EE (SFrame). */
+  e2ee?: RoomE2eeConfig | false;
   debug?: (message: string, data?: unknown) => void;
 }
 
@@ -313,6 +340,9 @@ export class Room extends TypedEmitter<RoomEventMap> implements RoomQualityHost 
   private joined = false;
   private joining = false;
   private closed = false;
+  private e2eeProcessor: SFrameProcessor | null = null;
+  private pendingIceServers: RTCIceServer[] | null = null;
+  private authRefreshInFlight: Promise<string | null> | null = null;
   /** Serializes concurrent `join()` calls so retries start after settle. */
   private joinChain: Promise<unknown> = Promise.resolve();
   private readonly snapshotStore: ObservableStore<RoomSnapshot>;
@@ -384,6 +414,38 @@ export class Room extends TypedEmitter<RoomEventMap> implements RoomQualityHost 
     });
     // Re-emit device-change events on the room so apps can use room.on(...).
     this.devices.on('devices:changed', () => this.emit('devices:changed'));
+    // E2EE: construct processor when key is supplied; warn when unsupported.
+    if (this.config.e2ee && typeof this.config.e2ee === 'object') {
+      this.e2eeProcessor = new SFrameProcessor(this.config.e2ee.key);
+      this.e2eeProcessor.on('e2ee:warning', (w) => {
+        this.emit('e2ee:warning', w);
+        if (this.config.e2ee && typeof this.config.e2ee === 'object' && this.config.e2ee.required) {
+          this.emit('e2ee:error', new Error(w.message));
+          this.emit('error', Object.assign(new Error(w.message), { code: 'e2ee-unsupported' }));
+        }
+      });
+      this.e2eeProcessor.on('e2ee:error', (e) => {
+        this.emit('e2ee:error', e);
+        this.emit('error', e);
+      });
+      this.e2eeProcessor.on('e2ee:key-rotated', () => this.emit('e2ee:key-rotated'));
+      if (!this.e2eeProcessor.supported && this.config.e2ee.required) {
+        // Defer emit so listeners attached after construction can still hear it.
+        queueMicrotask(() => {
+          this.emit('e2ee:warning', { code: 'e2ee-unsupported', message: 'E2EE required but not supported' });
+          this.emit('e2ee:error', new Error('E2EE required but not supported in this environment'));
+        });
+      }
+      // Dev-only warning when auth is expected but not supplied (open mode in prod)
+      // Mirrors plan: debug warns 'auth:missing-in-prod' when NODE_ENV===production and auth absent.
+    }
+    if (!this.config.auth?.token && typeof process !== 'undefined') {
+      try {
+        if ((process as unknown as { env?: Record<string, string> }).env?.NODE_ENV === 'production') {
+          this.debug('auth:missing-in-prod', 'Room is in open mode while NODE_ENV=production');
+        }
+      } catch { /* ignore */ }
+    }
     // Snapshot layer: rebuild + notify whenever tracked state mutates. Events
     // that do not affect the snapshot (reaction/chat/error/...) are
     // deliberately not wired — unrelated updates never notify subscribers.
@@ -404,6 +466,107 @@ export class Room extends TypedEmitter<RoomEventMap> implements RoomQualityHost 
     ] as const) {
       this.on(event, invalidate);
     }
+  }
+
+  // -------------------------------------------------------------- e2ee helpers
+
+  get e2ee(): SFrameProcessor | null {
+    return this.e2eeProcessor;
+  }
+
+  /** Rotate the E2EE key (re-sets transform on all senders/receivers). */
+  async setE2eeKey(key: CryptoKey | Uint8Array): Promise<void> {
+    if (!this.e2eeProcessor) {
+      this.e2eeProcessor = new SFrameProcessor(key);
+      this.e2eeProcessor.on('e2ee:key-rotated', () => this.emit('e2ee:key-rotated'));
+      this.e2eeProcessor.on('e2ee:warning', (w) => this.emit('e2ee:warning', w));
+      this.e2eeProcessor.on('e2ee:error', (e) => {
+        this.emit('e2ee:error', e);
+        this.emit('error', e);
+      });
+      return;
+    }
+    await this.e2eeProcessor.setKey(key);
+    for (const entry of this.peers.values()) {
+      try {
+        await this.e2eeProcessor.setupPeerConnection(entry.pc);
+      } catch (err) {
+        this.debug('e2ee:setup-failed', err);
+      }
+    }
+  }
+
+  /** Current auth token (if configured). */
+  get authToken(): string | undefined {
+    return this.config.auth?.token;
+  }
+
+  setAuthToken(token: string): void {
+    if (!this.config.auth) this.config.auth = {};
+    this.config.auth.token = token;
+  }
+
+  /** Resolve TURN/ICE servers (cached). */
+  async getIceServers(): Promise<RTCIceServer[]> {
+    if (this.config.auth?.getTurnCredentials) {
+      try {
+        const servers = await this.config.auth.getTurnCredentials();
+        this.pendingIceServers = servers;
+        return servers;
+      } catch (err) {
+        this.debug('ice:turn-failed', err);
+      }
+    }
+    if (typeof this.config.iceServers === 'function') {
+      const v = this.config.iceServers();
+      return v instanceof Promise ? await v : v as RTCIceServer[];
+    }
+    if (Array.isArray(this.config.iceServers)) return this.config.iceServers;
+    return this.pendingIceServers ?? [];
+  }
+
+  private async resolveIceServers(): Promise<RTCIceServer[]> {
+    if (this.config.auth?.getTurnCredentials) {
+      try {
+        const servers = await this.config.auth.getTurnCredentials();
+        this.pendingIceServers = servers;
+        return servers;
+      } catch (err) {
+        this.debug('ice:turn-failed', err);
+      }
+    }
+    if (typeof this.config.iceServers === 'function') {
+      const v = this.config.iceServers();
+      const arr = v instanceof Promise ? await v : (v as RTCIceServer[]);
+      if (arr.length) return arr;
+    }
+    if (Array.isArray(this.config.iceServers)) return this.config.iceServers;
+    return this.pendingIceServers ?? [];
+  }
+
+  /** Handle an auth error from a transport layer (4401): refresh once and re-throw mapped error. */
+  async handleAuthError(err: unknown): Promise<never> {
+    const e = err instanceof Error ? err : new Error(String(err));
+    (e as unknown as Record<string, unknown>).code = 'auth:error';
+    this.emit('auth:error', e);
+    if (this.config.auth?.onTokenExpired && !this.authRefreshInFlight) {
+      this.authRefreshInFlight = (async () => {
+        try {
+          const tok = await this.config.auth!.onTokenExpired!();
+          if (tok) this.setAuthToken(tok);
+          return tok;
+        } catch {
+          return null;
+        } finally {
+          this.authRefreshInFlight = null;
+        }
+      })();
+    }
+    if (this.authRefreshInFlight) {
+      await this.authRefreshInFlight;
+    }
+    this.emit('error', e);
+    throw e;
   }
 
   // -------------------------------------------------------------- join/leave
@@ -888,9 +1051,20 @@ export class Room extends TypedEmitter<RoomEventMap> implements RoomQualityHost 
       case 'pong':
       case 'sfu':
         break;
-      case 'error':
-        this.reportError(new Error(envelope.payload?.message ?? 'remote error'));
+      case 'error': {
+        const code = (envelope.payload as { code?: string })?.code;
+        const msg = (envelope.payload as { message?: string })?.message ?? 'remote error';
+        const err = new Error(msg);
+        if (code === 'unauthorized' || code === 'token_expired' || code === 'forbidden') {
+          (err as unknown as Record<string, unknown>).code = code;
+          this.emit('auth:error', err);
+          if (this.config.auth?.onTokenExpired) {
+            void this.handleAuthError(err).catch(() => {});
+          }
+        }
+        this.reportError(err);
         break;
+      }
     }
   }
 
@@ -981,9 +1155,13 @@ export class Room extends TypedEmitter<RoomEventMap> implements RoomQualityHost 
       this.emit('participant-joined', shell);
     }
 
+    let iceServersResolved: RTCIceServer[] = [];
+    if (!this.config.peerFactory) {
+      iceServersResolved = await this.resolveIceServers();
+    }
     const pc = this.config.peerFactory
       ? this.config.peerFactory(participantId)
-      : new RTCPeerConnection({ iceServers: this.config.iceServers ?? [] });
+      : new RTCPeerConnection({ iceServers: iceServersResolved });
     const polite =
       typeof this.config.polite === 'function'
         ? this.config.polite(this.local.id, participantId)
@@ -1038,6 +1216,17 @@ export class Room extends TypedEmitter<RoomEventMap> implements RoomQualityHost 
         // Adaptive quality: configure the new peer's sender too (never throws).
         await this.quality.attachTrack(publication.track);
       }
+    }
+
+    // E2EE: install per-sender/receiver transforms (best-effort)
+    if (this.e2eeProcessor?.supported) {
+      try {
+        await this.e2eeProcessor.setupPeerConnection(pc);
+      } catch (err) {
+        this.debug('e2ee:setup-failed', err);
+        this.emit('e2ee:error', err instanceof Error ? err : new Error(String(err)));
+      }
+      this.e2eeProcessor.on('icecandidateerror' as never, (e: unknown) => this.debug('ice:turn-failed', e));
     }
 
     const entry: PeerEntry = { pc, manager, bus };

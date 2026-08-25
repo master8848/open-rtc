@@ -29,9 +29,10 @@
 import http from 'node:http';
 import { WebSocket, WebSocketServer } from 'ws';
 import { createEnvelope, isEnvelope, type Envelope } from '@vidcall/protocol';
-import { AuthError, verifyToken } from './auth.ts';
+import { AuthError, verifyToken, verifyTokenWithRotation } from './auth.ts';
 import {
   buildLeaveEnvelope,
+  getRoomPolicy,
   handleSignal,
   joinRoom,
   leaveRoom,
@@ -212,7 +213,9 @@ function authenticateSocket(
   const auth = services.auth;
   if (!auth) return true; // legacy open mode
   try {
-    const claims = verifyToken(auth.secret, tokens.get(socket) ?? '');
+    const token = tokens.get(socket) ?? '';
+    const secrets = auth.previousSecrets?.length ? [auth.secret, ...auth.previousSecrets] : [auth.secret];
+    const claims = secrets.length > 1 ? verifyTokenWithRotation(secrets, token) : verifyToken(auth.secret, token);
     if (claims.roomId !== roomId) {
       throw new AuthError(
         'forbidden',
@@ -330,7 +333,63 @@ async function handleJoin(
       : {}),
   };
   try {
-    const result = await joinRoom(services.store, roomId, input);
+    // Enforce room policy at WS join as well: locked / e2eeRequired
+    const roomForPolicy = await services.store.getRoom(roomId);
+    const policy = roomForPolicy ? getRoomPolicy(roomForPolicy) : {};
+    if (policy.locked) {
+      // check if sender is moderator/admin via token claims when available
+      const auth = services.auth;
+      if (auth) {
+        const token = tokens.get(socket) ?? '';
+        try {
+          const secrets = auth.previousSecrets?.length ? [auth.secret, ...auth.previousSecrets] : [auth.secret];
+          const claims = secrets.length > 1 ? verifyTokenWithRotation(secrets, token) : verifyToken(auth.secret, token);
+          const isModerator = policy.moderatorIds?.includes(claims.participantId) ?? false;
+          const isPrivileged = claims.role === 'admin' || isModerator;
+          if (!isPrivileged) {
+            sendJson(socket, errorEnvelope(roomId, 'forbidden', `Room ${roomId} is locked`));
+            socket.close(4401, 'forbidden');
+            return;
+          }
+        } catch {
+          // already handled by authenticateSocket; ignore
+        }
+      } else {
+        sendJson(socket, errorEnvelope(roomId, 'forbidden', `Room ${roomId} is locked`));
+        socket.close(4401, 'forbidden');
+        return;
+      }
+    }
+    // e2eeRequired: require token e2ee flag if auth present
+    if (policy.e2eeRequired && services.auth) {
+      const token = tokens.get(socket) ?? '';
+      try {
+        const secrets = services.auth.previousSecrets?.length ? [services.auth.secret, ...services.auth.previousSecrets] : [services.auth.secret];
+        const claims = secrets.length > 1 ? verifyTokenWithRotation(secrets, token) : verifyToken(services.auth.secret, token);
+        if (claims.e2ee !== true && claims.role !== 'admin') {
+          sendJson(socket, errorEnvelope(roomId, 'forbidden', 'Room requires E2EE-capable token (e2ee:true)'));
+          socket.close(4401, 'forbidden');
+          return;
+        }
+      } catch {
+        // auth already failed earlier
+      }
+    }
+    const room = await services.store.getRoom(roomId);
+    const checkPolicy = room ? getRoomPolicy(room) : {};
+    const auth = services.auth;
+    let actorRole: string | undefined;
+    let isModerator = false;
+    if (auth) {
+      try {
+        const token = tokens.get(socket) ?? '';
+        const secrets = auth.previousSecrets?.length ? [auth.secret, ...auth.previousSecrets] : [auth.secret];
+        const claims = secrets.length > 1 ? verifyTokenWithRotation(secrets, token) : verifyToken(auth.secret, token);
+        actorRole = claims.role;
+        isModerator = checkPolicy.moderatorIds?.includes(claims.participantId) ?? false;
+      } catch { /* ignore */ }
+    }
+    const result = await joinRoom(services.store, roomId, input, { actorRole, isModerator });
     // Persist the join envelope into the signal log + compute recipients.
     const delivery = await handleSignal(services.store, envelope);
     hub.attach(roomId, socket, envelope.senderId, envelope.sessionId);

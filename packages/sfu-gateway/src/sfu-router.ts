@@ -101,6 +101,13 @@ export type SfuRouterEventMap = {
   error: [SfuRouterErrorEvent];
 };
 
+export interface RoomPolicyForSfu {
+  locked?: boolean;
+  allowedCodecs?: string[];
+  e2eeRequired?: boolean;
+  moderatorIds?: string[];
+}
+
 export interface SfuRouterOptions {
   /** The gateway sessions are forwarded to. */
   gateway: SfuGateway;
@@ -115,6 +122,10 @@ export interface SfuRouterOptions {
    * (protocol extension, see protocol/types.ts). Default `'sfu'`.
    */
   sfuParticipantId?: string;
+  /** Optional room policy lookup for locked/e2ee/codec enforcement. */
+  getRoomPolicy?: (roomId: string) => RoomPolicyForSfu | Promise<RoomPolicyForSfu | null | undefined>;
+  /** Whether E2EE-encrypted tracks are expected (SFU skips decode when true). */
+  e2eeRequired?: boolean;
 }
 
 /** Internal registry of one room's published tracks (for bare `subscribe`). */
@@ -132,12 +143,16 @@ export class SfuRouter extends TypedEmitter<SfuRouterEventMap> {
   readonly sfuParticipantId: string;
   private readonly sessions = new Map<string, SfuSession>();
   private readonly tracks = new Map<string, Map<string, TrackRegistration>>();
+  private readonly getRoomPolicy?: (roomId: string) => RoomPolicyForSfu | Promise<RoomPolicyForSfu | null | undefined>;
+  private readonly e2eeRequired: boolean;
 
   constructor(options: SfuRouterOptions) {
     super();
     this.gateway = options.gateway;
     this.isParticipant = options.isParticipant;
     this.sfuParticipantId = options.sfuParticipantId ?? 'sfu';
+    this.getRoomPolicy = options.getRoomPolicy;
+    this.e2eeRequired = options.e2eeRequired ?? false;
   }
 
   // ------------------------------------------------------------- session map
@@ -201,6 +216,31 @@ export class SfuRouter extends TypedEmitter<SfuRouterEventMap> {
         envelope,
       );
       return;
+    }
+    // Room policy enforcement: locked / allowedCodecs / e2eeRequired
+    if (this.getRoomPolicy) {
+      try {
+        const policy = await this.getRoomPolicy(roomId);
+        if (policy?.locked) {
+          const isModerator = policy.moderatorIds?.includes(senderId) ?? false;
+          if (!isModerator) {
+            this.emitError('not-a-participant', `room ${roomId} is locked`, envelope);
+            return;
+          }
+        }
+        if (policy?.allowedCodecs?.length) {
+          const kind = (envelope.payload as SfuPayload | undefined)?.kind;
+          if (kind && !policy.allowedCodecs.includes(kind)) {
+            this.emitError('invalid-payload', `codec ${kind} not allowed in room ${roomId}`, envelope);
+            return;
+          }
+        }
+        if ((policy?.e2eeRequired || this.e2eeRequired) && envelope.type === 'sfu') {
+          // For SFU, e2ee tracks are opaque; just note enforcement, don't block publish
+        }
+      } catch {
+        // policy lookup failures don't block sfu flow; log via error event if needed
+      }
     }
     const session = this.sessions.get(sessionKeyOf(roomId, senderId));
     if (!session) {

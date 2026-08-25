@@ -33,14 +33,26 @@ import {
   createRoom,
   getRecordings,
   getRoomState,
+  getRoomPolicy,
   handleSignal,
   joinRoom,
   leaveRoom,
+  moderateRoom,
+  startRecording,
   stopRecording,
+  updateRoomPolicy,
+  type ModerationAction,
 } from './core.ts';
-import { DEFAULT_TOKEN_TTL_SECONDS, issueToken, verifyToken, type TokenClaims } from './auth.ts';
+import {
+  DEFAULT_TOKEN_TTL_SECONDS,
+  issueToken,
+  verifyToken,
+  verifyTokenWithRotation,
+  type TokenClaims,
+} from './auth.ts';
 import { errors, isVidcallError, VidcallError } from './errors.ts';
 import type { Services } from './services.ts';
+import { issueTurnCredentials, toIceServers } from './turn.ts';
 
 /** Everything a handler needs to answer one request, framework-agnostic. */
 export interface RouteContext {
@@ -109,6 +121,8 @@ interface AuthGuardOptions {
    * act as their own `participantId`; admin tokens are exempt.
    */
   asParticipantId?: string;
+  /** Require specific caps (e.g. { record:true }). Admins bypass caps. */
+  requireCaps?: Partial<Record<'publish' | 'subscribe' | 'record' | 'moderate', boolean>>;
 }
 
 /**
@@ -120,6 +134,13 @@ interface AuthGuardOptions {
  * @throws `VidcallError` 401 (`unauthorized` / `token_expired`) or
  *   403 (`forbidden`) — mapped to the standard error envelope by `dispatch`.
  */
+function verifyWithRotation(auth: NonNullable<Services['auth']>, token: string): TokenClaims {
+  const secrets = auth.previousSecrets?.length
+    ? [auth.secret, ...auth.previousSecrets]
+    : [auth.secret];
+  return secrets.length > 1 ? verifyTokenWithRotation(secrets, token) : verifyToken(auth.secret, token);
+}
+
 function requireAuth(
   services: Services,
   ctx: RouteContext,
@@ -128,7 +149,7 @@ function requireAuth(
 ): TokenClaims | undefined {
   const auth = services.auth;
   if (!auth) return undefined;
-  const claims = verifyToken(auth.secret, bearerToken(ctx.header('authorization')));
+  const claims = verifyWithRotation(auth, bearerToken(ctx.header('authorization')));
   if (claims.roomId !== roomId) {
     throw errors.forbidden(
       `Token is scoped to room ${claims.roomId}, not ${roomId} (tokens are room-scoped)`,
@@ -144,15 +165,32 @@ function requireAuth(
       );
     }
   }
+  if (opts.requireCaps) {
+    checkCaps(claims, opts.requireCaps);
+  }
   return claims;
+}
+
+function checkCaps(claims: TokenClaims, required: Partial<Record<'publish' | 'subscribe' | 'record' | 'moderate', boolean>>): void {
+  if (claims.role === 'admin') return;
+  const caps = claims.caps as Record<string, boolean | undefined> | undefined;
+  if (!caps) return; // no caps = default allow (backwards compat)
+  for (const [k, need] of Object.entries(required) as Array<[keyof NonNullable<TokenClaims['caps']>, boolean]>) {
+    if (!need) continue;
+    if (caps[k] === false) {
+      throw errors.forbidden(`Token lacks ${k} capability`);
+    }
+  }
 }
 
 async function createRoomHandler(services: Services, ctx: RouteContext): Promise<RouteResult> {
   const body = asRecord(ctx.body) ?? {};
+  const policy = asRecord(body.policy) as import('./types.ts').RoomPolicy | undefined;
   const room = await createRoom(services.store, {
     roomId: asString(body.roomId),
     maxParticipants: typeof body.maxParticipants === 'number' ? body.maxParticipants : undefined,
     metadata: asRecord(body.metadata),
+    ...(policy ? { policy } : {}),
     ...(services.now ? { now: services.now() } : {}),
   });
   return { status: 201, body: { room } };
@@ -170,8 +208,33 @@ async function joinHandler(services: Services, ctx: RouteContext): Promise<Route
     | undefined;
 
   // Token must be scoped to this room and bound to the joining participant.
-  requireAuth(services, ctx, roomId, { asParticipantId: participantId });
+  const claims = requireAuth(services, ctx, roomId, { asParticipantId: participantId });
+  // Enforce room policy: e2eeRequired requires claims.e2ee
+  if (claims) {
+    const roomForChecks = await services.store.getRoom(roomId);
+    const policy = roomForChecks ? getRoomPolicy(roomForChecks) : {};
+    if (policy.e2eeRequired && claims.e2ee !== true && claims.role !== 'admin') {
+      throw errors.forbidden('Room requires E2EE-capable token (e2ee:true)');
+    }
+    // Locked room: moderators/admins may join; handled in joinRoom via role/moderator check
+    const isModerator = policy.moderatorIds?.includes(claims.participantId) ?? false;
+    const result = await joinRoom(
+      services.store,
+      roomId,
+      { participantId, sessionId, displayName, metadata },
+      { actorRole: claims.role, isModerator },
+    );
+    services.relay?.broadcast(
+      roomId,
+      buildJoinEnvelope(roomId, { participantId, sessionId, displayName, metadata }),
+    );
+    return {
+      status: 200,
+      body: { room: result.room, participant: result.participant, participants: result.participants },
+    };
+  }
 
+  // Open mode: still enforce locked/maxParticipants via joinRoom
   const result = await joinRoom(services.store, roomId, {
     participantId,
     sessionId,
@@ -291,17 +354,36 @@ async function authTokenHandler(services: Services, ctx: RouteContext): Promise<
     }
     exp = body.exp;
   }
+  let caps: import('./auth.ts').TokenCaps | undefined;
+  if (body.caps !== undefined) {
+    if (typeof body.caps !== 'object' || body.caps === null || Array.isArray(body.caps)) {
+      throw errors.invalidRequest('caps must be an object {publish?,subscribe?,record?,moderate?}');
+    }
+    caps = body.caps as import('./auth.ts').TokenCaps;
+  }
+  let jti: string | undefined;
+  if (typeof body.jti === 'string' && body.jti.length > 0) jti = body.jti;
+  else if (body.jti !== undefined) throw errors.invalidRequest('jti must be a non-empty string');
+  let e2ee: boolean | undefined;
+  if (body.e2ee !== undefined) {
+    if (typeof body.e2ee !== 'boolean') throw errors.invalidRequest('e2ee must be a boolean');
+    e2ee = body.e2ee;
+  }
   const nowMs = services.now?.() ?? Date.now();
   const ttlSec =
     auth.defaultTokenTtlMs !== undefined
       ? Math.floor(auth.defaultTokenTtlMs / 1000)
       : DEFAULT_TOKEN_TTL_SECONDS;
+  const computedExp = exp ?? Math.floor(nowMs / 1000) + ttlSec;
   const token = issueToken(auth.secret, {
     roomId,
     participantId,
     role,
-    exp: exp ?? Math.floor(nowMs / 1000) + ttlSec,
+    exp: computedExp,
     now: nowMs,
+    ...(jti ? { jti } : {}),
+    ...(caps ? { caps } : {}),
+    ...(e2ee !== undefined ? { e2ee } : {}),
   });
   const claims = verifyToken(auth.secret, token);
   return {
@@ -313,6 +395,9 @@ async function authTokenHandler(services: Services, ctx: RouteContext): Promise<
       role: claims.role,
       exp: claims.exp,
       iat: claims.iat,
+      ...(claims.jti ? { jti: claims.jti } : {}),
+      ...(claims.caps ? { caps: claims.caps } : {}),
+      ...(claims.e2ee !== undefined ? { e2ee: claims.e2ee } : {}),
     },
   };
 }
@@ -354,13 +439,133 @@ async function finalizeHandler(services: Services, ctx: RouteContext): Promise<R
 // Router
 // ---------------------------------------------------------------------------
 
+async function recordingsStartHandler(services: Services, ctx: RouteContext): Promise<RouteResult> {
+  const roomId = ctx.params['id']!;
+  // recording start is room-scoped; require token with record cap when auth is on
+  const claims = requireAuth(services, ctx, roomId);
+  if (claims && claims.role !== 'admin') {
+    if (claims.caps?.record === false) throw errors.forbidden('Token lacks record capability');
+  }
+  const room = await services.store.getRoom(roomId);
+  if (!room) throw errors.roomNotFound(roomId);
+  const policy = getRoomPolicy(room);
+  if (policy.allowRecording === false) throw errors.forbidden('Recording is disabled for this room');
+  if (policy.e2eeRequired || services.e2ee?.required) {
+    // When E2EE is required, we still allow recording but mark it encrypted
+    const body = asRecord(ctx.body) ?? {};
+    const encrypted = body.encrypted === true ? true : policy.e2eeRequired || services.e2ee?.required ? true : false;
+    const rec = await startRecording(services.store, roomId, {
+      ...(body.metadata ? { metadata: body.metadata as Record<string, unknown> } : {}),
+    });
+    // mark encrypted after creation
+    if (encrypted) {
+      rec.encrypted = true;
+      await services.store.putRecording(rec);
+    }
+    return { status: 201, body: { recording: rec } };
+  }
+  const body = asRecord(ctx.body) ?? {};
+  const rec = await startRecording(services.store, roomId, {
+    ...(body.metadata ? { metadata: body.metadata as Record<string, unknown> } : {}),
+  });
+  return { status: 201, body: { recording: rec } };
+}
+
+async function roomPolicyHandler(services: Services, ctx: RouteContext): Promise<RouteResult> {
+  const roomId = ctx.params['id']!;
+  const claims = requireAuth(services, ctx, roomId);
+  if (claims && claims.role !== 'admin' && claims.caps?.moderate === false) {
+    throw errors.forbidden('Token lacks moderate capability');
+  }
+  // Check moderator via policy; admin bypasses
+  const room = await services.store.getRoom(roomId);
+  if (!room) throw errors.roomNotFound(roomId);
+  const policy = getRoomPolicy(room);
+  const isModerator = claims ? (policy.moderatorIds?.includes(claims.participantId) ?? false) : false;
+  if (claims && claims.role !== 'admin' && !isModerator) {
+    // open mode without claims: allow
+    if (services.auth) throw errors.forbidden('Moderator or admin required');
+  }
+  const body = asRecord(ctx.body) ?? {};
+  const patch: import('./types.ts').RoomPolicy = {};
+  if (typeof body.locked === 'boolean') patch.locked = body.locked;
+  if (typeof body.allowRecording === 'boolean') patch.allowRecording = body.allowRecording;
+  if (Array.isArray(body.allowedCodecs)) patch.allowedCodecs = body.allowedCodecs as string[];
+  if (Array.isArray(body.moderatorIds)) patch.moderatorIds = body.moderatorIds as string[];
+  if (typeof body.e2eeRequired === 'boolean') patch.e2eeRequired = body.e2eeRequired;
+  if (typeof body.maxParticipants === 'number') patch.maxParticipants = body.maxParticipants;
+  const updated = await updateRoomPolicy(services.store, roomId, patch);
+  return { status: 200, body: { room: updated, policy: getRoomPolicy(updated) } };
+}
+
+async function moderateHandler(services: Services, ctx: RouteContext): Promise<RouteResult> {
+  const roomId = ctx.params['id']!;
+  const body = asRecord(ctx.body) ?? {};
+  const action = requireString(body.action, 'action') as ModerationAction;
+  if (!['kick', 'mute', 'lock', 'unlock'].includes(action)) {
+    throw errors.invalidRequest('action must be kick|mute|lock|unlock');
+  }
+  const targetId = asString(body.targetId);
+  // auth + moderator check
+  const claims = requireAuth(services, ctx, roomId);
+  if (!claims) throw errors.unauthorized('Moderation requires authentication');
+  const room = await services.store.getRoom(roomId);
+  if (!room) throw errors.roomNotFound(roomId);
+  const policy = getRoomPolicy(room);
+  const isModerator = policy.moderatorIds?.includes(claims.participantId) ?? false;
+  const isAdmin = claims.role === 'admin';
+  const hasModerateCap = claims.caps?.moderate !== false;
+  if (!isAdmin && !(isModerator && hasModerateCap)) {
+    throw errors.forbidden('Moderator or admin required');
+  }
+  const result = await moderateRoom(services.store, roomId, claims.participantId, action, targetId);
+  // For kick, broadcast leave to remaining members
+  if (action === 'kick' && result.kicked) {
+    const envelope = { v: 1 as const, type: 'leave' as const, roomId, senderId: result.kicked, sessionId: '', ts: Date.now(), seq: 0, payload: { reason: 'kicked' } } as unknown as import('@vidcall/protocol').Envelope;
+    services.relay?.broadcast(roomId, envelope);
+  }
+  return { status: 200, body: { room: result.room, ...(result.kicked ? { kicked: result.kicked } : {}) } };
+}
+
+async function turnCredentialsHandler(services: Services, ctx: RouteContext): Promise<RouteResult> {
+  if (!services.turn) throw errors.notImplemented('TURN is not configured on this server');
+  // derive room/identity from token
+  const auth = services.auth;
+  if (!auth) throw errors.authNotConfigured();
+  const claims = verifyWithRotation(auth, bearerToken(ctx.header('authorization')));
+  const creds = issueTurnCredentials(services.turn, claims.participantId);
+  const iceServers = toIceServers(creds);
+  return { status: 200, body: { iceServers, ttlSec: services.turn.ttlSec ?? 86400, username: creds.username } };
+}
+
+async function revokeHandler(services: Services, ctx: RouteContext): Promise<RouteResult> {
+  if (!services.auth) throw errors.authNotConfigured();
+  // Revocation is admin-only; scope to a dummy room so requireAuth checks role.
+  // Use the `id` param when present, otherwise require Authorization directly.
+  const authHeader = ctx.header('authorization');
+  if (!authHeader) throw errors.unauthorized('Missing Authorization header (Bearer <token>)');
+  const claims = verifyWithRotation(services.auth, bearerToken(authHeader));
+  if (claims.role !== 'admin') throw errors.forbidden('Admin role required for revocation');
+  const body = asRecord(ctx.body) ?? {};
+  const jti = requireString(body.jti, 'jti');
+  const exp = typeof body.exp === 'number' ? body.exp : undefined;
+  const { revokeToken } = await import('./auth.ts');
+  revokeToken(jti, exp);
+  return { status: 200, body: { revoked: jti } };
+}
+
 export const routes: readonly Route[] = [
   { method: 'POST', pattern: '/auth/token', handler: authTokenHandler },
+  { method: 'POST', pattern: '/auth/revoke', handler: revokeHandler },
+  { method: 'GET', pattern: '/turn/credentials', handler: turnCredentialsHandler },
   { method: 'POST', pattern: '/rooms', handler: createRoomHandler },
   { method: 'POST', pattern: '/rooms/:id/join', handler: joinHandler },
   { method: 'POST', pattern: '/rooms/:id/leave', handler: leaveHandler },
   { method: 'POST', pattern: '/rooms/:id/signal', handler: signalHandler },
   { method: 'POST', pattern: '/rooms/:id/close', handler: closeRoomHandler },
+  { method: 'POST', pattern: '/rooms/:id/policy', handler: roomPolicyHandler },
+  { method: 'POST', pattern: '/rooms/:id/moderate', handler: moderateHandler },
+  { method: 'POST', pattern: '/rooms/:id/recordings/start', handler: recordingsStartHandler },
   { method: 'DELETE', pattern: '/rooms/:id', handler: deleteRoomHandler },
   { method: 'GET', pattern: '/rooms/:id/state', handler: stateHandler },
   { method: 'GET', pattern: '/rooms/:id/recordings', handler: recordingsListHandler },

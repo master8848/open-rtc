@@ -32,6 +32,14 @@ export function createExpressRouter(services: Services): express.Router {
     const result = await dispatch(services, expressContext(req));
     res.status(result.status).json(result.body);
   });
+  router.post('/auth/revoke', express.json({ limit: '4mb' }), async (req, res) => {
+    const result = await dispatch(services, expressContext(req));
+    res.status(result.status).json(result.body);
+  });
+  router.get('/turn/credentials', async (req, res) => {
+    const result = await dispatch(services, expressContext(req));
+    res.status(result.status).json(result.body);
+  });
 
   router.post('/rooms', express.json({ limit: '4mb' }), async (req, res) => {
     const result = await dispatch(services, expressContext(req));
@@ -54,6 +62,18 @@ export function createExpressRouter(services: Services): express.Router {
   });
 
   router.post('/rooms/:id/close', express.json({ limit: '4mb' }), async (req, res) => {
+    const result = await dispatch(services, expressContext(req));
+    res.status(result.status).json(result.body);
+  });
+  router.post('/rooms/:id/policy', express.json({ limit: '4mb' }), async (req, res) => {
+    const result = await dispatch(services, expressContext(req));
+    res.status(result.status).json(result.body);
+  });
+  router.post('/rooms/:id/moderate', express.json({ limit: '4mb' }), async (req, res) => {
+    const result = await dispatch(services, expressContext(req));
+    res.status(result.status).json(result.body);
+  });
+  router.post('/rooms/:id/recordings/start', express.json({ limit: '4mb' }), async (req, res) => {
     const result = await dispatch(services, expressContext(req));
     res.status(result.status).json(result.body);
   });

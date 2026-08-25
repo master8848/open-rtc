@@ -17,6 +17,7 @@ export * from './devices.ts';
 export * from './controls/index.ts';
 export * from './room-quality.ts';
 export * from './recording/index.ts';
+export * from './e2ee.ts';
 
 export type { Envelope } from '@vidcall/protocol';
 export { PROTOCOL_VERSION, MESSAGE_TYPES, createEnvelope, isEnvelope } from '@vidcall/protocol';

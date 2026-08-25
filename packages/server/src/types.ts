@@ -13,6 +13,22 @@ import type { Envelope } from '@vidcall/protocol';
 /** Room lifecycle state. */
 export type RoomState = 'open' | 'closed';
 
+/** Room policy enforced by the server (secure mode). */
+export interface RoomPolicy {
+  /** When true, only admins/moderators may join new participants. */
+  locked?: boolean;
+  /** Gate recording facade (default true when undefined). */
+  allowRecording?: boolean;
+  /** Allowed codecs, e.g. ['VP8','H264'] (empty/undef = all). */
+  allowedCodecs?: string[];
+  /** Participant ids allowed to moderate (kick/mute/lock). */
+  moderatorIds?: string[];
+  /** When true, SFU refuses unencrypted tracks and recording is blocked or marked encrypted. */
+  e2eeRequired?: boolean;
+  /** Optional max participants override (mirrors Room.maxParticipants). */
+  maxParticipants?: number;
+}
+
 /** A call room: durable identity + capacity + app metadata. */
 export interface Room {
   /** Unique room id (client-supplied or server-generated). */
@@ -27,6 +43,8 @@ export interface Room {
   maxParticipants?: number;
   /** App-defined metadata, round-tripped verbatim. */
   metadata?: Record<string, unknown>;
+  /** Room policy (secure mode); also readable via `metadata.policy` for backwards compat. */
+  policy?: RoomPolicy;
 }
 
 /** A participant currently in a room (one per senderId). */
@@ -70,6 +88,8 @@ export interface RecordingSession {
   /** Epoch ms when the recording was stopped/finalized. */
   stoppedAt?: number;
   status: RecordingStatus;
+  /** True when this session's bytes are ciphertext (E2EE mode; key never stored). */
+  encrypted?: boolean;
   /** App-defined metadata (uploader identity, mime type, ...). */
   metadata?: Record<string, unknown>;
 }

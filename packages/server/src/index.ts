@@ -28,6 +28,8 @@ export * from './store.ts';
 
 // Auth (HMAC room tokens)
 export * from './auth.ts';
+export { issueTurnCredentials, toIceServers } from './turn.ts';
+export type { TurnConfig as TurnServerConfig, TurnCredentials } from './turn.ts';
 
 // Service wiring + hosting
 export * from './services.ts';
