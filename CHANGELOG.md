@@ -26,6 +26,12 @@ The feature wave of 2026-08-25, pending its first versioned release.
   round-trip, payloads, targeted/broadcast routing, unknown-envelope
   tolerance, schema coverage).
 
+### Removed
+
+- GitHub Actions CI workflow — validation is local-only for now
+  (`bun run build && bun run typecheck && bun run test && bun run lint`);
+  reintroduce a workflow when the repo goes public.
+
 ### Fixed
 
 - server: REST `join`/`leave`/signal fan-out reached only sockets connected
@@ -108,6 +114,6 @@ wave above.
   integration guides; competitive research and internal review docs.
 - Examples: vanilla two-tab BroadcastChannel call, React + Supabase room,
   Express + `@vidcall/server` host.
-- Repo scaffolding, MIT license, GitHub Actions matrix (node 20/22, Swift,
-  Dart, Kotlin), CONTRIBUTING.md codifying dependency-age/exact-pin/adapter
-  policies, and workspace wiring for each new package.
+- Repo scaffolding, MIT license, CONTRIBUTING.md codifying
+  dependency-age/exact-pin/adapter policies, and workspace wiring for each new
+  package.

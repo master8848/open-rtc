@@ -150,7 +150,7 @@ The binding follows the shared matrix from `docs/research/mobile-bindings.md`
 |---|---|---|
 | **L0 protocol conformance** | encode/decode of the canonical wire fixtures (`protocol/fixtures/`, the single source of truth shared with the Kotlin/Swift/TS suites — see `protocol/fixtures/README.md`), unknown-field/type tolerance, version guard | `dart test` — CI (no devices) |
 | **L1 unit tests** | `VidcallClient` over an in-process `dart:io` WebSocket broadcast server: send/receive round-trip, seq monotonicity, state transitions, schema validation | `dart test` — CI (no devices) |
-| **L2 integration** | two real peers through a local signaling server + native WebRTC loopback | `flutter test integration_test` on iOS simulator + Android emulator (macOS GitHub Actions runner) |
+| **L2 integration** | two real peers through a local signaling server + native WebRTC loopback | `flutter test integration_test` on iOS simulator + Android emulator (local macOS) |
 
 Local checks (all green in CI):
 

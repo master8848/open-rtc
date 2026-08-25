@@ -63,13 +63,16 @@ cd packages/kotlin && ./gradlew test
 
 ## CI
 
-`.github/workflows/ci.yml` runs the full matrix on push/PR:
-`node` (20+22: build/test/typecheck/lint + every backend vitest), `swift`
-(macos-14), `dart` (setup-dart stable), `kotlin` (temurin 21, gradle test).
+No CI is configured right now — the repo is validated locally with
+`bun run build && bun run typecheck && bun run test && bun run lint` (plus the
+per-toolchain suites below). A workflow can be reintroduced when the repo goes
+public; the matrix it should cover: `node` (build/test/typecheck/lint + every
+backend vitest), `swift` (macos-14), `dart` (stable), `kotlin` (temurin 21).
 
 ## Adding a backend
 
 1. Implement `SignalingTransport` (`packages/transport/src/base.ts`).
 2. Import `runAdapterTestSuite` from `@vidcall/transport/shared-tests` and wire
    your fake + real-store harness into your vitest suite.
-3. Keep your package in `packages/backend-*` so CI picks it up automatically.
+3. Keep your package in `packages/backend-*` so the root scripts and any future
+   CI pick it up automatically.
