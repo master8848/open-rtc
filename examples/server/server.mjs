@@ -10,14 +10,12 @@
  * packages/server/README.md for the full route table and error codes.
  */
 import express from 'express';
-import {
-  attachWebSocketRelay,
-  createExpressRouter,
-  createServices,
-  InMemoryStore,
-} from '@vidcall/server';
+import { attachWebSocketRelay, createServices, InMemoryStore } from '@vidcall/server';
+import { createExpressRouter } from '@vidcall/server/express';
 
-const store = new InMemoryStore(); // or SqliteStore / PostgresStore / MysqlStore
+// SQL-backed stores live behind subpath exports with optional drivers, e.g.:
+//   import { SqliteStore } from '@vidcall/server/stores/sqlite';  // + npm i better-sqlite3
+const store = new InMemoryStore();
 const services = createServices({ store }); // add recordingStorage for recordings
 
 const app = express();

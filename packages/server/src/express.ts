@@ -3,11 +3,13 @@
  *
  * `createExpressRouter(services)` returns an `express.Router` mounting the
  * shared `dispatch()` handlers. express is an optional peer dependency —
- * add it to your app, then:
+ * add it to your app, then (note the subpath import; the default entry
+ * never loads express):
  *
  * ```ts
  * import express from 'express';
- * import { createExpressRouter, createServices, InMemoryStore } from '@vidcall/server';
+ * import { createExpressRouter } from '@vidcall/server/express';
+ * import { createServices, InMemoryStore } from '@vidcall/server';
  *
  * const app = express();
  * app.use('/vidcall', createExpressRouter(createServices({ store: new InMemoryStore() })));

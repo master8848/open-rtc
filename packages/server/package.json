@@ -16,7 +16,33 @@
       "types": "./dist/shared-tests.d.ts",
       "development": "./src/shared-tests.ts",
       "default": "./dist/shared-tests.js"
-    }
+    },
+    "./express": {
+      "types": "./dist/express.d.ts",
+      "development": "./src/express.ts",
+      "default": "./dist/express.js"
+    },
+    "./fastify": {
+      "types": "./dist/fastify.d.ts",
+      "development": "./src/fastify.ts",
+      "default": "./dist/fastify.js"
+    },
+    "./stores/sqlite": {
+      "types": "./dist/stores/SqliteStore.d.ts",
+      "development": "./src/stores/SqliteStore.ts",
+      "default": "./dist/stores/SqliteStore.js"
+    },
+    "./stores/postgres": {
+      "types": "./dist/stores/PostgresStore.d.ts",
+      "development": "./src/stores/PostgresStore.ts",
+      "default": "./dist/stores/PostgresStore.js"
+    },
+    "./stores/mysql": {
+      "types": "./dist/stores/MysqlStore.d.ts",
+      "development": "./src/stores/MysqlStore.ts",
+      "default": "./dist/stores/MysqlStore.js"
+    },
+    "./package.json": "./package.json"
   },
   "files": [
     "dist",
@@ -33,28 +59,40 @@
   },
   "dependencies": {
     "@vidcall/protocol": "0.1.0",
-    "better-sqlite3": "13.0.1",
-    "mysql2": "3.23.2",
-    "pg": "8.22.0",
     "ws": "8.9.0"
   },
   "devDependencies": {
     "@types/better-sqlite3": "7.6.13",
     "@types/node": "22.19.1",
+    "@types/express": "5.0.6",
+    "better-sqlite3": "13.0.1",
     "express": "5.2.1",
     "fastify": "5.10.0",
-    "typescript": "5.9.3",
-    "@types/express": "5.0.6"
+    "mysql2": "3.23.2",
+    "pg": "8.22.0",
+    "typescript": "5.9.3"
   },
   "peerDependencies": {
-    "express": "^5.2.1",
-    "fastify": "^5.10.0"
+    "better-sqlite3": "13.0.1",
+    "express": "5.2.1",
+    "fastify": "5.10.0",
+    "mysql2": "3.23.2",
+    "pg": "8.22.0"
   },
   "peerDependenciesMeta": {
+    "better-sqlite3": {
+      "optional": true
+    },
     "express": {
       "optional": true
     },
     "fastify": {
+      "optional": true
+    },
+    "mysql2": {
+      "optional": true
+    },
+    "pg": {
       "optional": true
     }
   }

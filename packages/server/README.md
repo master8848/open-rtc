@@ -16,27 +16,60 @@ App (vibe coder)
    ▼
 @vidcall/server  ── rooms · roster · signal log · relay · recordings
    │  Store (function-based, ~10 methods)          RecordingStorage (bytes)
-   ├── InMemoryStore (dev/tests)                   ├── DiskRecordingStorage
-   ├── SqliteStore   (better-sqlite3)              └── S3RecordingStorage
-   ├── PostgresStore (pg)                            (fetch + SigV4, no AWS SDK)
-   └── MysqlStore    (mysql2)
+   ├── InMemoryStore (default entry)               ├── DiskRecordingStorage
+   ├── SqliteStore   (@vidcall/server/stores/sqlite)   └── S3RecordingStorage
+   ├── PostgresStore (@vidcall/server/stores/postgres)   (fetch + SigV4, no AWS SDK)
+   └── MysqlStore    (@vidcall/server/stores/mysql)
    │  Hosting
    ├── node:http standalone  (createNodeServer)
-   ├── Express router        (createExpressRouter)
-   ├── Fastify plugin        (createFastifyPlugin)
+   ├── Express router        (@vidcall/server/express)
+   ├── Fastify plugin        (@vidcall/server/fastify)
    └── sidecar proxy         (Django / Laravel / Rails — see integrations/)
 ```
+
+## Install & dependencies
+
+```sh
+npm install @vidcall/server
+```
+
+The default entry is **driver-free**: it ships the core room/session logic,
+auth, REST dispatch, the WS relay, recording storage, and `InMemoryStore`,
+and its only runtime dependencies are `@vidcall/protocol` and the pure-JS
+`ws` package — no native addons, no database drivers. Everything heavy lives
+behind a **subpath export** with its driver as an _optional peer dependency_
+(same `types` / `development` / `default` convention as `@vidcall/transport`):
+
+| Subpath                           | Exports                | Also install           |
+| --------------------------------- | ---------------------- | ---------------------- |
+| `@vidcall/server`                 | everything below plus… | —                      |
+| `@vidcall/server/stores/sqlite`   | `SqliteStore`          | `npm i better-sqlite3` |
+| `@vidcall/server/stores/postgres` | `PostgresStore`        | `npm i pg`             |
+| `@vidcall/server/stores/mysql`    | `MysqlStore`           | `npm i mysql2`         |
+| `@vidcall/server/express`         | `createExpressRouter`  | `npm i express`        |
+| `@vidcall/server/fastify`         | `createFastifyPlugin`  | `npm i fastify`        |
+
+Notes:
+
+- SQL stores load their driver lazily and only inside the store module:
+  importing `@vidcall/server` never resolves `pg` / `mysql2` /
+  `better-sqlite3`, and a missing driver fails with an actionable error
+  naming the install command. (`SqliteStore` goes further: the native addon
+  is injected via its constructor, never imported at all.)
+- The adapters hang off their own subpaths too, so the barrel loads even in
+  installs without `express`/`fastify`. `fastify.ts` only imports types;
+  `express.ts` needs express at runtime.
+- `ws` stays the one regular dependency on purpose: it powers
+  `attachWebSocketRelay`, which is what makes this package a signaling
+  server rather than a CRUD API; it is pure JS with zero dependencies of its
+  own, and every hosting guide uses it.
 
 ## Quick start (Express)
 
 ```ts
 import express from 'express';
-import {
-  createExpressRouter,
-  createServices,
-  InMemoryStore,
-  attachWebSocketRelay,
-} from '@vidcall/server';
+import { createServices, InMemoryStore, attachWebSocketRelay } from '@vidcall/server';
+import { createExpressRouter } from '@vidcall/server/express';
 
 const store = new InMemoryStore(); // or SqliteStore / PostgresStore / MysqlStore
 const services = createServices({ store }); // add recordingStorage for recordings
@@ -219,11 +252,12 @@ interface Store {
 ```
 
 JSON documents round-trip verbatim; the Store assigns the per-room monotonic
-`seq` atomically. Implementations: `InMemoryStore`, `SqliteStore`,
-`PostgresStore`, `MysqlStore` — all pass the **shared store test suite**
-(`@vidcall/server/shared-tests`, run per store in `test/*Store.test.ts`).
-Implement one for any other database in ~100 lines — see
-`integrations/DATABASES.md`.
+`seq` atomically. Implementations: `InMemoryStore` (from the default entry),
+`SqliteStore`, `PostgresStore`, `MysqlStore` (from the store subpaths above —
+each driver is an optional peer, so pick and install only the one you use).
+All four pass the **shared store test suite** (`@vidcall/server/shared-tests`,
+run per store in `test/*Store.test.ts`). Implement one for any other database
+in ~100 lines — see `integrations/DATABASES.md`.
 
 ## Recording storage
 
@@ -243,19 +277,21 @@ recording session in the Store.
 Verified 2026-08-12 via `npm view <pkg> time --json`; package-lock.json is
 committed at the repo root.
 
-| Package                       | Pin      | Published    | Age    | Why                                          |
-| ----------------------------- | -------- | ------------ | ------ | -------------------------------------------- |
-| `@vidcall/protocol`           | `0.1.0`  | in-workspace | —      | wire envelope types (single source of truth) |
-| `better-sqlite3`              | `13.0.1` | 2026-07-21   | 21 d   | SQLite store driver (synchronous, prebuilt)  |
-| `pg`                          | `8.22.0` | 2026-06-19   | 54 d   | PostgreSQL store driver                      |
-| `mysql2`                      | `3.23.2` | 2026-07-27   | 15 d   | MySQL store driver                           |
-| `ws`                          | `8.9.0`  | 2022-09-22   | 1419 d | WebSocket relay (`/ws?roomId=`)              |
-| `express` (dev/peer)          | `5.2.1`  | 2025-12-01   | 253 d  | Express router adapter + mount smoke tests   |
-| `fastify` (dev/peer)          | `5.10.0` | 2026-07-05   | 37 d   | Fastify plugin adapter + mount smoke tests   |
-| `@types/better-sqlite3` (dev) | `7.6.13` | 2025-04-04   | 494 d  | typings                                      |
-| `@types/express` (dev)        | `5.0.6`  | 2025-12-01   | 253 d  | typings                                      |
+| Package                            | Pin      | Published    | Age    | Why                                          |
+| ---------------------------------- | -------- | ------------ | ------ | -------------------------------------------- |
+| `@vidcall/protocol`                | `0.1.0`  | in-workspace | —      | wire envelope types (single source of truth) |
+| `ws`                               | `8.9.0`  | 2022-09-22   | 1419 d | WebSocket relay (`/ws?roomId=`)              |
+| `better-sqlite3` (opt. peer + dev) | `13.0.1` | 2026-07-21   | 21 d   | SQLite store driver (synchronous, prebuilt)  |
+| `pg` (opt. peer + dev)             | `8.22.0` | 2026-06-19   | 54 d   | PostgreSQL store driver                      |
+| `mysql2` (opt. peer + dev)         | `3.23.2` | 2026-07-27   | 15 d   | MySQL store driver                           |
+| `express` (dev/peer)               | `5.2.1`  | 2025-12-01   | 253 d  | Express router adapter + mount smoke tests   |
+| `fastify` (dev/peer)               | `5.10.0` | 2026-07-05   | 37 d   | Fastify plugin adapter + mount smoke tests   |
+| `@types/better-sqlite3` (dev)      | `7.6.13` | 2025-04-04   | 494 d  | typings                                      |
+| `@types/express` (dev)             | `5.0.6`  | 2025-12-01   | 253 d  | typings                                      |
 
-> Rejected as too new on 2026-08-12: `better-sqlite3@13.0.3` (6 d),
+> The SQL drivers are **optional peers** (also dev-pinned here so this
+> repo's own store suites run): consumers install only the one matching the
+> subpath they import. Rejected as too new on 2026-08-12: `better-sqlite3@13.0.3` (6 d),
 > `pg@8.23.0` (3 d), `mysql2@3.23.3` (1 d), `ws@8.21.3` (4 d),
 > `fastify@5.11.3` (3 d). Re-run the age check before bumping anything.
 

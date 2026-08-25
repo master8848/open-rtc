@@ -5,19 +5,15 @@ Register the component as a plugin — Fastify's lifecycle, logging, and
 Fastify HTTP server.
 
 ```bash
-npm install @vidcall/server fastify
+npm install @vidcall/server fastify pg
 ```
 
 ```ts
 // server.ts
 import Fastify from 'fastify';
-import {
-  attachWebSocketRelay,
-  createFastifyPlugin,
-  createServices,
-  PostgresStore,
-  S3RecordingStorage,
-} from '@vidcall/server';
+import { attachWebSocketRelay, createServices, S3RecordingStorage } from '@vidcall/server';
+import { createFastifyPlugin } from '@vidcall/server/fastify';
+import { PostgresStore } from '@vidcall/server/stores/postgres';
 
 const store = new PostgresStore(process.env.DATABASE_URL!);
 await store.bootstrap();

@@ -158,12 +158,39 @@ runStoreTestSuite({
 
 ## Databases shipped
 
-| Store           | Driver         | Tables              | Notes                                           |
-| --------------- | -------------- | ------------------- | ----------------------------------------------- |
-| `InMemoryStore` | —              | —                   | reference impl, dev/tests, single-process       |
-| `SqliteStore`   | better-sqlite3 | 4 tables, JSON docs | `bootstrap()` idempotent; WAL for multi-process |
-| `PostgresStore` | pg             | 4 tables, JSONB     | identity seq for signals                        |
-| `MysqlStore`    | mysql2         | 4 tables, JSON      | auto-increment seq                              |
+Each SQL-backed store is a **subpath export** whose driver is an optional
+peer dependency — installing `@vidcall/server` alone pulls in no database
+driver at all. Import the store you use and install only its driver:
+
+```sh
+npm install @vidcall/server            # core + InMemoryStore, zero drivers
+npm install @vidcall/server better-sqlite3   # + SQLite (native addon)
+npm install @vidcall/server pg               # + PostgreSQL
+npm install @vidcall/server mysql2           # + MySQL
+```
+
+| Store           | Import from                       | Driver         | Install                | Tables / notes                                                     |
+| --------------- | --------------------------------- | -------------- | ---------------------- | ------------------------------------------------------------------ |
+| `InMemoryStore` | `@vidcall/server`                 | —              | —                      | reference impl, dev/tests, single-process                          |
+| `SqliteStore`   | `@vidcall/server/stores/sqlite`   | better-sqlite3 | `npm i better-sqlite3` | 4 tables, JSON docs; bootstrap() idempotent; WAL for multi-process |
+| `PostgresStore` | `@vidcall/server/stores/postgres` | pg             | `npm i pg`             | 4 tables, JSONB; identity seq for signals                          |
+| `MysqlStore`    | `@vidcall/server/stores/mysql`    | mysql2         | `npm i mysql2`         | 4 tables, JSON; auto-increment seq                                 |
+
+```ts
+// SQLite: the driver handle is injected (never imported by this package)
+import Database from 'better-sqlite3';
+import { SqliteStore } from '@vidcall/server/stores/sqlite';
+const store = new SqliteStore(new Database('vidcall.db'));
+
+// Postgres/MySQL: pass a connection string or pool; the driver loads lazily
+import { PostgresStore } from '@vidcall/server/stores/postgres';
+const store = new PostgresStore(process.env.DATABASE_URL);
+
+await store.bootstrap();
+```
+
+If the optional peer is missing, the store fails fast with an error naming
+the install command (`npm i pg`, `npm i mysql2`, `npm i better-sqlite3`).
 
 Every store passes the same shared suite (`packages/server/test/*Store.test.ts`);
 the Postgres/MySQL suites run against live servers when

@@ -5,14 +5,22 @@
  * URL string). Signal seqs use a per-(room) AUTO_INCREMENT column so
  * ordering is atomic under concurrency.
  *
+ * `mysql2` is an **optional peer dependency** and is loaded lazily (only
+ * when this store has to create its own pool), so importing the module
+ * never loads the driver. Install it next to `@vidcall/server`:
+ *
  * ```
- * import { MysqlStore } from '@vidcall/server';
+ * npm i mysql2
+ * ```
+ *
+ * ```
+ * import { MysqlStore } from '@vidcall/server/stores/mysql';
  * const store = new MysqlStore({ host: '127.0.0.1', port: 3306, user: 'vidcall', password: '...', database: 'vidcall' });
  * await store.bootstrap();
  * ```
  */
 
-import mysql, { type Pool, type PoolOptions } from 'mysql2/promise';
+import type { Pool, PoolOptions } from 'mysql2/promise';
 import type { Envelope } from '@vidcall/protocol';
 import type { Store } from '../store.ts';
 import type { Participant, RecordingSession, Room, StoredSignal } from '../types.ts';
@@ -43,32 +51,63 @@ const SCHEMA_STATEMENTS = [
   )`,
 ];
 
+type MysqlPromiseModule = typeof import('mysql2/promise');
+
+/**
+ * Lazy driver load: importing this module must never resolve `mysql2` — only
+ * a store that creates its own pool touches the driver, at first query.
+ * Missing installs surface as an actionable error.
+ */
+async function loadMysql(): Promise<MysqlPromiseModule> {
+  try {
+    return await import('mysql2/promise');
+  } catch {
+    throw new Error(
+      "MysqlStore requires the optional peer dependency 'mysql2'. " +
+        'Install it next to @vidcall/server: npm i mysql2',
+    );
+  }
+}
+
 export class MysqlStore implements Store {
-  private readonly pool: Pool;
+  private readonly source: Pool | PoolOptions | string;
+  private lazyPool: Pool | null = null;
   private bootstrapped = false;
 
   constructor(poolOrOptions: Pool | PoolOptions | string) {
-    if (typeof poolOrOptions === 'string') {
-      this.pool = mysql.createPool({ ...parseConnectionUrl(poolOrOptions), connectTimeout: 5000 });
-    } else if (isPool(poolOrOptions)) {
-      this.pool = poolOrOptions;
-    } else {
-      this.pool = mysql.createPool({ ...poolOrOptions, connectTimeout: 5000 });
+    this.source = poolOrOptions;
+  }
+
+  /**
+   * The injected pool when one was passed; otherwise lazily create the
+   * driver-backed pool from the URL/options on first use.
+   */
+  private async connect(): Promise<Pool> {
+    if (isPool(this.source)) return this.source;
+    if (!this.lazyPool) {
+      const { createPool } = await loadMysql();
+      this.lazyPool =
+        typeof this.source === 'string'
+          ? createPool({ ...parseConnectionUrl(this.source), connectTimeout: 5000 })
+          : createPool({ ...this.source, connectTimeout: 5000 });
     }
+    return this.lazyPool;
   }
 
   /** Create tables if missing. Idempotent; call once at boot. */
   async bootstrap(): Promise<void> {
     if (this.bootstrapped) return;
+    const pool = await this.connect();
     for (const statement of SCHEMA_STATEMENTS) {
-      await this.pool.query(statement);
+      await pool.query(statement);
     }
     this.bootstrapped = true;
   }
 
   // ---- rooms -------------------------------------------------------------
   async getRoom(roomId: string): Promise<Room | null> {
-    const [rows] = await this.pool.query('SELECT room_json FROM vidcall_rooms WHERE room_id = ?', [
+    const pool = await this.connect();
+    const [rows] = await pool.query('SELECT room_json FROM vidcall_rooms WHERE room_id = ?', [
       roomId,
     ]);
     const row = firstRow(rows);
@@ -76,7 +115,8 @@ export class MysqlStore implements Store {
   }
 
   async putRoom(room: Room): Promise<void> {
-    await this.pool.query(
+    const pool = await this.connect();
+    await pool.query(
       'INSERT INTO vidcall_rooms (room_id, room_json) VALUES (?, ?) ' +
         'ON DUPLICATE KEY UPDATE room_json = VALUES(room_json)',
       [room.roomId, JSON.stringify(room)],
@@ -84,15 +124,17 @@ export class MysqlStore implements Store {
   }
 
   async deleteRoom(roomId: string): Promise<void> {
-    await this.pool.query('DELETE FROM vidcall_rooms WHERE room_id = ?', [roomId]);
-    await this.pool.query('DELETE FROM vidcall_participants WHERE room_id = ?', [roomId]);
-    await this.pool.query('DELETE FROM vidcall_signals WHERE room_id = ?', [roomId]);
-    await this.pool.query('DELETE FROM vidcall_recordings WHERE room_id = ?', [roomId]);
+    const pool = await this.connect();
+    await pool.query('DELETE FROM vidcall_rooms WHERE room_id = ?', [roomId]);
+    await pool.query('DELETE FROM vidcall_participants WHERE room_id = ?', [roomId]);
+    await pool.query('DELETE FROM vidcall_signals WHERE room_id = ?', [roomId]);
+    await pool.query('DELETE FROM vidcall_recordings WHERE room_id = ?', [roomId]);
   }
 
   // ---- participants ------------------------------------------------------
   async getParticipant(roomId: string, participantId: string): Promise<Participant | null> {
-    const [rows] = await this.pool.query(
+    const pool = await this.connect();
+    const [rows] = await pool.query(
       'SELECT participant_json FROM vidcall_participants WHERE room_id = ? AND participant_id = ?',
       [roomId, participantId],
     );
@@ -101,7 +143,8 @@ export class MysqlStore implements Store {
   }
 
   async putParticipant(participant: Participant): Promise<void> {
-    await this.pool.query(
+    const pool = await this.connect();
+    await pool.query(
       'INSERT INTO vidcall_participants (room_id, participant_id, participant_json) VALUES (?, ?, ?) ' +
         'ON DUPLICATE KEY UPDATE participant_json = VALUES(participant_json)',
       [participant.roomId, participant.participantId, JSON.stringify(participant)],
@@ -109,14 +152,16 @@ export class MysqlStore implements Store {
   }
 
   async deleteParticipant(roomId: string, participantId: string): Promise<void> {
-    await this.pool.query(
-      'DELETE FROM vidcall_participants WHERE room_id = ? AND participant_id = ?',
-      [roomId, participantId],
-    );
+    const pool = await this.connect();
+    await pool.query('DELETE FROM vidcall_participants WHERE room_id = ? AND participant_id = ?', [
+      roomId,
+      participantId,
+    ]);
   }
 
   async listParticipants(roomId: string): Promise<Participant[]> {
-    const [rows] = await this.pool.query(
+    const pool = await this.connect();
+    const [rows] = await pool.query(
       'SELECT participant_json FROM vidcall_participants WHERE room_id = ?',
       [roomId],
     );
@@ -131,7 +176,8 @@ export class MysqlStore implements Store {
     envelope: Envelope;
     receivedAt: number;
   }): Promise<StoredSignal> {
-    const [result] = await this.pool.query(
+    const pool = await this.connect();
+    const [result] = await pool.query(
       'INSERT INTO vidcall_signals (room_id, envelope_json, received_at) VALUES (?, ?, ?)',
       [signal.roomId, JSON.stringify(signal.envelope), signal.receivedAt],
     );
@@ -140,7 +186,8 @@ export class MysqlStore implements Store {
   }
 
   async listSignals(roomId: string, since: number): Promise<StoredSignal[]> {
-    const [rows] = await this.pool.query(
+    const pool = await this.connect();
+    const [rows] = await pool.query(
       'SELECT seq, envelope_json, received_at FROM vidcall_signals WHERE room_id = ? AND seq > ? ORDER BY seq',
       [roomId, since],
     );
@@ -154,7 +201,8 @@ export class MysqlStore implements Store {
 
   // ---- recordings --------------------------------------------------------
   async putRecording(recording: RecordingSession): Promise<void> {
-    await this.pool.query(
+    const pool = await this.connect();
+    await pool.query(
       'INSERT INTO vidcall_recordings (session_id, room_id, recording_json) VALUES (?, ?, ?) ' +
         'ON DUPLICATE KEY UPDATE recording_json = VALUES(recording_json)',
       [recording.sessionId, recording.roomId, JSON.stringify(recording)],
@@ -162,7 +210,8 @@ export class MysqlStore implements Store {
   }
 
   async listRecordings(roomId: string): Promise<RecordingSession[]> {
-    const [rows] = await this.pool.query(
+    const pool = await this.connect();
+    const [rows] = await pool.query(
       'SELECT recording_json FROM vidcall_recordings WHERE room_id = ?',
       [roomId],
     );
@@ -170,7 +219,8 @@ export class MysqlStore implements Store {
   }
 
   async getRecording(sessionId: string): Promise<RecordingSession | null> {
-    const [rows] = await this.pool.query(
+    const pool = await this.connect();
+    const [rows] = await pool.query(
       'SELECT recording_json FROM vidcall_recordings WHERE session_id = ?',
       [sessionId],
     );
@@ -180,7 +230,12 @@ export class MysqlStore implements Store {
 
   /** Close the underlying pool (call when shutting down). */
   async close(): Promise<void> {
-    await this.pool.end();
+    if (this.lazyPool) {
+      await this.lazyPool.end();
+      this.lazyPool = null;
+    } else if (isPool(this.source)) {
+      await this.source.end();
+    }
   }
 }
 

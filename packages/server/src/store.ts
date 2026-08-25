@@ -10,10 +10,12 @@
  *  - signals:               append-only per-room log of protocol envelopes
  *  - recordings:            one row per recording session (metadata only)
  *
- * Implementations ship in `src/stores/`: `InMemoryStore` (tests/dev),
- * `SqliteStore` (better-sqlite3), `PostgresStore` (pg), `MysqlStore`
- * (mysql2). See `integrations/DATABASES.md` for how to implement one for
- * any other database (MongoDB, DynamoDB, Redis, Firestore, ...).
+ * Implementations: `InMemoryStore` ships from the default entry; the
+ * SQL-backed ones live behind subpath exports so the core stays
+ * driver-free — `@vidcall/server/stores/sqlite` (better-sqlite3),
+ * `/stores/postgres` (pg), `/stores/mysql` (mysql2). See
+ * `integrations/DATABASES.md` for how to implement one for any other
+ * database (MongoDB, DynamoDB, Redis, Firestore, ...).
  *
  * Contract notes:
  *  - All methods are async (even in-memory) so implementations stay uniform.

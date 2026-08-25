@@ -15,13 +15,9 @@ npm install @vidcall/server better-sqlite3
 ```js
 // sidecar.mjs
 import http from 'node:http';
-import {
-  attachWebSocketRelay,
-  createNodeServer,
-  createServices,
-  SqliteStore,
-} from '@vidcall/server';
 import Database from 'better-sqlite3';
+import { attachWebSocketRelay, createNodeServer, createServices } from '@vidcall/server';
+import { SqliteStore } from '@vidcall/server/stores/sqlite';
 
 const store = new SqliteStore(new Database('/var/lib/vidcall/vidcall.db'));
 await store.bootstrap();

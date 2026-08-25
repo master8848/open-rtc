@@ -8,18 +8,14 @@ component as a tiny Node process and let Rails proxy the `/vidcall/` prefix
 ## 1. Run the sidecar (Node)
 
 ```bash
-npm install @vidcall/server better-sqlite3
+npm install @vidcall/server pg
 ```
 
 ```js
-// sidecar.mjs
+// sidecar.mjs — reuses your Rails Postgres via DATABASE_URL
 import http from 'node:http';
-import {
-  attachWebSocketRelay,
-  createNodeServer,
-  createServices,
-  PostgresStore,
-} from '@vidcall/server';
+import { attachWebSocketRelay, createNodeServer, createServices } from '@vidcall/server';
+import { PostgresStore } from '@vidcall/server/stores/postgres';
 
 const store = new PostgresStore(process.env.DATABASE_URL); // reuse your PG
 await store.bootstrap();

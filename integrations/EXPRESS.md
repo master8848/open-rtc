@@ -5,20 +5,16 @@ separate process, no proxy. The WS relay upgrades the same HTTP server, so
 `/ws?roomId=...` and the REST API share one port.
 
 ```bash
-npm install @vidcall/server express
+npm install @vidcall/server express better-sqlite3
 ```
 
 ```ts
 // server.ts
 import express from 'express';
 import http from 'node:http';
-import {
-  attachWebSocketRelay,
-  createExpressRouter,
-  createServices,
-  SqliteStore,
-  DiskRecordingStorage,
-} from '@vidcall/server';
+import { attachWebSocketRelay, createServices, DiskRecordingStorage } from '@vidcall/server';
+import { createExpressRouter } from '@vidcall/server/express';
+import { SqliteStore } from '@vidcall/server/stores/sqlite';
 import Database from 'better-sqlite3';
 
 const store = new SqliteStore(new Database('vidcall.db'));

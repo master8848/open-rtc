@@ -14,13 +14,9 @@ npm install @vidcall/server better-sqlite3
 ```js
 // sidecar.mjs
 import http from 'node:http';
-import {
-  attachWebSocketRelay,
-  createNodeServer,
-  createServices,
-  SqliteStore,
-} from '@vidcall/server';
 import Database from 'better-sqlite3';
+import { attachWebSocketRelay, createNodeServer, createServices } from '@vidcall/server';
+import { SqliteStore } from '@vidcall/server/stores/sqlite';
 
 const store = new SqliteStore(
   new Database(process.env.VIDCALL_DB_PATH ?? '/var/lib/vidcall/vidcall.db'),
@@ -124,7 +120,8 @@ are room-scoped and identity-bound on top of them.
 
 - The sidecar is stateless on the DB side (SQLite file or Postgres), so it
   survives `php artisan octane:reload` without dropping rooms.
-- For horizontal scale, point the sidecar at Postgres (`PostgresStore`) and
+- For horizontal scale, point the sidecar at Postgres (`PostgresStore` from
+  `@vidcall/server/stores/postgres` + `npm i pg`) and
   run one sidecar per instance behind a load balancer; the WS hub is
   per-process, so pin a client's `/ws` connection to one instance (sticky
   sessions) or move to a shared pub/sub relay later.

@@ -2,11 +2,14 @@
  * @vidcall/server — Fastify adapter.
  *
  * `createFastifyPlugin(services)` returns a Fastify plugin registering the
- * shared `dispatch()` handlers. fastify is an optional peer dependency:
+ * shared `dispatch()` handlers. fastify is an optional peer dependency
+ * (this module only imports its types, so nothing is loaded at runtime).
+ * Import it from its subpath:
  *
  * ```ts
  * import Fastify from 'fastify';
- * import { createFastifyPlugin, createServices, InMemoryStore } from '@vidcall/server';
+ * import { createFastifyPlugin } from '@vidcall/server/fastify';
+ * import { createServices, InMemoryStore } from '@vidcall/server';
  *
  * const app = Fastify();
  * await app.register(createFastifyPlugin(createServices({ store: new InMemoryStore() })));

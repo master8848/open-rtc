@@ -2,16 +2,26 @@
  * SQLite `Store` backed by better-sqlite3 (synchronous driver; all methods
  * are async to match the `Store` contract).
  *
+ * The driver is **injected, not imported**: this module only carries
+ * `import type` for better-sqlite3, so importing it never loads the native
+ * addon. `better-sqlite3` is an optional peer dependency — install it next
+ * to `@vidcall/server` and pass the database handle in:
+ *
+ * ```
+ * npm i better-sqlite3
+ * ```
+ *
+ * ```
+ * import Database from 'better-sqlite3';
+ * import { SqliteStore } from '@vidcall/server/stores/sqlite';
+ * const store = new SqliteStore(new Database('vidcall.db'));
+ * await store.bootstrap(); // CREATE TABLE IF NOT EXISTS ...
+ * ```
+ *
  * Schema: four tables holding JSON documents plus indexed columns for the
  * queries the contract needs (list by room, seq > since). `vidcall_rooms`
  * and `vidcall_recordings` also work for multi-process deployments as long
  * as every process uses WAL + a shared file.
- *
- * ```
- * import Database from 'better-sqlite3';
- * const store = new SqliteStore(new Database('vidcall.db'));
- * await store.bootstrap(); // CREATE TABLE IF NOT EXISTS ...
- * ```
  */
 
 import type Database from 'better-sqlite3';
@@ -51,6 +61,13 @@ export class SqliteStore implements Store {
   private bootstrapped = false;
 
   constructor(db: Database.Database) {
+    if (typeof db === 'string' || db === undefined || db === null) {
+      throw new Error(
+        'SqliteStore expects a better-sqlite3 Database instance, not a file path. ' +
+          'Install the optional peer dependency and pass the handle in: ' +
+          "npm i better-sqlite3 → new SqliteStore(new Database('vidcall.db'))",
+      );
+    }
     this.db = db;
   }
 
