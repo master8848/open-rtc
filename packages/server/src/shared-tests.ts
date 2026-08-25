@@ -3,10 +3,10 @@
  *
  * Every `Store` implementation must pass this exact matrix — the same
  * idea as the client's shared adapter suite
- * (`@vidcall/transport/shared-tests`). Run it from each store's test file:
+ * (`@mbsks/transport/shared-tests`). Run it from each store's test file:
  *
  * ```ts
- * import { runStoreTestSuite } from '@vidcall/server/shared-tests';
+ * import { runStoreTestSuite } from '@mbsks/server/shared-tests';
  * runStoreTestSuite({
  *   name: 'sqlite',
  *   createStore: async () => { const s = new SqliteStore(new Database(':memory:')); await s.bootstrap(); return s; },
@@ -16,7 +16,7 @@
 
 import { beforeEach, afterEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { createEnvelope } from '@vidcall/protocol';
+import { createEnvelope } from '@mbsks/protocol';
 import {
   closeRoom,
   createRoom,
@@ -44,7 +44,7 @@ export interface StoreHarness {
 let suiteCounter = 0;
 
 export function runStoreTestSuite(h: StoreHarness): void {
-  describe(`@vidcall/server shared store suite → ${h.name}`, () => {
+  describe(`@mbsks/server shared store suite → ${h.name}`, () => {
     let store: Store;
     beforeEach(async () => {
       store = await h.createStore();

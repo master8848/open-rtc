@@ -1,5 +1,5 @@
 /**
- * @vidcall/server — Fastify adapter.
+ * @mbsks/server — Fastify adapter.
  *
  * `createFastifyPlugin(services)` returns a Fastify plugin registering the
  * shared `dispatch()` handlers. fastify is an optional peer dependency
@@ -8,8 +8,8 @@
  *
  * ```ts
  * import Fastify from 'fastify';
- * import { createFastifyPlugin } from '@vidcall/server/fastify';
- * import { createServices, InMemoryStore } from '@vidcall/server';
+ * import { createFastifyPlugin } from '@mbsks/server/fastify';
+ * import { createServices, InMemoryStore } from '@mbsks/server';
  *
  * const app = Fastify();
  * await app.register(createFastifyPlugin(createServices({ store: new InMemoryStore() })));

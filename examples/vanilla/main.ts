@@ -1,8 +1,8 @@
 /**
  * vidcall vanilla example — a single-file browser app, no framework.
  *
- * Wires a `Room` (from @vidcall/core) to the sqlite BroadcastChannel backend
- * (from @vidcall/backend-sqlite): open this page in TWO tabs of the same
+ * Wires a `Room` (from @mbsks/core) to the sqlite BroadcastChannel backend
+ * (from @mbsks/backend-sqlite): open this page in TWO tabs of the same
  * browser, join both, turn the camera on — you get a 1:1 mesh call with no
  * server, no signaling infra, and no build tooling beyond one esbuild step.
  *
@@ -10,7 +10,7 @@
  *  - mute/camera via `MediaStreamTrack.enabled` toggles (peers keep the
  *    stream, just muted),
  *  - local adaptive-quality monitoring with `AdaptiveQualityController`
- *    (@vidcall/quality) fed from `RTCPeerConnection.getStats()` — every tier
+ *    (@mbsks/quality) fed from `RTCPeerConnection.getStats()` — every tier
  *    change and warning lands in the event log,
  *  - start-recording wiring: `room.recording.startRecording()` composites the
  *    local + remote streams and emits `recording:blob-chunk` events.
@@ -19,10 +19,10 @@
  * serve this folder (`npx serve examples/vanilla` or
  * `python3 -m http.server 8000` from `examples/vanilla`).
  */
-import { Room, type TrackPublication } from '@vidcall/core';
-import type { RTCStatsSnapshot } from '@vidcall/quality';
-import { AdaptiveQualityController, DeviceCapability, statsSnapshot } from '@vidcall/quality';
-import { SqliteBackend, type SqliteBackendOptions } from '@vidcall/backend-sqlite';
+import { Room, type TrackPublication } from '@mbsks/core';
+import type { RTCStatsSnapshot } from '@mbsks/quality';
+import { AdaptiveQualityController, DeviceCapability, statsSnapshot } from '@mbsks/quality';
+import { SqliteBackend, type SqliteBackendOptions } from '@mbsks/backend-sqlite';
 import type { Client } from '@libsql/client';
 
 // ------------------------------------------------------------------- setup
@@ -156,7 +156,7 @@ room.on('recording:error', ({ error }) => log(`⏺ recording error: ${error.mess
 
 /**
  * Poll every peer's `getStats()` and feed the pure policy engine from
- * @vidcall/quality. Tier changes/warnings are logged; applying the tier
+ * @mbsks/quality. Tier changes/warnings are logged; applying the tier
  * (setParameters / applyConstraints) is the app's job — see
  * packages/quality/README.md.
  */

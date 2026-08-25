@@ -200,7 +200,7 @@ Same single-peer gaps as Swift (no mesh roster, no data-channel bus, no recordin
 | presence (backend-native) | ✓ | env-only | ✗ | ✗ |
 | reaction / chat / screen-share | ✓ | ✓ | ✓ | ✓ |
 | quality-warning send/receive | ✓ | ✓ | ✓ | ✓ |
-| quality adaptation engine | ✓ (`@vidcall/quality`) | ✗ | ✗ | ✗ |
+| quality adaptation engine | ✓ (`@mbsks/quality`) | ✗ | ✗ | ✗ |
 | ICE restart | ✓ | ✗ | ✗ | ✓ |
 | connection-state / ice-conn-state | ✓ / ✓ | ✗ / ✓ | status / ✓ | ✓ / ✓ |
 | DataChannelBus (reactions/chat/control) | ✓ | ✗ | ✗ | ✗ |
@@ -232,7 +232,7 @@ Same single-peer gaps as Swift (no mesh roster, no data-channel bus, no recordin
 ### P2 — polish
 
 10. **Recording facade** (composite `MediaRecorder`-equivalent per platform + uploader) — required only when mobile parity with TS `room.recording` is a product goal; otherwise document as JS-only.
-11. **Adaptive quality**: mobile bindings can already emit/consume `quality-warning`; porting `@vidcall/quality`'s pure tier ladder (stats → action) would give mobile the same adaptation; low urgency for v1 mesh.
+11. **Adaptive quality**: mobile bindings can already emit/consume `quality-warning`; porting `@mbsks/quality`'s pure tier ladder (stats → action) would give mobile the same adaptation; low urgency for v1 mesh.
 12. **Kotlin `RestTransport`**: move blocking HTTP off the caller thread; add reconnect/backoff to `WebSocketTransport`.
 13. **Swift**: add the missing `README.md` (referenced by `Package.swift`/`VidcallWebRTC.swift`), consider `Int64` JSON numbers in `JSONValue` for `seq` precision at extreme values, and document macOS support status.
 14. **Dart**: document the `dart:io`-only limitation (no Flutter web) in the README; consider `web_socket_channel` for a web-capable connector.

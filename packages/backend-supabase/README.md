@@ -1,4 +1,4 @@
-# @vidcall/backend-supabase
+# @mbsks/backend-supabase
 
 Supabase Realtime signaling adapter — the **default** vidcall backend. Uses
 Realtime's native **broadcast** (SDP/ICE/reactions/chat) and **presence**
@@ -8,7 +8,7 @@ Realtime's native **broadcast** (SDP/ICE/reactions/chat) and **presence**
 
 ```ts
 import { createClient } from '@supabase/supabase-js';
-import { SupabaseBackend } from '@vidcall/backend-supabase';
+import { SupabaseBackend } from '@mbsks/backend-supabase';
 
 const supabase = createClient('https://<ref>.supabase.co', '<anon-key>');
 const backend = new SupabaseBackend({ client: supabase });
@@ -32,7 +32,7 @@ await backend.dispose();
 ```
 
 The adapter implements `SignalingTransport` (packages/core contract; structural
-twin in `@vidcall/transport`), so it plugs straight into the vidcall engine.
+twin in `@mbsks/transport`), so it plugs straight into the vidcall engine.
 
 ## How it maps
 
@@ -59,10 +59,10 @@ twin in `@vidcall/transport`), so it plugs straight into the vidcall engine.
 - **Auth**: private channels require a signed JWT; configure RLS so only room
   members can subscribe. The adapter passes the client through untouched.
 - Payloads above 256 KB are chunked transparently (the generic chunker in
-  `@vidcall/transport`); you will never hit this with SDP/ICE.
+  `@mbsks/transport`); you will never hit this with SDP/ICE.
 
 ## Package
 
 - Pin: `@supabase/supabase-js@2.110.9` (published 2026-07-27 — 15 d old at
   implementation time; re-verified `npm view @supabase/supabase-js time`).
-- Runtime deps: `@supabase/supabase-js`, `@vidcall/transport`.
+- Runtime deps: `@supabase/supabase-js`, `@mbsks/transport`.

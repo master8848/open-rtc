@@ -1,6 +1,6 @@
 /**
  * vidcall React example — `Room` wired to the Supabase backend through the
- * `@vidcall/react` hooks.
+ * `@mbsks/react` hooks.
  *
  * The vidcall packages are consumed through the monorepo workspace (file:
  * deps in package.json), exactly the "unpublished" install path from the
@@ -19,9 +19,9 @@
  */
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type JSX } from 'react';
 import { createClient } from '@supabase/supabase-js';
-import { Room, type TrackPublication } from '@vidcall/core';
-import { SupabaseBackend } from '@vidcall/backend-supabase';
-import { useJoin, useParticipants, useRoomState } from '@vidcall/react';
+import { Room, type TrackPublication } from '@mbsks/core';
+import { SupabaseBackend } from '@mbsks/backend-supabase';
+import { useJoin, useParticipants, useRoomState } from '@mbsks/react';
 
 interface QualityEvent {
   id: number;

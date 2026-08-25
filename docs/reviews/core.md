@@ -8,7 +8,7 @@
 
 ## 1. Strengths
 
-- **Zero-dep core**: `@vidcall/core` has no runtime dependencies (platform
+- **Zero-dep core**: `@mbsks/core` has no runtime dependencies (platform
   `RTCPeerConnection` + `MediaRecorder` only) — no supply-chain surface, easy
   bundling, works in any browser context.
 - **Disciplined protocol**: `protocol/schema.json` is the single source of
@@ -18,7 +18,7 @@
   recording tests green).
 - **Shared adapter suite**: all 6 client backends pass the same
   `runAdapterTestSuite`, which is what makes "pluggable backend" a real claim.
-- **Server component** (`@vidcall/server`) is function-first (`Store` as first
+- **Server component** (`@mbsks/server`) is function-first (`Store` as first
   arg, zero framework imports) with 4 store impls sharing one suite, and an
   in-workspace SigV4 signer instead of the AWS SDK.
 
@@ -31,7 +31,7 @@
 | SQLite client adapter | `@libsql/client` 0.17.4 (BroadcastChannel) | `node:sqlite` (builtin, Node 22) | node:sqlite has no cross-tab BroadcastChannel story and no server-push; libsql keeps the same-device dev flow + remote `wss://` path. OK. |
 | SQLite server store | `better-sqlite3` 13.0.1 | `node:sqlite` | better-sqlite3 is synchronous + battle-tested; fine pinned at 13.0.1 (21d at audit). |
 | JSON-RPC framing | n/a — plain envelopes over WS/REST | `jsonrpsee` | Not applicable: the wire protocol is JSON envelope-based (see `protocol/schema.json`), not a JSON-RPC method surface. Revisit only if a full JSON-RPC server API is ever needed. |
-| WS relay (server) | hand-rolled | `ws`/`socket.io` | Hand-rolled keeps deps zero in `@vidcall/server` core; `ws` already present as dev dep for tests. OK. |
+| WS relay (server) | hand-rolled | `ws`/`socket.io` | Hand-rolled keeps deps zero in `@mbsks/server` core; `ws` already present as dev dep for tests. OK. |
 | Encoding (bindings) | kotlinx.serialization / Codable / dart:convert | Moshi/Gson, SwiftyJSON | Native codecs are the right call — no codegen drift risk with the schema. |
 
 **Conclusion**: no forced library swaps. The one genuinely missing *piece of
@@ -39,7 +39,7 @@ code* is quality-engine integration (below), not a missing dependency.
 
 ## 3. Architecture issues (ranked)
 
-- **P0 — Quality engine not wired into Room.** `@vidcall/quality` ships a
+- **P0 — Quality engine not wired into Room.** `@mbsks/quality` ships a
   policy ladder + hysteresis, but nothing in `packages/core` calls
   `getStats()`, `setParameters()`, `applyConstraints()`, or creates simulcast
   encodings. The README headline ("adaptive quality switches by network speed
@@ -83,7 +83,7 @@ code* is quality-engine integration (below), not a missing dependency.
 
 ## 5. Recommended follow-ups (P0/P1/P2 tickets)
 
-1. **P0** Wire `@vidcall/quality` into Room (stats → policy → setParameters /
+1. **P0** Wire `@mbsks/quality` into Room (stats → policy → setParameters /
    applyConstraints → events) + tests. → delegated to `code-vidcall-quality-wiring`.
 2. **P1** `examples/` (vanilla + React) + root README quickstart + install
    path via git dependency. → delegated to `code-vidcall-examples-docs`.

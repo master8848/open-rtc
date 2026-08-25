@@ -18,7 +18,7 @@
  * If the gap to the next expected seq exceeds `maxGap` (lost frames), the
  * buffered run is flushed anyway so the call can proceed.
  */
-import type { Envelope } from '@vidcall/protocol';
+import type { Envelope } from '@mbsks/protocol';
 
 export type KindFilter = (kind: string) => boolean;
 

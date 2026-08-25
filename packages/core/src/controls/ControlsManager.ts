@@ -16,7 +16,7 @@
  * `packages/core/test/controls.test.ts`).
  *
  * The manager is attached to a `Room` as `room.controls` (wired by
- * `@vidcall/core`'s index; see docs/features/controls.md). `Room` satisfies
+ * `@mbsks/core`'s index; see docs/features/controls.md). `Room` satisfies
  * the minimal `ControlsHost` contract structurally — no subclassing needed.
  *
  * Zero runtime dependencies: builds on platform Web APIs only.
@@ -171,7 +171,7 @@ function defaultMediaProvider(): ControlsMediaProvider {
  * Local media controls for a vidcall `Room` (attached as `room.controls`).
  *
  * ```ts
- * const controls = room.controls; // wired by @vidcall/core
+ * const controls = room.controls; // wired by @mbsks/core
  * await controls.toggleCamera();          // publish the camera
  * await controls.setMicrophoneMuted(true); // mute (peers hear silence)
  * await controls.toggleScreenShare();     // share the screen

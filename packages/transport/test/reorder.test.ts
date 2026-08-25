@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { createEnvelope, type Envelope } from '@vidcall/protocol';
+import { createEnvelope, type Envelope } from '@mbsks/protocol';
 import { ReorderBuffer } from '../src/internal/reorder.js';
 
 function msg(seq: number, type: 'offer' | 'ice' | 'chat' = 'offer', sender = 'a'): Envelope {

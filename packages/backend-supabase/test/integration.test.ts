@@ -12,8 +12,8 @@
 import { describe, it, expect } from 'vitest';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { SupabaseBackend } from '../src/SupabaseBackend.js';
-import { runAdapterTestSuite, type AdapterHarness } from '@vidcall/transport/shared-tests';
-import type { SignalingTransport } from '@vidcall/transport';
+import { runAdapterTestSuite, type AdapterHarness } from '@mbsks/transport/shared-tests';
+import type { SignalingTransport } from '@mbsks/transport';
 
 const url = process.env.VIDCALL_TEST_SUPABASE_URL;
 const anonKey = process.env.VIDCALL_TEST_SUPABASE_ANON_KEY;

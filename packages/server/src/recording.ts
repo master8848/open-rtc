@@ -1,5 +1,5 @@
 /**
- * @vidcall/server — recording byte storage.
+ * @mbsks/server — recording byte storage.
  *
  * Recording *sessions* (metadata) live in the `Store`; the media *bytes*
  * (MediaRecorder `.webm` chunks, SFU egress segments, ...) live in a

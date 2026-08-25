@@ -1,14 +1,14 @@
 /**
- * @vidcall/server — domain types.
+ * @mbsks/server — domain types.
  *
  * The server component owns ROOM/SESSION state (rooms, participants,
- * recordings) and relays signaling envelopes from `@vidcall/protocol`
+ * recordings) and relays signaling envelopes from `@mbsks/protocol`
  * between room members. All types here are plain data: any framework
  * (Express, Fastify, Django, Laravel, Rails, ...) and any database can
  * host them via the function-based `Store` contract (see `store.ts`).
  */
 
-import type { Envelope } from '@vidcall/protocol';
+import type { Envelope } from '@mbsks/protocol';
 
 /** Room lifecycle state. */
 export type RoomState = 'open' | 'closed';

@@ -44,7 +44,7 @@ an L-sized adapter build with real ordering/replay risks to validate.
 
 | Guidance | Verdict |
 |---|---|
-| Sidecar pattern as default | Correct. Nothing PHP exists in this repo (grep confirms zero PHP/composer files); `@vidcall/server` is Node-only. |
+| Sidecar pattern as default | Correct. Nothing PHP exists in this repo (grep confirms zero PHP/composer files); `@mbsks/server` is Node-only. |
 | nginx `location /vidcall/` + WS upgrade block | Correct and matches `DJANGO.md`; trailing-slash `proxy_pass` correctly strips the prefix so `/vidcall/rooms/:id/join` → `/rooms/:id/join`. |
 | Auth flow description | Accurately reflects the code: `adminToken` header guards `POST /auth/token` (`packages/server/src/http.ts:278-285` accepts `adminToken` or `x-admin-token`); tokens are room-scoped + identity-bound (`auth.ts`, guards in `http.ts:123-148`); `?token=` on `/ws` verified at join (`ws.ts:201-231`), close code 4401. |
 | "Keep your policies first line of defense" | Right instinct; matches the design intent in `services.ts` (`AuthConfig`). |
@@ -106,7 +106,7 @@ all guides share one `createServices(...)` instance.
 | Missing item | Why it matters |
 |---|---|
 | **Reverb** | Zero mentions. Reverb ships with Laravel 11+ and is the idiomatic WS layer; readers will ask "why can't I use my existing Reverb?" (see §3b). |
-| **Queue-driven lifecycle events** | No events exist on either side: `@vidcall/server` emits no webhooks/events, and the guide defines no Laravel listeners. Room lifecycle can only be observed by polling `GET /rooms/:id/state`. |
+| **Queue-driven lifecycle events** | No events exist on either side: `@mbsks/server` emits no webhooks/events, and the guide defines no Laravel listeners. Room lifecycle can only be observed by polling `GET /rooms/:id/state`. |
 | **Scheduled cleanup** | `vidcall_signals` is append-only with no GC anywhere in the repo; participants leak rows if the sidecar dies mid-call (auto-leave happens only on socket `close`, `ws.ts:347-366`). No `schedule:run` recipe, no retention guidance. |
 | **Rate limiting** | No `throttle:` middleware on the token-minting route — an authenticated user can hammer `POST /vidcall-token` and burn HMAC work / fill the signal log via joins. |
 | **Horizon/Octane considerations** | One bullet about Octane reloads. Nothing about: supervising the sidecar under Forge (`daemons`), systemd/supervisor units (Django's guide has one!), Octane worker-safe HTTP client usage, or Horizon job examples. |
@@ -308,13 +308,13 @@ first-class Reverb feature.
   ordering/idempotency/glare" (`schema.json` description; `transport.ts:1-12`).
 - ⚠️ Message size: Pusher-protocol messages cap around 10 KB; SDP offers fit,
   but bursts need the existing chunker/coalescer
-  (`@vidcall/transport` helpers — chunker, reorder, heartbeat, ICE coalescer,
+  (`@mbsks/transport` helpers — chunker, reorder, heartbeat, ICE coalescer,
   root `README.md:98`; `backend-postgres` demonstrates chunked frames against a
   7000-byte cap in `PostgresBackend.ts:29-33,147-159`).
 - ⚠️ Client-event rate limits (whisper-style sends) must be validated against
   ICE trickle bursts; Reverb self-host limits are configurable, cloud Pusher
   less so.
-- ❌ **No durable signal log / replay.** `@vidcall/server` persists envelopes
+- ❌ **No durable signal log / replay.** `@mbsks/server` persists envelopes
   (`putSignal`/`listSignals(since)`) so late/cold clients can catch up;
   Reverb is fire-and-forget. The mesh engine tolerates lossy transports by
   design (`OrderedMessageBuffer`, perfect-negotiation renegotiation), and the
@@ -513,7 +513,7 @@ pg/mysql suites env-gated like `VIDCALL_TEST_POSTGRES_URL` in
 | 4 | **`vidcall/laravel` package**: provider, facade, config, migrations (extracted GC columns), `vidcall:install` + `vidcall:room:gc` + scheduler | **M/L** | Migration sketch §4; schema parity sources `stores/PostgresStore.ts`, `stores/MysqlStore.ts`; GC rationale §1.4 |
 | 5 | **L0 conformance suite for PHP reading canonical fixtures** | **S** (inside #2) | `protocol/fixtures/README.md` naming rules; mirror `packages/kotlin/.../EnvelopeSerializationTest.kt`; fixture-sync script for composer logistics |
 | 6 | **`backend-reverb` transport adapter** (Pusher-protocol over laravel-echo/pusher-js) passing the shared adapter suite + race test | **L** | Implement `SignalingTransport` per `packages/core/src/transport.ts:29-44`; validate via `packages/transport/src/shared-tests.ts`; reuse chunker/coalescer patterns from `packages/backend-postgres/src/PostgresBackend.ts`; root `README.md` backend table gains a 7th entry |
-| 7 | **Optional event emission from `@vidcall/server`** (webhook POST or Redis pub/sub on join/leave/close/delete) → drives Laravel queued listeners without polling | **M** | Hook points already exist where handlers mutate state (`http.ts` joinHandler/leaveHandler/closeRoomHandler); `Services` is the natural place for an `onEvent` callback (`services.ts:50-60`) |
+| 7 | **Optional event emission from `@mbsks/server`** (webhook POST or Redis pub/sub on join/leave/close/delete) → drives Laravel queued listeners without polling | **M** | Hook points already exist where handlers mutate state (`http.ts` joinHandler/leaveHandler/closeRoomHandler); `Services` is the natural place for an `onEvent` callback (`services.ts:50-60`) |
 | 8 | **Sidecar ops polish**: opt-in CORS, `/healthz`, docker-compose example (laravel + sidecar + postgres), Redis-backed `Relay` implementation behind the existing interface | **S + M** | `http.ts:436-441` (`createNodeServer` headers), `services.ts:39-48` (`Relay` seam), `ws.ts:58-98` (`RoomHub` to wrap); removes the sticky-session caveat in `LARAVEL.md:126-127` |
 
 Items 1–3 are the adoption floor: without the relay fix, the bridge topology

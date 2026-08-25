@@ -1,8 +1,8 @@
-# @vidcall/backend-sqlite
+# @mbsks/backend-sqlite
 
 Signaling adapter for **SQLite/libSQL** — one of the six interchangeable
 backends for the vidcall engine. See
-[`@vidcall/transport`](../transport/README.md) for the contract every adapter
+[`@mbsks/transport`](../transport/README.md) for the contract every adapter
 implements and the shared test suite each one must pass.
 
 ## The short version
@@ -14,7 +14,7 @@ exactly that: no server, no accounts, just `Room` + `SqliteBackend`.
 
 Multi-device calls would need Turso sync, which is eventually consistent
 (seconds-level) — **not** suitable for an SDP offer/answer handshake. Use one
-of the other five backends, or `@vidcall/server`, when participants are on
+of the other five backends, or `@mbsks/server`, when participants are on
 different devices.
 
 ## How it works
@@ -33,7 +33,7 @@ different devices.
 ## Install
 
 ```sh
-npm i @vidcall/backend-sqlite           # once published
+npm i @mbsks/backend-sqlite           # once published
 # today (workspace): npm i file:../vidcall/packages/backend-sqlite
 ```
 
@@ -41,8 +41,8 @@ npm i @vidcall/backend-sqlite           # once published
 
 ```ts
 import { createClient } from '@libsql/client';
-import { SqliteBackend } from '@vidcall/backend-sqlite';
-import { Room } from '@vidcall/core';
+import { SqliteBackend } from '@mbsks/backend-sqlite';
+import { Room } from '@mbsks/core';
 
 const backend = new SqliteBackend({
   client: createClient({ url: 'file:local.db' }), // durable log
@@ -90,5 +90,5 @@ peer up over the BroadcastChannel.
 cd packages/backend-sqlite && npm run test   # adapter unit tests
 ```
 
-The shared adapter suite (`@vidcall/transport/shared-tests`) also runs in CI
+The shared adapter suite (`@mbsks/transport/shared-tests`) also runs in CI
 for this backend.

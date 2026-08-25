@@ -1,5 +1,5 @@
 /**
- * @vidcall/server — service wiring.
+ * @mbsks/server — service wiring.
  *
  * `Services` bundles everything the HTTP + WS hosting layers need:
  * the `Store`, an optional `RecordingStorage`, and an optional `Relay`
@@ -7,7 +7,7 @@
  * hosting layer decides which pieces to attach.
  */
 
-import type { Envelope } from '@vidcall/protocol';
+import type { Envelope } from '@mbsks/protocol';
 import type { RecordingStorage } from './recording.ts';
 import type { Store } from './store.ts';
 

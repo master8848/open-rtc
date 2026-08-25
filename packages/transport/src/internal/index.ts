@@ -1,6 +1,6 @@
 /**
  * Internal helpers used by backend adapters.
- * Subpath export: @vidcall/transport/internal
+ * Subpath export: @mbsks/transport/internal
  */
 export * from './chunker.js';
 export * from './reorder.js';

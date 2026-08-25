@@ -19,11 +19,11 @@
  * Ordering: per-document commit order is sequential per writer; cross-writer
  * interleaving needs the seq reorder buffer (`seq-required`).
  */
-import type { Envelope, PresenceState } from '@vidcall/protocol';
+import type { Envelope, PresenceState } from '@mbsks/protocol';
 import { ID, Query, type Client, type Models, type RealtimeResponseEvent } from 'appwrite';
 import type { Databases } from 'appwrite';
 import type { Realtime, RealtimeSubscription } from 'appwrite';
-import { BaseSignalingTransport, type BaseOptions, type ParticipantInfo, type ParticipantPresence } from '@vidcall/transport';
+import { BaseSignalingTransport, type BaseOptions, type ParticipantInfo, type ParticipantPresence } from '@mbsks/transport';
 
 /** Free-tier realtime message cap (Pro: 3 MB) — chunking kicks in above this. */
 export const APPWRITE_MAX_PAYLOAD = 256 * 1024;

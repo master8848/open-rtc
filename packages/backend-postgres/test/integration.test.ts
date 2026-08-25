@@ -13,8 +13,8 @@
 import { describe, it } from 'vitest';
 import pg from 'pg';
 import { PostgresBackend } from '../src/PostgresBackend.js';
-import { runAdapterTestSuite, type AdapterHarness } from '@vidcall/transport/shared-tests';
-import type { SignalingTransport } from '@vidcall/transport';
+import { runAdapterTestSuite, type AdapterHarness } from '@mbsks/transport/shared-tests';
+import type { SignalingTransport } from '@mbsks/transport';
 
 const url = process.env.VIDCALL_TEST_POSTGRES_URL;
 const enabled = Boolean(url);

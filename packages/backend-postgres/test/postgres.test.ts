@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { createEnvelope } from '@vidcall/protocol';
+import { createEnvelope } from '@mbsks/protocol';
 import { PostgresBackend, channelName, presenceChannelName } from '../src/PostgresBackend.js';
-import { runAdapterTestSuite, type AdapterHarness } from '@vidcall/transport/shared-tests';
-import type { SignalingTransport } from '@vidcall/transport';
+import { runAdapterTestSuite, type AdapterHarness } from '@mbsks/transport/shared-tests';
+import type { SignalingTransport } from '@mbsks/transport';
 import { FakePgBus, FakePgClient } from './fakes.js';
 
 // one fake "Postgres server" per test file

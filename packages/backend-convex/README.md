@@ -1,4 +1,4 @@
-# @vidcall/backend-convex
+# @mbsks/backend-convex
 
 Convex signaling adapter: rooms are **Convex tables**, writes are
 **mutations** (serialized, transactional, strongly ordered), reads are
@@ -8,7 +8,7 @@ deployment IS the signaling bus.
 ## Usage
 
 ```ts
-import { ConvexBackend } from '@vidcall/backend-convex';
+import { ConvexBackend } from '@mbsks/backend-convex';
 import { ConvexClient } from 'convex/browser';
 
 const backend = new ConvexBackend({

@@ -125,7 +125,7 @@ function makeControlsRoom(
     transport,
     peerFactory: factory,
   });
-  // `room.controls` is wired by @vidcall/core's index; the constructor takes
+  // `room.controls` is wired by @mbsks/core's index; the constructor takes
   // the Room as a structurally-compatible ControlsHost.
   const controls = new ControlsManager(room, { mediaProvider: media });
   return { room, controls, media, transport };

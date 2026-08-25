@@ -1,5 +1,5 @@
 {
-  "name": "@vidcall/backend-sqlite",
+  "name": "@mbsks/backend-sqlite",
   "version": "0.1.0",
   "description": "vidcall signaling backend adapter for SQLite/libSQL — same-device BroadcastChannel mode (dev/test) with a local-first durable signal log.",
   "author": "Saurav Sanjel <jobarsanjel2@gmail.com>",
@@ -28,8 +28,8 @@
   },
   "dependencies": {
     "@libsql/client": "0.17.4",
-    "@vidcall/protocol": "0.1.0",
-    "@vidcall/transport": "0.1.0"
+    "@mbsks/protocol": "0.1.0",
+    "@mbsks/transport": "0.1.0"
   },
   "devDependencies": {
     "@types/node": "22.20.1",

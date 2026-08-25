@@ -1,5 +1,5 @@
 /**
- * @vidcall/sfu-gateway — SfuGateway contract.
+ * @mbsks/sfu-gateway — SfuGateway contract.
  *
  * The engine stays mesh-first (docs/architecture.md D2); this interface is
  * the optional path to a selective-forwarding unit (SFU) at scale. It is
@@ -21,7 +21,7 @@
  * // sfu envelope {action:'leave'}                   -> session.leave()
  * ```
  */
-import type { IcePayload, OfferPayload, SfuKind } from '@vidcall/protocol';
+import type { IcePayload, OfferPayload, SfuKind } from '@mbsks/protocol';
 
 /**
  * Transport parameters handed to the gateway at `join`. Adapters map these

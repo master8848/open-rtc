@@ -1,4 +1,4 @@
-# @vidcall/server
+# @mbsks/server
 
 The **backend component** for [vidcall](https://github.com/vidcall): ROOM/SESSION
 state, a signaling relay, and recording storage that _any_ app backend can host.
@@ -6,53 +6,53 @@ It attaches to other backends — **Express / Fastify natively**, **Django /
 Laravel / Rails** via a language-agnostic REST + WebSocket contract — and works
 with **any database** through a function-based `Store` interface.
 
-The client side (`@vidcall/core` + pluggable signaling adapters) is the media
+The client side (`@mbsks/core` + pluggable signaling adapters) is the media
 plane; this package is its signaling/state plane: rooms, participant rosters,
 the per-room signal log, envelope relay, and recording session storage.
 
 ```
 App (vibe coder)
-   │  @vidcall/core (client engine: RTCPeerConnection mesh, adapters)
+   │  @mbsks/core (client engine: RTCPeerConnection mesh, adapters)
    ▼
-@vidcall/server  ── rooms · roster · signal log · relay · recordings
+@mbsks/server  ── rooms · roster · signal log · relay · recordings
    │  Store (function-based, ~10 methods)          RecordingStorage (bytes)
    ├── InMemoryStore (default entry)               ├── DiskRecordingStorage
-   ├── SqliteStore   (@vidcall/server/stores/sqlite)   └── S3RecordingStorage
-   ├── PostgresStore (@vidcall/server/stores/postgres)   (fetch + SigV4, no AWS SDK)
-   └── MysqlStore    (@vidcall/server/stores/mysql)
+   ├── SqliteStore   (@mbsks/server/stores/sqlite)   └── S3RecordingStorage
+   ├── PostgresStore (@mbsks/server/stores/postgres)   (fetch + SigV4, no AWS SDK)
+   └── MysqlStore    (@mbsks/server/stores/mysql)
    │  Hosting
    ├── node:http standalone  (createNodeServer)
-   ├── Express router        (@vidcall/server/express)
-   ├── Fastify plugin        (@vidcall/server/fastify)
+   ├── Express router        (@mbsks/server/express)
+   ├── Fastify plugin        (@mbsks/server/fastify)
    └── sidecar proxy         (Django / Laravel / Rails — see integrations/)
 ```
 
 ## Install & dependencies
 
 ```sh
-npm install @vidcall/server
+npm install @mbsks/server
 ```
 
 The default entry is **driver-free**: it ships the core room/session logic,
 auth, REST dispatch, the WS relay, recording storage, and `InMemoryStore`,
-and its only runtime dependencies are `@vidcall/protocol` and the pure-JS
+and its only runtime dependencies are `@mbsks/protocol` and the pure-JS
 `ws` package — no native addons, no database drivers. Everything heavy lives
 behind a **subpath export** with its driver as an _optional peer dependency_
-(same `types` / `development` / `default` convention as `@vidcall/transport`):
+(same `types` / `development` / `default` convention as `@mbsks/transport`):
 
 | Subpath                           | Exports                | Also install           |
 | --------------------------------- | ---------------------- | ---------------------- |
-| `@vidcall/server`                 | everything below plus… | —                      |
-| `@vidcall/server/stores/sqlite`   | `SqliteStore`          | `npm i better-sqlite3` |
-| `@vidcall/server/stores/postgres` | `PostgresStore`        | `npm i pg`             |
-| `@vidcall/server/stores/mysql`    | `MysqlStore`           | `npm i mysql2`         |
-| `@vidcall/server/express`         | `createExpressRouter`  | `npm i express`        |
-| `@vidcall/server/fastify`         | `createFastifyPlugin`  | `npm i fastify`        |
+| `@mbsks/server`                 | everything below plus… | —                      |
+| `@mbsks/server/stores/sqlite`   | `SqliteStore`          | `npm i better-sqlite3` |
+| `@mbsks/server/stores/postgres` | `PostgresStore`        | `npm i pg`             |
+| `@mbsks/server/stores/mysql`    | `MysqlStore`           | `npm i mysql2`         |
+| `@mbsks/server/express`         | `createExpressRouter`  | `npm i express`        |
+| `@mbsks/server/fastify`         | `createFastifyPlugin`  | `npm i fastify`        |
 
 Notes:
 
 - SQL stores load their driver lazily and only inside the store module:
-  importing `@vidcall/server` never resolves `pg` / `mysql2` /
+  importing `@mbsks/server` never resolves `pg` / `mysql2` /
   `better-sqlite3`, and a missing driver fails with an actionable error
   naming the install command. (`SqliteStore` goes further: the native addon
   is injected via its constructor, never imported at all.)
@@ -68,8 +68,8 @@ Notes:
 
 ```ts
 import express from 'express';
-import { createServices, InMemoryStore, attachWebSocketRelay } from '@vidcall/server';
-import { createExpressRouter } from '@vidcall/server/express';
+import { createServices, InMemoryStore, attachWebSocketRelay } from '@mbsks/server';
+import { createExpressRouter } from '@mbsks/server/express';
 
 const store = new InMemoryStore(); // or SqliteStore / PostgresStore / MysqlStore
 const services = createServices({ store }); // add recordingStorage for recordings
@@ -166,10 +166,10 @@ curl -X POST http://localhost:3000/vidcall/auth/token \
 - `exp` is optional (epoch seconds; defaults to `defaultTokenTtlMs` / 1 hour).
 
 Or mint tokens in your own code with `issueToken` (exported from
-`@vidcall/server`):
+`@mbsks/server`):
 
 ```ts
-import { issueToken } from '@vidcall/server';
+import { issueToken } from '@mbsks/server';
 const token = issueToken(secret, {
   roomId: 'standup',
   participantId: 'alice',
@@ -255,7 +255,7 @@ JSON documents round-trip verbatim; the Store assigns the per-room monotonic
 `seq` atomically. Implementations: `InMemoryStore` (from the default entry),
 `SqliteStore`, `PostgresStore`, `MysqlStore` (from the store subpaths above —
 each driver is an optional peer, so pick and install only the one you use).
-All four pass the **shared store test suite** (`@vidcall/server/shared-tests`,
+All four pass the **shared store test suite** (`@mbsks/server/shared-tests`,
 run per store in `test/*Store.test.ts`). Implement one for any other database
 in ~100 lines — see `integrations/DATABASES.md`.
 
@@ -279,7 +279,7 @@ committed at the repo root.
 
 | Package                            | Pin      | Published    | Age    | Why                                          |
 | ---------------------------------- | -------- | ------------ | ------ | -------------------------------------------- |
-| `@vidcall/protocol`                | `0.1.0`  | in-workspace | —      | wire envelope types (single source of truth) |
+| `@mbsks/protocol`                | `0.1.0`  | in-workspace | —      | wire envelope types (single source of truth) |
 | `ws`                               | `8.9.0`  | 2022-09-22   | 1419 d | WebSocket relay (`/ws?roomId=`)              |
 | `better-sqlite3` (opt. peer + dev) | `13.0.1` | 2026-07-21   | 21 d   | SQLite store driver (synchronous, prebuilt)  |
 | `pg` (opt. peer + dev)             | `8.22.0` | 2026-06-19   | 54 d   | PostgreSQL store driver                      |

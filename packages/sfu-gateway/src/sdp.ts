@@ -12,7 +12,7 @@
  * fields the reference adapter uses, and documents what it does not parse
  * (bundled m-lines, rtcp-fb, extmap, fmtp, ...).
  */
-import type { SfuKind } from '@vidcall/protocol';
+import type { SfuKind } from '@mbsks/protocol';
 
 /** RFC 4572 hash algorithms mediasoup accepts (its `FingerprintAlgorithm`). */
 export const SDP_FINGERPRINT_ALGORITHMS = [

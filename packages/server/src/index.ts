@@ -1,5 +1,5 @@
 /**
- * @vidcall/server — public API (zero-database core).
+ * @mbsks/server — public API (zero-database core).
  *
  * A backend component for vidcall that attaches to OTHER backends:
  *  - core room/session/recording logic (pure functions over a `Store`);
@@ -10,14 +10,14 @@
  *  - recording byte storage (Disk + S3 via minimal SigV4 fetch client).
  *
  * Everything with a heavy/native dependency lives behind a subpath export,
- * so installing `@vidcall/server` alone pulls in only `@vidcall/protocol`
+ * so installing `@mbsks/server` alone pulls in only `@mbsks/protocol`
  * and the pure-JS `ws` package (see "Dependencies" in README.md):
  *
- *  - `@vidcall/server/express`         → createExpressRouter (needs express)
- *  - `@vidcall/server/fastify`         → createFastifyPlugin (types only)
- *  - `@vidcall/server/stores/sqlite`   → SqliteStore   (+ better-sqlite3)
- *  - `@vidcall/server/stores/postgres` → PostgresStore (+ pg)
- *  - `@vidcall/server/stores/mysql`    → MysqlStore    (+ mysql2)
+ *  - `@mbsks/server/express`         → createExpressRouter (needs express)
+ *  - `@mbsks/server/fastify`         → createFastifyPlugin (types only)
+ *  - `@mbsks/server/stores/sqlite`   → SqliteStore   (+ better-sqlite3)
+ *  - `@mbsks/server/stores/postgres` → PostgresStore (+ pg)
+ *  - `@mbsks/server/stores/mysql`    → MysqlStore    (+ mysql2)
  */
 
 // Core domain
@@ -41,5 +41,5 @@ export * from './recording.ts';
 // subpath exports so no database driver is loaded from this entry.
 export { InMemoryStore } from './stores/InMemoryStore.ts';
 
-// Shared test suite (also importable from '@vidcall/server/shared-tests')
+// Shared test suite (also importable from '@mbsks/server/shared-tests')
 export { runStoreTestSuite, type StoreHarness } from './shared-tests.ts';

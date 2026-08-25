@@ -1,7 +1,7 @@
 # Controls — mute, camera, screen share, reactions, devices
 
 > Status: implementation doc for `packages/core/src/controls/ControlsManager.ts`.
-> `room.controls` is wired by `@vidcall/core`'s index; the manager takes the
+> `room.controls` is wired by `@mbsks/core`'s index; the manager takes the
 > `Room` as a structurally-compatible `ControlsHost`.
 
 `ControlsManager` is the "Zoom-clone" control surface for the **local**
@@ -339,15 +339,15 @@ noise suppression, and auto-gain control:
 ## 8. Full lifecycle example
 
 ```ts
-import { Room } from '@vidcall/core';
-import { SupabaseBackend } from '@vidcall/backend-supabase';
+import { Room } from '@mbsks/core';
+import { SupabaseBackend } from '@mbsks/backend-supabase';
 
 const room = new Room({
   roomId: 'room-abc',
   selfId: 'user-42',
   transport: new SupabaseBackend({ url, anonKey }),
 });
-const controls = room.controls; // wired by @vidcall/core
+const controls = room.controls; // wired by @mbsks/core
 
 controls.on('mic-muted', (m) => micButton.update(m));
 controls.on('camera-published', (on) => camButton.update(on));

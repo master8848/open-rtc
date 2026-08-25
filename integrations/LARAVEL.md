@@ -1,6 +1,6 @@
-# Hosting @vidcall/server next to a Laravel app
+# Hosting @mbsks/server next to a Laravel app
 
-Laravel is PHP — @vidcall/server is a Node component that speaks plain
+Laravel is PHP — @mbsks/server is a Node component that speaks plain
 REST + WebSocket JSON. The recommended pattern is the **sidecar**: run the
 component as a tiny Node process and have Laravel proxy the `/vidcall/`
 prefix (or put it behind the same domain with nginx).
@@ -8,15 +8,15 @@ prefix (or put it behind the same domain with nginx).
 ## 1. Run the sidecar (Node)
 
 ```bash
-npm install @vidcall/server better-sqlite3
+npm install @mbsks/server better-sqlite3
 ```
 
 ```js
 // sidecar.mjs
 import http from 'node:http';
 import Database from 'better-sqlite3';
-import { attachWebSocketRelay, createNodeServer, createServices } from '@vidcall/server';
-import { SqliteStore } from '@vidcall/server/stores/sqlite';
+import { attachWebSocketRelay, createNodeServer, createServices } from '@mbsks/server';
+import { SqliteStore } from '@mbsks/server/stores/sqlite';
 
 const store = new SqliteStore(
   new Database(process.env.VIDCALL_DB_PATH ?? '/var/lib/vidcall/vidcall.db'),
@@ -121,7 +121,7 @@ are room-scoped and identity-bound on top of them.
 - The sidecar is stateless on the DB side (SQLite file or Postgres), so it
   survives `php artisan octane:reload` without dropping rooms.
 - For horizontal scale, point the sidecar at Postgres (`PostgresStore` from
-  `@vidcall/server/stores/postgres` + `npm i pg`) and
+  `@mbsks/server/stores/postgres` + `npm i pg`) and
   run one sidecar per instance behind a load balancer; the WS hub is
   per-process, so pin a client's `/ws` connection to one instance (sticky
   sessions) or move to a shared pub/sub relay later.

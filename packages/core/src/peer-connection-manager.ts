@@ -19,7 +19,7 @@
  * (e.g. `Room`) forwards over a `SignalingTransport`, and consumes
  * `PeerSignal`s coming from the wire via `handleSignal`.
  */
-import type { IcePayload, OfferPayload } from '@vidcall/protocol';
+import type { IcePayload, OfferPayload } from '@mbsks/protocol';
 import { SdpIdempotencyGuard } from './sdp.ts';
 
 export type PeerSignal =

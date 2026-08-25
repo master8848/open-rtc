@@ -6,7 +6,7 @@
  * Not for multi-process production use: state lives in one Node process.
  */
 
-import type { Envelope } from '@vidcall/protocol';
+import type { Envelope } from '@mbsks/protocol';
 import type { Store } from '../store.ts';
 import type { Participant, RecordingSession, Room, StoredSignal } from '../types.ts';
 

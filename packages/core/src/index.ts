@@ -1,5 +1,5 @@
 /**
- * @vidcall/core — vidcall mesh engine.
+ * @mbsks/core — vidcall mesh engine.
  *
  * Zero runtime dependencies: builds on the platform `RTCPeerConnection`
  * (browser WebRTC, werift/wrtc in Node, or injected fakes in tests).
@@ -19,8 +19,8 @@ export * from './room-quality.ts';
 export * from './recording/index.ts';
 export * from './e2ee.ts';
 
-export type { Envelope } from '@vidcall/protocol';
-export { PROTOCOL_VERSION, MESSAGE_TYPES, createEnvelope, isEnvelope } from '@vidcall/protocol';
+export type { Envelope } from '@mbsks/protocol';
+export { PROTOCOL_VERSION, MESSAGE_TYPES, createEnvelope, isEnvelope } from '@mbsks/protocol';
 export type {
   MessageType,
   DeviceProfile,
@@ -39,4 +39,4 @@ export type {
   SfuPayload,
   ErrorPayload,
   JoinCapabilities,
-} from '@vidcall/protocol';
+} from '@mbsks/protocol';

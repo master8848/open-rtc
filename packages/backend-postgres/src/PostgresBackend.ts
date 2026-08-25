@@ -17,11 +17,11 @@
  * Browser caveat: `pg` is Node-only. Browser clients need a ws-bridge (a
  * Node server mapping rooms -> channels, e.g. `ws` + `pg`). See README.md.
  */
-import type { Envelope, PresenceState } from '@vidcall/protocol';
+import type { Envelope, PresenceState } from '@mbsks/protocol';
 import { createHash } from 'node:crypto';
 import pg from 'pg';
-import { BaseSignalingTransport, type BaseOptions, type ParticipantInfo, type ParticipantPresence } from '@vidcall/transport';
-import { encodeChunks, isChunkFrame } from '@vidcall/transport/internal';
+import { BaseSignalingTransport, type BaseOptions, type ParticipantInfo, type ParticipantPresence } from '@mbsks/transport';
+import { encodeChunks, isChunkFrame } from '@mbsks/transport/internal';
 
 const { Client } = pg;
 

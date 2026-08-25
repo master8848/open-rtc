@@ -1,5 +1,5 @@
 /**
- * @vidcall/server — WebSocket signaling relay.
+ * @mbsks/server — WebSocket signaling relay.
  *
  * `attachWebSocketRelay(server, services)` upgrades `GET /ws?roomId=...`
  * connections on any `node:http` server (standalone, or the one Express /
@@ -28,7 +28,7 @@
 
 import http from 'node:http';
 import { WebSocket, WebSocketServer } from 'ws';
-import { createEnvelope, isEnvelope, type Envelope } from '@vidcall/protocol';
+import { createEnvelope, isEnvelope, type Envelope } from '@mbsks/protocol';
 import { AuthError, verifyToken, verifyTokenWithRotation } from './auth.ts';
 import {
   buildLeaveEnvelope,

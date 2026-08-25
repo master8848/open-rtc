@@ -11,11 +11,11 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "2.110.9",
-    "@vidcall/backend-supabase": "file:../../packages/backend-supabase",
-    "@vidcall/core": "file:../../packages/core",
-    "@vidcall/protocol": "file:../../protocol",
-    "@vidcall/react": "file:../../packages/react",
-    "@vidcall/transport": "file:../../packages/transport",
+    "@mbsks/backend-supabase": "file:../../packages/backend-supabase",
+    "@mbsks/core": "file:../../packages/core",
+    "@mbsks/protocol": "file:../../protocol",
+    "@mbsks/react": "file:../../packages/react",
+    "@mbsks/transport": "file:../../packages/transport",
     "react": "19.2.8",
     "react-dom": "19.2.8"
   },

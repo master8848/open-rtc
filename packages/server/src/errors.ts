@@ -1,5 +1,5 @@
 /**
- * @vidcall/server — typed error model.
+ * @mbsks/server — typed error model.
  *
  * Every failure surfaced by the core functions and HTTP/WS layer is a
  * `VidcallError` with a stable machine-readable `code`, a human message,

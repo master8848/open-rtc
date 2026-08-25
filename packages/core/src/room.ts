@@ -27,7 +27,7 @@ import type {
   QualityWarningPayload,
   ReactionPayload,
   ScreenSharePayload,
-} from '@vidcall/protocol';
+} from '@mbsks/protocol';
 import { DataChannelBus } from './data-channel-bus.ts';
 import { TypedEmitter } from './events.ts';
 import { OrderedMessageBuffer } from './ordering.ts';

@@ -15,7 +15,7 @@ The feature wave of 2026-08-25, pending its first versioned release.
   `room.getSnapshot()` expose an immutable room snapshot for
   `useSyncExternalStore`-style consumers; `join()` is now abortable and
   serialized so concurrent joins can't interleave negotiation steps.
-- **@vidcall/react (new package).** `useRoomState`, `useParticipants`,
+- **@mbsks/react (new package).** `useRoomState`, `useParticipants`,
   `useParticipant`, and `useJoin` hooks over the core snapshot store,
   StrictMode-safe.
 - **server: zero-driver default install.** SQL stores and framework adapters
@@ -45,7 +45,7 @@ The feature wave of 2026-08-25, pending its first versioned release.
 - transport: reorder-buffer test envelopes carried payloads that no protocol
   type defines.
 - examples/react: stable `selfId` fixes a StrictMode ghost roster entry; the
-  example now consumes the `@vidcall/react` hooks.
+  example now consumes the `@mbsks/react` hooks.
 
 ## History
 
@@ -77,7 +77,7 @@ wave above.
 
 ### Client transports & signaling backends
 
-- `@vidcall/transport`: transport twin + helpers (chunker, reorder buffer,
+- `@mbsks/transport`: transport twin + helpers (chunker, reorder buffer,
   heartbeat, ICE coalescer), `InMemoryBackend`, and the shared adapter test
   suite all client backends run against.
 - Six backend adapters, each green on the shared suite: Supabase Realtime,
@@ -113,7 +113,7 @@ wave above.
   bindings/sfu-gateway; architecture, features, testing-matrix, and
   integration guides; competitive research and internal review docs.
 - Examples: vanilla two-tab BroadcastChannel call, React + Supabase room,
-  Express + `@vidcall/server` host.
+  Express + `@mbsks/server` host.
 - Repo scaffolding, MIT license, CONTRIBUTING.md codifying
   dependency-age/exact-pin/adapter policies, and workspace wiring for each new
   package.

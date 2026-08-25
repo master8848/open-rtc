@@ -1,5 +1,5 @@
 import { afterAll, describe, it, expect } from 'vitest';
-import { createEnvelope } from '@vidcall/protocol';
+import { createEnvelope } from '@mbsks/protocol';
 import { InMemoryBackend } from '../src/InMemoryBackend.js';
 import { runAdapterTestSuite, type AdapterHarness } from '../src/shared-tests.js';
 import type { SignalingTransport } from '../src/types.js';

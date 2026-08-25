@@ -1,6 +1,6 @@
 /**
  * Packaging guard: ESM resolve hook that makes every optional peer of
- * `@vidcall/server` (the SQL drivers + the framework adapters' packages)
+ * `@mbsks/server` (the SQL drivers + the framework adapters' packages)
  * unresolvable. Used by `../packaging.test.ts` to prove that importing the
  * default entry never loads a database driver, and that store subpaths
  * fail with the actionable install error instead.

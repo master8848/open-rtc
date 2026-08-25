@@ -1,6 +1,6 @@
 # Implementing a Store for any database
 
-@vidcall/server's core is a set of **pure functions** that take a `Store` as
+@mbsks/server's core is a set of **pure functions** that take a `Store` as
 their first argument (`createRoom(store, ...)`, `joinRoom(store, ...)`,
 `handleSignal(store, envelope)`, ...). A `Store` is a minimal async KV +
 query surface — about ten methods — so _any_ database can host the component:
@@ -61,8 +61,8 @@ interface Store {
 
 ```ts
 import { MongoClient } from 'mongodb';
-import type { Store, SignalInput } from '@vidcall/server';
-import type { Envelope } from '@vidcall/protocol';
+import type { Store, SignalInput } from '@mbsks/server';
+import type { Envelope } from '@mbsks/protocol';
 
 export class MongoStore implements Store {
   constructor(private db: MongoClient['db']) {}
@@ -145,7 +145,7 @@ Then prove it against the **shared test suite**:
 
 ```ts
 // test/MongoStore.test.ts
-import { runStoreTestSuite } from '@vidcall/server/shared-tests';
+import { runStoreTestSuite } from '@mbsks/server/shared-tests';
 runStoreTestSuite({
   name: 'mongodb',
   createStore: async () =>
@@ -159,31 +159,31 @@ runStoreTestSuite({
 ## Databases shipped
 
 Each SQL-backed store is a **subpath export** whose driver is an optional
-peer dependency — installing `@vidcall/server` alone pulls in no database
+peer dependency — installing `@mbsks/server` alone pulls in no database
 driver at all. Import the store you use and install only its driver:
 
 ```sh
-npm install @vidcall/server            # core + InMemoryStore, zero drivers
-npm install @vidcall/server better-sqlite3   # + SQLite (native addon)
-npm install @vidcall/server pg               # + PostgreSQL
-npm install @vidcall/server mysql2           # + MySQL
+npm install @mbsks/server            # core + InMemoryStore, zero drivers
+npm install @mbsks/server better-sqlite3   # + SQLite (native addon)
+npm install @mbsks/server pg               # + PostgreSQL
+npm install @mbsks/server mysql2           # + MySQL
 ```
 
 | Store           | Import from                       | Driver         | Install                | Tables / notes                                                     |
 | --------------- | --------------------------------- | -------------- | ---------------------- | ------------------------------------------------------------------ |
-| `InMemoryStore` | `@vidcall/server`                 | —              | —                      | reference impl, dev/tests, single-process                          |
-| `SqliteStore`   | `@vidcall/server/stores/sqlite`   | better-sqlite3 | `npm i better-sqlite3` | 4 tables, JSON docs; bootstrap() idempotent; WAL for multi-process |
-| `PostgresStore` | `@vidcall/server/stores/postgres` | pg             | `npm i pg`             | 4 tables, JSONB; identity seq for signals                          |
-| `MysqlStore`    | `@vidcall/server/stores/mysql`    | mysql2         | `npm i mysql2`         | 4 tables, JSON; auto-increment seq                                 |
+| `InMemoryStore` | `@mbsks/server`                 | —              | —                      | reference impl, dev/tests, single-process                          |
+| `SqliteStore`   | `@mbsks/server/stores/sqlite`   | better-sqlite3 | `npm i better-sqlite3` | 4 tables, JSON docs; bootstrap() idempotent; WAL for multi-process |
+| `PostgresStore` | `@mbsks/server/stores/postgres` | pg             | `npm i pg`             | 4 tables, JSONB; identity seq for signals                          |
+| `MysqlStore`    | `@mbsks/server/stores/mysql`    | mysql2         | `npm i mysql2`         | 4 tables, JSON; auto-increment seq                                 |
 
 ```ts
 // SQLite: the driver handle is injected (never imported by this package)
 import Database from 'better-sqlite3';
-import { SqliteStore } from '@vidcall/server/stores/sqlite';
+import { SqliteStore } from '@mbsks/server/stores/sqlite';
 const store = new SqliteStore(new Database('vidcall.db'));
 
 // Postgres/MySQL: pass a connection string or pool; the driver loads lazily
-import { PostgresStore } from '@vidcall/server/stores/postgres';
+import { PostgresStore } from '@mbsks/server/stores/postgres';
 const store = new PostgresStore(process.env.DATABASE_URL);
 
 await store.bootstrap();

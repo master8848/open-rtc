@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { createEnvelope } from '@vidcall/protocol';
+import { createEnvelope } from '@mbsks/protocol';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { SupabaseBackend } from '../src/SupabaseBackend.js';
-import { runAdapterTestSuite, waitFor, type AdapterHarness } from '@vidcall/transport/shared-tests';
-import type { SignalingTransport } from '@vidcall/transport';
+import { runAdapterTestSuite, waitFor, type AdapterHarness } from '@mbsks/transport/shared-tests';
+import type { SignalingTransport } from '@mbsks/transport';
 import { FakeRealtimeBus, FakeSupabaseClient, makeEnv } from './fakes.js';
 
 // One shared bus per test file: every peer's channel lives in the same

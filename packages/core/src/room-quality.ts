@@ -2,7 +2,7 @@
  * RoomQualityController — the adaptive-quality runtime for a vidcall Room
  * (docs/architecture.md D5, docs/research/webrtc-js.md §5).
  *
- * Wires the pure `@vidcall/quality` policy engine to live WebRTC senders:
+ * Wires the pure `@mbsks/quality` policy engine to live WebRTC senders:
  *
  *  - **Sampling**: polls `RTCPeerConnection.getStats()` on every peer every
  *    `intervalMs` (default 2s) while running **and** at least one local video
@@ -34,7 +34,7 @@
  *    `device-capped`, `recovered`, `manual`, `monitor-error`) are emitted on
  *    the controller; the Room re-emits them as room events.
  *
- * Zero runtime dependencies: platform WebRTC APIs + `@vidcall/quality` (an
+ * Zero runtime dependencies: platform WebRTC APIs + `@mbsks/quality` (an
  * in-workspace pure policy package, no WebRTC imports).
  */
 import {
@@ -43,7 +43,7 @@ import {
   DEFAULT_QUALITY_TIERS,
   DeviceCapability,
   tierIndex,
-} from '@vidcall/quality';
+} from '@mbsks/quality';
 import type {
   QualityChangeEvent,
   QualityLimitationReason,
@@ -52,8 +52,8 @@ import type {
   QualityWarningEvent,
   QualityWarningReason,
   RTCStatsSnapshot,
-} from '@vidcall/quality';
-import type { DeviceProfile } from '@vidcall/protocol';
+} from '@mbsks/quality';
+import type { DeviceProfile } from '@mbsks/protocol';
 import { TypedEmitter } from './events.ts';
 
 // ------------------------------------------------------------------ events

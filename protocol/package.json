@@ -1,5 +1,5 @@
 {
-  "name": "@vidcall/protocol",
+  "name": "@mbsks/protocol",
   "version": "0.1.0",
   "description": "vidcall wire protocol types (TS mirror of protocol/schema.json \u2014 the single source of truth).",
   "license": "MIT",

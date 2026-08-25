@@ -1,6 +1,6 @@
 // Commit-message functions for @changesets/cli v3 (`commit: ["./commits.mjs", null]`).
 // Keeps generated release commits in the repo's lowercase conventional style
-// (see CONTRIBUTING.md → Commit style): `chore: release @vidcall/core@0.2.0, ...`
+// (see CONTRIBUTING.md → Commit style): `chore: release @mbsks/core@0.2.0, ...`
 export async function getAddMessage() {
   return "chore: add changeset";
 }

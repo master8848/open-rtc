@@ -6,7 +6,7 @@
 vidcall is **mesh-first**: the shipped core connects every participant to every
 other participant with a direct `RTCPeerConnection`, over any dumb pub/sub
 signaling backend. An optional `SfuGateway` interface (plus a reference
-mediasoup adapter in `@vidcall/sfu-gateway`) is the migration path when a call
+mediasoup adapter in `@mbsks/sfu-gateway`) is the migration path when a call
 outgrows a mesh. This document explains the three call models, the bandwidth
 math that decides between them, and how vidcall's signaling + wire protocol
 support each one.
@@ -19,7 +19,7 @@ support each one.
 | ----------------------------------- | ---------------------------------------------------------------- | ---------------------------------------------------- | ---------------------------------------------------------------------------- |
 | **1:1 (duo)**                       | One `RTCPeerConnection` per peer                                 | `Room` (mesh engine, two participants)               | Sales/support calls, tutoring, interviews, any two-person conversation       |
 | **N-way mesh**                      | `N−1` `RTCPeerConnection`s per peer (one per remote)             | `Room` (default, no extra infra)                     | 2–4 video participants, larger audio-only rooms, events over "dumb" backends |
-| **SFU (selective forwarding unit)** | One uplink to a media server; the server forwards to subscribers | `SfuGateway` + `SfuSession` (`@vidcall/sfu-gateway`) | 5+ video participants, webinars, large classes, recording/egress needs       |
+| **SFU (selective forwarding unit)** | One uplink to a media server; the server forwards to subscribers | `SfuGateway` + `SfuSession` (`@mbsks/sfu-gateway`) | 5+ video participants, webinars, large classes, recording/egress needs       |
 
 The wire protocol is identical in all three modes: the same JSON envelope
 (`protocol/schema.json`) carries `join`/`offer`/`answer`/`ice` for mesh, and

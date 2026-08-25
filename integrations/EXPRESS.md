@@ -1,20 +1,20 @@
-# Hosting @vidcall/server in an Express app
+# Hosting @mbsks/server in an Express app
 
 Mount the component's router directly inside your existing Express app — no
 separate process, no proxy. The WS relay upgrades the same HTTP server, so
 `/ws?roomId=...` and the REST API share one port.
 
 ```bash
-npm install @vidcall/server express better-sqlite3
+npm install @mbsks/server express better-sqlite3
 ```
 
 ```ts
 // server.ts
 import express from 'express';
 import http from 'node:http';
-import { attachWebSocketRelay, createServices, DiskRecordingStorage } from '@vidcall/server';
-import { createExpressRouter } from '@vidcall/server/express';
-import { SqliteStore } from '@vidcall/server/stores/sqlite';
+import { attachWebSocketRelay, createServices, DiskRecordingStorage } from '@mbsks/server';
+import { createExpressRouter } from '@mbsks/server/express';
+import { SqliteStore } from '@mbsks/server/stores/sqlite';
 import Database from 'better-sqlite3';
 
 const store = new SqliteStore(new Database('vidcall.db'));
@@ -84,7 +84,7 @@ it:
 ```ts
 // routes/tokens.ts
 import { Router, json as expressJson } from 'express';
-import { createServices } from '@vidcall/server';
+import { createServices } from '@mbsks/server';
 
 export function tokenRouter(services: ReturnType<typeof createServices>) {
   const router = Router();

@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { createEnvelope } from '@vidcall/protocol';
+import { createEnvelope } from '@mbsks/protocol';
 import type { Databases, Realtime } from 'appwrite';
 import { AppwriteBackend } from '../src/AppwriteBackend.js';
-import { runAdapterTestSuite, type AdapterHarness } from '@vidcall/transport/shared-tests';
-import type { SignalingTransport } from '@vidcall/transport';
+import { runAdapterTestSuite, type AdapterHarness } from '@mbsks/transport/shared-tests';
+import type { SignalingTransport } from '@mbsks/transport';
 import { FakeAppwriteStore, FakeDatabases, FakeRealtime } from './fakes.js';
 
 // one fake Appwrite project per test file

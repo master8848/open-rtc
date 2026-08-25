@@ -1,4 +1,4 @@
-# @vidcall/sfu-gateway
+# @mbsks/sfu-gateway
 
 The optional SFU path for vidcall (docs/architecture.md D2, docs/research/webrtc-js.md §3).
 
@@ -44,7 +44,7 @@ ignored — mesh chat/reactions/presence keep flowing through the same backend.
 ## Plugging into Room (parent TODO)
 
 ```ts
-import { SfuRouter, type SfuGateway } from '@vidcall/sfu-gateway';
+import { SfuRouter, type SfuGateway } from '@mbsks/sfu-gateway';
 
 // 1. Construct one gateway per room (mediasoup Router per room):
 const gateway: SfuGateway = new MediasoupAdapter({ router, onAnswer: sendAnswerEnvelope });
@@ -103,7 +103,7 @@ npm run test:integration   # sets VIDCALL_MEDIASOUP_INTEGRATION=1
 
 ### Dependencies
 
-- `@vidcall/protocol` (runtime): envelope + `SfuPayload` types.
+- `@mbsks/protocol` (runtime): envelope + `SfuPayload` types.
 - `mediasoup` (devDependency only, exact pin `3.23.1`): the adapter `import
 type`s mediasoup for compile-time types and the integration test drives a
   real worker. Runtime code never loads the native module.

@@ -1,8 +1,8 @@
-# @vidcall/backend-appwrite
+# @mbsks/backend-appwrite
 
 Signaling adapter for **Appwrite Realtime** — one of the six interchangeable
 backends for the vidcall engine. See
-[`@vidcall/transport`](../transport/README.md) for the contract every adapter
+[`@mbsks/transport`](../transport/README.md) for the contract every adapter
 implements and the shared test suite each one must pass.
 
 ## How it works
@@ -26,7 +26,7 @@ cross-writer interleaving goes through the shared seq reorder buffer.
 ## Install
 
 ```sh
-npm i @vidcall/backend-appwrite          # once published
+npm i @mbsks/backend-appwrite          # once published
 # today (workspace): npm i file:../vidcall/packages/backend-appwrite
 ```
 
@@ -34,8 +34,8 @@ npm i @vidcall/backend-appwrite          # once published
 
 ```ts
 import { Client } from 'appwrite';
-import { AppwriteBackend } from '@vidcall/backend-appwrite';
-import { Room } from '@vidcall/core';
+import { AppwriteBackend } from '@mbsks/backend-appwrite';
+import { Room } from '@mbsks/core';
 
 const client = new Client().setEndpoint('https://cloud.appwrite.io/v1').setProject('<project-id>'); // browser client — permissions gate the collections
 
@@ -82,7 +82,7 @@ this automatically for the two collection ids you pass in).
 ## Tests
 
 Runs against the shared adapter suite (see
-[`@vidcall/transport/shared-tests`](../transport/README.md#shared-adapter-tests))
+[`@mbsks/transport/shared-tests`](../transport/README.md#shared-adapter-tests))
 plus adapter-specific unit tests:
 
 ```sh

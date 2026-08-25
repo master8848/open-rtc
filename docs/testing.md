@@ -72,7 +72,7 @@ backend vitest), `swift` (macos-14), `dart` (stable), `kotlin` (temurin 21).
 ## Adding a backend
 
 1. Implement `SignalingTransport` (`packages/transport/src/base.ts`).
-2. Import `runAdapterTestSuite` from `@vidcall/transport/shared-tests` and wire
+2. Import `runAdapterTestSuite` from `@mbsks/transport/shared-tests` and wire
    your fake + real-store harness into your vitest suite.
 3. Keep your package in `packages/backend-*` so the root scripts and any future
    CI pick it up automatically.

@@ -1,5 +1,5 @@
 {
-  "name": "@vidcall/backend-appwrite",
+  "name": "@mbsks/backend-appwrite",
   "version": "0.1.0",
   "description": "vidcall signaling backend adapter for Appwrite (document-event signaling + heartbeat-document presence over Realtime).",
   "author": "Saurav Sanjel <jobarsanjel2@gmail.com>",
@@ -28,8 +28,8 @@
   },
   "dependencies": {
     "appwrite": "26.2.0",
-    "@vidcall/protocol": "0.1.0",
-    "@vidcall/transport": "0.1.0"
+    "@mbsks/protocol": "0.1.0",
+    "@mbsks/transport": "0.1.0"
   },
   "devDependencies": {
     "@types/node": "22.20.1",

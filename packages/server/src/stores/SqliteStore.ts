@@ -5,7 +5,7 @@
  * The driver is **injected, not imported**: this module only carries
  * `import type` for better-sqlite3, so importing it never loads the native
  * addon. `better-sqlite3` is an optional peer dependency — install it next
- * to `@vidcall/server` and pass the database handle in:
+ * to `@mbsks/server` and pass the database handle in:
  *
  * ```
  * npm i better-sqlite3
@@ -13,7 +13,7 @@
  *
  * ```
  * import Database from 'better-sqlite3';
- * import { SqliteStore } from '@vidcall/server/stores/sqlite';
+ * import { SqliteStore } from '@mbsks/server/stores/sqlite';
  * const store = new SqliteStore(new Database('vidcall.db'));
  * await store.bootstrap(); // CREATE TABLE IF NOT EXISTS ...
  * ```
@@ -25,7 +25,7 @@
  */
 
 import type Database from 'better-sqlite3';
-import type { Envelope } from '@vidcall/protocol';
+import type { Envelope } from '@mbsks/protocol';
 import type { Store } from '../store.ts';
 import type { Participant, RecordingSession, Room, StoredSignal } from '../types.ts';
 

@@ -10,7 +10,7 @@
  * The interface mirrors docs/architecture.md D4:
  * `join / leave / emit / onMessage / onPresence / setPresence / dispose`.
  */
-import type { Envelope, PresenceState } from '@vidcall/protocol';
+import type { Envelope, PresenceState } from '@mbsks/protocol';
 
 /** Static info a peer announces when joining a room. */
 export interface ParticipantInfo {

@@ -14,7 +14,7 @@
 
 ## TL;DR
 
-The **engine layer is genuinely TanStack-grade**: `@vidcall/core` and `@vidcall/quality`
+The **engine layer is genuinely TanStack-grade**: `@mbsks/core` and `@mbsks/quality`
 have zero external runtime dependencies, the WebRTC seam (`peerFactory`, injected
 fakes, pluggable `SignalingTransport`) is exactly how we'd isolate a platform API,
 and the shared-adapter-suite idea (`packages/transport/src/shared-tests.ts`) plus the
@@ -22,7 +22,7 @@ canonical fixture corpus (`protocol/fixtures/`) is more disciplined than most
 commercial SDKs manage.
 
 The **missing half is everything we'd call the product**: there is no observable
-snapshot/state layer and therefore no real adapter story — no `@vidcall/react`
+snapshot/state layer and therefore no real adapter story — no `@mbsks/react`
 package at all, just an example that hand-wires emitter callbacks into `useState`
 under `<StrictMode>` with a join/leave race. There is also no release engineering
 (no changesets, inconsistent exports maps), a split test-runner brain
@@ -34,7 +34,7 @@ Scorecard (TanStack lens):
 | Dimension | Grade | One-liner |
 |---|---|---|
 | Core/adapter seam | B | Seam exists and is clean, but stops at the emitter; no observer/store layer, no adapters |
-| Dependency discipline | A− | Zero-dep core/quality/transport is real; `@vidcall/server` drags native + DB deps |
+| Dependency discipline | A− | Zero-dep core/quality/transport is real; `@mbsks/server` drags native + DB deps |
 | Packaging/resolution | C+ | `sideEffects:false` everywhere, but `types` → `src/*.ts` on some packages, dist on others |
 | API surface | B− | LiveKit-grade naming, inconsistent event style, weak error taxonomy |
 | Protocol/type sharing | A− | Schema + fixtures + targeted variants are exemplary; TS doesn't eat its own dog food |
@@ -50,7 +50,7 @@ Scorecard (TanStack lens):
 The framework-agnostic *library* boundary is real and clean:
 
 - `packages/core` contains **zero React, zero DOM-framework, zero external imports**
-  (verified: `grep` over `packages/core/src` shows only `@vidcall/*` and relative
+  (verified: `grep` over `packages/core/src` shows only `@mbsks/*` and relative
   imports). Platform APIs are injected, not assumed: `RoomConfig.peerFactory`
   (`packages/core/src/room.ts:182`), `mediaDevices` override
   (`room.ts:160-166`), `MediaRecorder` ctor and `fetch` impl overrides
@@ -91,8 +91,8 @@ snapshots aren't stable values (mutable objects → referential equality lies to
 **No React (or Solid/Vue/Svelte) adapter package exists.** The TanStack shape would be:
 
 ```
-@vidcall/core        ← engine + a small subscribable state layer   (exists, minus state layer)
-@vidcall/react       ← useSyncExternalStore bindings, ~200 LOC       (missing)
+@mbsks/core        ← engine + a small subscribable state layer   (exists, minus state layer)
+@mbsks/react       ← useSyncExternalStore bindings, ~200 LOC       (missing)
 ```
 
 Instead the only React code in the repo is an example
@@ -122,7 +122,7 @@ with comments explaining that TS structural typing keeps them assignable
 (`types.ts:5-15`). It works today, but twins drift (this is a two-file diff away from
 a silent breaking mismatch), and other-language ports get no help from TS structural
 typing. We'd put the contract in the leaf package everyone already depends on
-(`@vidcall/protocol`, or a `@vidcall/transport-contract`) and have core import it —
+(`@mbsks/protocol`, or a `@mbsks/transport-contract`) and have core import it —
 same reason `@tanstack/history` exists as a dependency-free contract package.
 
 **Would TanStack extract a pure observable layer? Yes.** Concretely: keep
@@ -132,7 +132,7 @@ and add a derived, immutable `RoomSnapshot` (roster array + per-participant reco
 aggregate connection state + current quality tier), rebuilt on mutation, exposed via
 `room.subscribe(listener)` / `room.getSnapshot()`. Everything else falls out:
 
-- `@vidcall/react`: `useRoom(config)` = instance management; `useRoomState(selector)`
+- `@mbsks/react`: `useRoom(config)` = instance management; `useRoomState(selector)`
   = `useSyncExternalStore(store.subscribe, () => selector(store.getSnapshot()))`.
 - Dart/Kotlin/Swift ports get a `StateFlow`/`AsyncSequence` for free from the same
   snapshot stream (their clients already invent their own shapes — see §4).
@@ -148,14 +148,14 @@ This is the single highest-leverage architectural change available.
 
 | Package | Runtime deps | External runtime deps | Verdict |
 |---|---|---|---|
-| `@vidcall/protocol` | none | none | ✅ perfect leaf |
-| `@vidcall/quality` | `@vidcall/protocol` | none | ✅ pure policy engine, no WebRTC imports (`packages/quality/src/index.ts` docblock) |
-| `@vidcall/core` | `protocol`, `quality` | none | ✅ zero-dep claim holds (grep over `src` confirms) |
-| `@vidcall/test-utils` | none | none | ✅ |
-| `@vidcall/transport` | `protocol` | none (vitest is dev-only) | ✅ |
+| `@mbsks/protocol` | none | none | ✅ perfect leaf |
+| `@mbsks/quality` | `@mbsks/protocol` | none | ✅ pure policy engine, no WebRTC imports (`packages/quality/src/index.ts` docblock) |
+| `@mbsks/core` | `protocol`, `quality` | none | ✅ zero-dep claim holds (grep over `src` confirms) |
+| `@mbsks/test-utils` | none | none | ✅ |
+| `@mbsks/transport` | `protocol` | none (vitest is dev-only) | ✅ |
 | `backend-*` (×6) | `transport` + their SDK | supabase-js, convex, firebase, appwrite, @libsql/client | ✅ appropriate — SDK-per-adapter is the point |
-| `@vidcall/server` | `protocol`, **better-sqlite3, mysql2, pg, ws** | ⚠️ see below |
-| `@vidcall/sfu-gateway` | `protocol` | none at runtime (`import type` only, `sfu-gateway/src/mediasoup-adapter.ts:30`) | ✅ clever, ⚠️ types leak (below) |
+| `@mbsks/server` | `protocol`, **better-sqlite3, mysql2, pg, ws** | ⚠️ see below |
+| `@mbsks/sfu-gateway` | `protocol` | none at runtime (`import type` only, `sfu-gateway/src/mediasoup-adapter.ts:30`) | ✅ clever, ⚠️ types leak (below) |
 
 Genuine wins:
 
@@ -169,14 +169,14 @@ Genuine wins:
 
 What we'd cut/change:
 
-1. **`@vidcall/server` hard-depends on three database drivers including a *native*
+1. **`@mbsks/server` hard-depends on three database drivers including a *native*
    module.** `better-sqlite3` (compiled addon), `pg`, `mysql2` sit in
    `dependencies` (`packages/server/package.json`), and the root barrel re-exports
    all four stores from `src/stores/index.ts` via `src/index.ts:31` — so
-   `import { createServer } from '@vidcall/server'` pulls every driver, native build
+   `import { createServer } from '@mbsks/server'` pulls every driver, native build
    included, even if you use `InMemoryStore`. Express/Fastify are already optional
    peers (`peerDependenciesMeta`); `ws`/`pg`/`mysql2`/`better-sqlite3` should be too,
-   and each store should live behind a subpath export (`@vidcall/server/store-postgres`).
+   and each store should live behind a subpath export (`@mbsks/server/store-postgres`).
    This is the difference between "small enough to fit anywhere" and "npm install
    compiles SQLite on your CI".
 2. **`sfu-gateway`'s type-only mediasoup still leaks.** Root barrel re-exports the
@@ -342,7 +342,7 @@ Gaps:
   benchmarks area that doesn't exist. Fine pre-release; list it.
 - Lint/prettier are configured and enforced (flat ESLint, `eslint.config.mjs`; root
   `lint` script) — but the config is bare `recommended`; we'd add import-boundary
-  rules (forbid `@vidcall/core` importing adapters, forbid deep `../../pkg/src`
+  rules (forbid `@mbsks/core` importing adapters, forbid deep `../../pkg/src`
   imports like the ones in `packages/core/test/*.test.ts`).
 
 ---
@@ -358,7 +358,7 @@ Gaps:
   packages pinned at `0.1.0`; no `.changeset/`, no release workflow; the only
   CHANGELOG in the repo is the pub.dev-mandated one
   (`packages/dart/CHANGELOG.md`). Cross-package deps are exact-pinned
-  (`"@vidcall/protocol": "0.1.0"`), which means the first real release requires
+  (`"@mbsks/protocol": "0.1.0"`), which means the first real release requires
   touching every manifest. Adopt changesets *now* so the habit forms while the API
   is churning — our changelogs are a third of our DX reputation.
 - **Publish-readiness gaps:** mixed exports maps (`types` → `src/*.ts` on
@@ -388,14 +388,14 @@ Ranked by impact; effort S ≈ ≤1 day, M ≈ a few days, L ≈ 1–2 weeks.
 | # | Change | Why (impact) | Files | Effort |
 |---|---|---|---|---|
 | 1 | **Add a snapshot/state layer to core**: immutable `RoomSnapshot` (roster, per-participant state, publications, quality tier) + `room.subscribe()/getSnapshot()`, rebuilt on every mutation | Unlocks everything else: real adapters, strict-mode-safe hooks, devtools, parity with bindings. This is the query-core→react-query seam vidcall is missing | `packages/core/src/room.ts`, new `packages/core/src/store.ts` | L |
-| 2 | **Ship `@vidcall/react`** on `useSyncExternalStore`: `useRoom()`, `useParticipants()`, `usePublication()`, `useQuality()`; keyed instance cache, AbortSignal-aware join, StrictMode-tested | Turns a good engine into a usable library; kills the hand-rolled `examples/react` wiring | new `packages/react`; rewrite `examples/react/src/App.tsx` | M (after #1) |
+| 2 | **Ship `@mbsks/react`** on `useSyncExternalStore`: `useRoom()`, `useParticipants()`, `usePublication()`, `useQuality()`; keyed instance cache, AbortSignal-aware join, StrictMode-tested | Turns a good engine into a usable library; kills the hand-rolled `examples/react` wiring | new `packages/react`; rewrite `examples/react/src/App.tsx` | M (after #1) |
 | 3 | **TS L0 conformance suite over `protocol/fixtures/*.json`** (+ validate all fixtures against `schema.json` in CI) | The reference implementation currently doesn't prove conformance to its own contract; cheapest correctness win in the repo | new `packages/core/test/protocol.conformance.test.ts`; `.github/workflows/ci.yml` | S |
-| 4 | **Fix `@vidcall/server` weight**: move `pg`/`mysql2`/`better-sqlite3`/`ws` to optional peers; subpath exports per store (`/store-postgres`, …); same treatment for sfu-gateway `/mediasoup` | Removes a native-module compile from every install; aligns with "fits anywhere" positioning | `packages/server/package.json`, `src/stores/index.ts`, `src/index.ts`, `packages/sfu-gateway/src/index.ts` | S |
+| 4 | **Fix `@mbsks/server` weight**: move `pg`/`mysql2`/`better-sqlite3`/`ws` to optional peers; subpath exports per store (`/store-postgres`, …); same treatment for sfu-gateway `/mediasoup` | Removes a native-module compile from every install; aligns with "fits anywhere" positioning | `packages/server/package.json`, `src/stores/index.ts`, `src/index.ts`, `packages/sfu-gateway/src/index.ts` | S |
 | 5 | **Unify on vitest**; delete the `node:test` + `--conditions=development` path or make it dev-only; reconcile `engines >=18.18` with reality (drop to `>=20` or bundle tests) | One runner = shared assertions (adapter suite reusable by core), honest engine requirements, simpler CI log | root `package.json`, `packages/*/package.json`, `ci.yml` | M |
 | 6 | **Adopt changesets + release pipeline** (version bumps, npm publish dry-run, GitHub Release notes); add `publint`+`attw` CI gates; normalize exports maps to dist-`.d.ts` everywhere | Publishing is currently impossible without a manual sweep of 14 manifests; type-resolution bugs would surface only post-publish | `.changeset/config.json`, all `packages/*/package.json`, new `.github/workflows/release.yml` | M |
 | 7 | **Typed error taxonomy**: `VidcallError { code }` mirroring wire `ErrorPayload.code`; replace bare `Error` emission (`reportError`), add `cause` chaining; document which errors are fatal vs recoverable | Every UI above the library branches on error identity today and can't | `packages/core/src/errors.ts` (new), `room.ts:890-893`, `:708` | S/M |
 | 8 | **StrictMode/lifecycle hardening**: `AbortSignal` option on `join()`; make `leave()` cancel in-flight joins; write the canonical mount/unmount recipe + a StrictMode test in the react example | The #1 class of user bug reports for realtime libs in React 18+ | `room.ts:360-423`, `examples/react/src/App.tsx:65-101` | S |
-| 9 | **Observability**: structured `logger` option replacing single `debug` fn; ring-buffer of recent envelopes/transitions on the room; seed `@vidcall/devtools` panel rendering the snapshot | Realtime debugging over console.log is where adoption goes to die; the snapshot layer makes the panel cheap | `room.ts`, `packages/core/src/events.ts`, new package | M (panel: L) |
+| 9 | **Observability**: structured `logger` option replacing single `debug` fn; ring-buffer of recent envelopes/transitions on the room; seed `@mbsks/devtools` panel rendering the snapshot | Realtime debugging over console.log is where adoption goes to die; the snapshot layer makes the panel cheap | `room.ts`, `packages/core/src/events.ts`, new package | M (panel: L) |
 | 10 | **Size budget + tree-shake gates**: `size-limit` configs for core/quality/react, a fixture that imports one symbol and asserts dead-code elimination, dts bundling for clean public types | Protects the headline claim ("lightweight") forever; cheap once CI exists | root `package.json`, `.github/workflows/ci.yml`, `tsconfig` for dts rollup | S |
 
 Honorable mentions: pick one event-naming grammar (`room.ts:97-142`); spec-or-remove
@@ -418,7 +418,7 @@ Keep these exactly as they are — they're the moat:
   consumed cross-language.
 - `runAdapterTestSuite` / `runStoreTestSuite`: "pluggable" backed by a mandatory
   conformance matrix, not a blog post.
-- Policy purity in `@vidcall/quality` (`adaptive-quality-controller.ts:1-12`: consumes
+- Policy purity in `@mbsks/quality` (`adaptive-quality-controller.ts:1-12`: consumes
   stats snapshots, zero WebRTC imports) with hysteresis knobs as plain config — the
   most unit-testable adaptive-quality design we've seen in a JS WebRTC lib.
 - The L0/L1/L2 framing in `docs/testing.md` and a CI matrix that actually builds

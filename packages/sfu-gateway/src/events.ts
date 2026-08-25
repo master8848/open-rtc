@@ -1,7 +1,7 @@
 /**
- * Typed event emitter — in-workspace mirror of `@vidcall/core`'s `TypedEmitter`
+ * Typed event emitter — in-workspace mirror of `@mbsks/core`'s `TypedEmitter`
  * (zero runtime dependencies; same shape as Node's EventEmitter but typed and
- * framework-agnostic). Kept in-package so `@vidcall/sfu-gateway` stays a
+ * framework-agnostic). Kept in-package so `@mbsks/sfu-gateway` stays a
  * leaf package: `Room` will depend on this package, not the other way around.
  *
  * ```ts

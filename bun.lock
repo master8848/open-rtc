@@ -13,11 +13,11 @@
       },
     },
     "packages/backend-appwrite": {
-      "name": "@vidcall/backend-appwrite",
+      "name": "@mbsks/backend-appwrite",
       "version": "0.1.0",
       "dependencies": {
-        "@vidcall/protocol": "0.1.0",
-        "@vidcall/transport": "0.1.0",
+        "@mbsks/protocol": "0.1.0",
+        "@mbsks/transport": "0.1.0",
         "appwrite": "26.2.0",
       },
       "devDependencies": {
@@ -27,11 +27,11 @@
       },
     },
     "packages/backend-convex": {
-      "name": "@vidcall/backend-convex",
+      "name": "@mbsks/backend-convex",
       "version": "0.1.0",
       "dependencies": {
-        "@vidcall/protocol": "0.1.0",
-        "@vidcall/transport": "0.1.0",
+        "@mbsks/protocol": "0.1.0",
+        "@mbsks/transport": "0.1.0",
         "convex": "1.42.3",
       },
       "devDependencies": {
@@ -41,11 +41,11 @@
       },
     },
     "packages/backend-firebase": {
-      "name": "@vidcall/backend-firebase",
+      "name": "@mbsks/backend-firebase",
       "version": "0.1.0",
       "dependencies": {
-        "@vidcall/protocol": "0.1.0",
-        "@vidcall/transport": "0.1.0",
+        "@mbsks/protocol": "0.1.0",
+        "@mbsks/transport": "0.1.0",
         "firebase": "12.16.0",
       },
       "devDependencies": {
@@ -55,11 +55,11 @@
       },
     },
     "packages/backend-postgres": {
-      "name": "@vidcall/backend-postgres",
+      "name": "@mbsks/backend-postgres",
       "version": "0.1.0",
       "dependencies": {
-        "@vidcall/protocol": "0.1.0",
-        "@vidcall/transport": "0.1.0",
+        "@mbsks/protocol": "0.1.0",
+        "@mbsks/transport": "0.1.0",
         "pg": "8.22.0",
       },
       "devDependencies": {
@@ -70,12 +70,12 @@
       },
     },
     "packages/backend-sqlite": {
-      "name": "@vidcall/backend-sqlite",
+      "name": "@mbsks/backend-sqlite",
       "version": "0.1.0",
       "dependencies": {
         "@libsql/client": "0.17.4",
-        "@vidcall/protocol": "0.1.0",
-        "@vidcall/transport": "0.1.0",
+        "@mbsks/protocol": "0.1.0",
+        "@mbsks/transport": "0.1.0",
       },
       "devDependencies": {
         "@types/node": "22.20.1",
@@ -84,12 +84,12 @@
       },
     },
     "packages/backend-supabase": {
-      "name": "@vidcall/backend-supabase",
+      "name": "@mbsks/backend-supabase",
       "version": "0.1.0",
       "dependencies": {
         "@supabase/supabase-js": "2.110.9",
-        "@vidcall/protocol": "0.1.0",
-        "@vidcall/transport": "0.1.0",
+        "@mbsks/protocol": "0.1.0",
+        "@mbsks/transport": "0.1.0",
       },
       "devDependencies": {
         "@types/node": "22.20.1",
@@ -98,28 +98,28 @@
       },
     },
     "packages/core": {
-      "name": "@vidcall/core",
+      "name": "@mbsks/core",
       "version": "0.1.0",
       "dependencies": {
-        "@vidcall/protocol": "0.1.0",
-        "@vidcall/quality": "0.1.0",
+        "@mbsks/protocol": "0.1.0",
+        "@mbsks/quality": "0.1.0",
       },
       "devDependencies": {
-        "@vidcall/test-utils": "0.1.0",
+        "@mbsks/test-utils": "0.1.0",
       },
     },
     "packages/quality": {
-      "name": "@vidcall/quality",
+      "name": "@mbsks/quality",
       "version": "0.1.0",
       "dependencies": {
-        "@vidcall/protocol": "0.1.0",
+        "@mbsks/protocol": "0.1.0",
       },
     },
     "packages/react": {
-      "name": "@vidcall/react",
+      "name": "@mbsks/react",
       "version": "0.1.0",
       "dependencies": {
-        "@vidcall/core": "0.1.0",
+        "@mbsks/core": "0.1.0",
       },
       "devDependencies": {
         "@testing-library/dom": "10.4.1",
@@ -127,7 +127,7 @@
         "@types/node": "22.20.1",
         "@types/react": "19.2.17",
         "@types/react-dom": "19.2.3",
-        "@vidcall/test-utils": "0.1.0",
+        "@mbsks/test-utils": "0.1.0",
         "jsdom": "30.0.1",
         "react": "19.2.8",
         "react-dom": "19.2.8",
@@ -139,10 +139,10 @@
       },
     },
     "packages/server": {
-      "name": "@vidcall/server",
+      "name": "@mbsks/server",
       "version": "0.1.0",
       "dependencies": {
-        "@vidcall/protocol": "0.1.0",
+        "@mbsks/protocol": "0.1.0",
         "ws": "8.9.0",
       },
       "devDependencies": {
@@ -174,10 +174,10 @@
       ],
     },
     "packages/sfu-gateway": {
-      "name": "@vidcall/sfu-gateway",
+      "name": "@mbsks/sfu-gateway",
       "version": "0.1.0",
       "dependencies": {
-        "@vidcall/protocol": "0.1.0",
+        "@mbsks/protocol": "0.1.0",
       },
       "devDependencies": {
         "@types/node": "22.20.1",
@@ -186,17 +186,17 @@
       },
     },
     "packages/test-utils": {
-      "name": "@vidcall/test-utils",
+      "name": "@mbsks/test-utils",
       "version": "0.1.0",
       "dependencies": {
-        "@vidcall/protocol": "0.1.0",
+        "@mbsks/protocol": "0.1.0",
       },
     },
     "packages/transport": {
-      "name": "@vidcall/transport",
+      "name": "@mbsks/transport",
       "version": "0.1.0",
       "dependencies": {
-        "@vidcall/protocol": "0.1.0",
+        "@mbsks/protocol": "0.1.0",
       },
       "devDependencies": {
         "@types/node": "22.20.1",
@@ -205,7 +205,7 @@
       },
     },
     "protocol": {
-      "name": "@vidcall/protocol",
+      "name": "@mbsks/protocol",
       "version": "0.1.0",
     },
   },
@@ -694,33 +694,33 @@
 
     "@typescript/typescript-win32-x64": ["@typescript/typescript-win32-x64@7.0.2", "", { "os": "win32", "cpu": "x64" }, "sha512-0BQ3HkAHHlKLSp1qRvf3SUhGpGsDuhB/jgFw75guyqbxJqEaS0Cw/VFO8i2nHglJUzQCRtMMR/IBAKE3ETMC4g=="],
 
-    "@vidcall/backend-appwrite": ["@vidcall/backend-appwrite@workspace:packages/backend-appwrite"],
+    "@mbsks/backend-appwrite": ["@mbsks/backend-appwrite@workspace:packages/backend-appwrite"],
 
-    "@vidcall/backend-convex": ["@vidcall/backend-convex@workspace:packages/backend-convex"],
+    "@mbsks/backend-convex": ["@mbsks/backend-convex@workspace:packages/backend-convex"],
 
-    "@vidcall/backend-firebase": ["@vidcall/backend-firebase@workspace:packages/backend-firebase"],
+    "@mbsks/backend-firebase": ["@mbsks/backend-firebase@workspace:packages/backend-firebase"],
 
-    "@vidcall/backend-postgres": ["@vidcall/backend-postgres@workspace:packages/backend-postgres"],
+    "@mbsks/backend-postgres": ["@mbsks/backend-postgres@workspace:packages/backend-postgres"],
 
-    "@vidcall/backend-sqlite": ["@vidcall/backend-sqlite@workspace:packages/backend-sqlite"],
+    "@mbsks/backend-sqlite": ["@mbsks/backend-sqlite@workspace:packages/backend-sqlite"],
 
-    "@vidcall/backend-supabase": ["@vidcall/backend-supabase@workspace:packages/backend-supabase"],
+    "@mbsks/backend-supabase": ["@mbsks/backend-supabase@workspace:packages/backend-supabase"],
 
-    "@vidcall/core": ["@vidcall/core@workspace:packages/core"],
+    "@mbsks/core": ["@mbsks/core@workspace:packages/core"],
 
-    "@vidcall/protocol": ["@vidcall/protocol@workspace:protocol"],
+    "@mbsks/protocol": ["@mbsks/protocol@workspace:protocol"],
 
-    "@vidcall/quality": ["@vidcall/quality@workspace:packages/quality"],
+    "@mbsks/quality": ["@mbsks/quality@workspace:packages/quality"],
 
-    "@vidcall/react": ["@vidcall/react@workspace:packages/react"],
+    "@mbsks/react": ["@mbsks/react@workspace:packages/react"],
 
-    "@vidcall/server": ["@vidcall/server@workspace:packages/server"],
+    "@mbsks/server": ["@mbsks/server@workspace:packages/server"],
 
-    "@vidcall/sfu-gateway": ["@vidcall/sfu-gateway@workspace:packages/sfu-gateway"],
+    "@mbsks/sfu-gateway": ["@mbsks/sfu-gateway@workspace:packages/sfu-gateway"],
 
-    "@vidcall/test-utils": ["@vidcall/test-utils@workspace:packages/test-utils"],
+    "@mbsks/test-utils": ["@mbsks/test-utils@workspace:packages/test-utils"],
 
-    "@vidcall/transport": ["@vidcall/transport@workspace:packages/transport"],
+    "@mbsks/transport": ["@mbsks/transport@workspace:packages/transport"],
 
     "@vitest/expect": ["@vitest/expect@4.1.10", "", { "dependencies": { "@standard-schema/spec": "^1.1.0", "@types/chai": "^5.2.2", "@vitest/spy": "4.1.10", "@vitest/utils": "4.1.10", "chai": "^6.2.2", "tinyrainbow": "^3.1.0" } }, "sha512-YsCn+qAk1GWjQOWFEsEcL2gNQ0zmVmQu3T03qP6UyjhtmdtwtbuI+DASn/7iQB3HGTXkdBwGddzxPlmiql5vlA=="],
 

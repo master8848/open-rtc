@@ -43,13 +43,13 @@ with the zero-server trick at the end of it.
 
 ## Step 1 — a signaling server in ~10 lines
 
-`@vidcall/server` ships rooms, a REST API, and a WebSocket relay. The default
+`@mbsks/server` ships rooms, a REST API, and a WebSocket relay. The default
 store keeps everything in memory — perfect for a first run:
 
 ```ts
 import express from 'express';
-import { InMemoryStore, attachWebSocketRelay, createServices } from '@vidcall/server';
-import { createExpressRouter } from '@vidcall/server/express';
+import { InMemoryStore, attachWebSocketRelay, createServices } from '@mbsks/server';
+import { createExpressRouter } from '@mbsks/server/express';
 
 const services = createServices({ store: new InMemoryStore() });
 const app = express();
@@ -87,8 +87,8 @@ stable id so React StrictMode remounts don't look like a second person:
 ```tsx
 import { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
-import { Room } from '@vidcall/core';
-import { SupabaseBackend } from '@vidcall/backend-supabase';
+import { Room } from '@mbsks/core';
+import { SupabaseBackend } from '@mbsks/backend-supabase';
 
 // One identity per page load — survives StrictMode remounts.
 const selfId = `user-${Math.random().toString(36).slice(2, 8)}`;
@@ -120,10 +120,10 @@ Don't call `room.join()` inside your own effect — React StrictMode mounts,
 unmounts, and remounts every component once in development, which starts two
 joins and can leave a half-joined session behind. The `useJoin` hook owns the
 lifecycle: join on mount, abort an in-flight join on unmount, leave only on a
-real unmount. It comes from `@vidcall/react` alongside two snapshot hooks:
+real unmount. It comes from `@mbsks/react` alongside two snapshot hooks:
 
 ```tsx
-import { useJoin, useParticipants, useRoomState } from '@vidcall/react';
+import { useJoin, useParticipants, useRoomState } from '@mbsks/react';
 
 function Call({ room }: { room: Room }) {
   useJoin(room); // StrictMode-safe auto-join
@@ -222,7 +222,7 @@ and recording — is [`examples/vanilla/main.ts`](../examples/vanilla/main.ts).
    no servers at all. Across Wi-Fi ↔ cellular or office networks, pass
    `iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]` to the `Room`
    config so peers can find a path to each other.
-5. **Nothing is on npm yet.** Install commands like `npm i @vidcall/core`
+5. **Nothing is on npm yet.** Install commands like `npm i @mbsks/core`
    won't resolve until the first release; consume from this repo meanwhile
    (see the root README's quick start).
 
@@ -236,14 +236,14 @@ and recording — is [`examples/vanilla/main.ts`](../examples/vanilla/main.ts).
   chat: the `ControlsManager` class wires these onto a room (see
   [`docs/features/controls.md`](features/controls.md)).
 - **Recording** — `room.recording` composites local + remote streams into a
-  MediaRecorder session and can upload chunks to `@vidcall/server`, where
+  MediaRecorder session and can upload chunks to `@mbsks/server`, where
   disk or S3-compatible storage keeps them.
 - **Bigger calls** — the mesh is comfortable around 2–4 participants. Beyond
   that you want an SFU: [`packages/sfu-gateway`](../packages/sfu-gateway/README.md)
   has the interface and a mediasoup reference adapter (scaffolded; wiring into
   `Room` is still TODO).
 - **Your own backend/transport** — implement the `SignalingTransport`
-  interface from [`@vidcall/transport`](../packages/transport/README.md),
+  interface from [`@mbsks/transport`](../packages/transport/README.md),
   validate with the shared test suite (`runAdapterTestSuite`), and check wire
   format against [`protocol/fixtures`](../protocol/fixtures).
 - **Mobile** — Kotlin, Swift, and Dart bindings speak the same protocol; see

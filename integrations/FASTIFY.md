@@ -1,19 +1,19 @@
-# Hosting @vidcall/server in a Fastify app
+# Hosting @mbsks/server in a Fastify app
 
 Register the component as a plugin — Fastify's lifecycle, logging, and
 `reply` helpers apply to the mounted routes. The WS relay attaches to the
 Fastify HTTP server.
 
 ```bash
-npm install @vidcall/server fastify pg
+npm install @mbsks/server fastify pg
 ```
 
 ```ts
 // server.ts
 import Fastify from 'fastify';
-import { attachWebSocketRelay, createServices, S3RecordingStorage } from '@vidcall/server';
-import { createFastifyPlugin } from '@vidcall/server/fastify';
-import { PostgresStore } from '@vidcall/server/stores/postgres';
+import { attachWebSocketRelay, createServices, S3RecordingStorage } from '@mbsks/server';
+import { createFastifyPlugin } from '@mbsks/server/fastify';
+import { PostgresStore } from '@mbsks/server/stores/postgres';
 
 const store = new PostgresStore(process.env.DATABASE_URL!);
 await store.bootstrap();

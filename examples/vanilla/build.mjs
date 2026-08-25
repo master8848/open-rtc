@@ -4,7 +4,7 @@
  *
  *   node examples/vanilla/build.mjs
  *
- * The @vidcall/* packages are aliased to their TypeScript sources so the
+ * The @mbsks/* packages are aliased to their TypeScript sources so the
  * example always builds against current code (no dist/ prerequisites).
  * @libsql/client resolves through its package.json `browser` condition.
  */
@@ -22,11 +22,11 @@ await build({
   sourcemap: true,
   outfile: fileURLToPath(new URL('./dist/main.js', import.meta.url)),
   alias: {
-    '@vidcall/core': root + 'packages/core/src/index.ts',
-    '@vidcall/backend-sqlite': root + 'packages/backend-sqlite/src/index.ts',
-    '@vidcall/transport': root + 'packages/transport/src/index.ts',
-    '@vidcall/protocol': root + 'protocol/types.ts',
-    '@vidcall/quality': root + 'packages/quality/src/index.ts',
+    '@mbsks/core': root + 'packages/core/src/index.ts',
+    '@mbsks/backend-sqlite': root + 'packages/backend-sqlite/src/index.ts',
+    '@mbsks/transport': root + 'packages/transport/src/index.ts',
+    '@mbsks/protocol': root + 'protocol/types.ts',
+    '@mbsks/quality': root + 'packages/quality/src/index.ts',
   },
   logLevel: 'info',
 });

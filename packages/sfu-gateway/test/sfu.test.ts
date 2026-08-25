@@ -10,7 +10,7 @@ import {
   type IcePayload,
   type OfferPayload,
   type SfuPayload,
-} from '@vidcall/protocol';
+} from '@mbsks/protocol';
 import { SfuRouter, type SfuRouterErrorCode } from '../src/sfu-router.ts';
 import type {
   PublishOptions,

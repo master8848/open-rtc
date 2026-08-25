@@ -1,5 +1,5 @@
 {
-  "name": "@vidcall/sfu-gateway",
+  "name": "@mbsks/sfu-gateway",
   "version": "0.1.0",
   "description": "vidcall SFU gateway: transport-agnostic SfuGateway interface + SfuRouter (protocol sfu-envelope handling, pure logic) + reference mediasoup adapter. Mesh -> SFU at scale (docs/architecture.md D2); Room integration TODO.",
   "author": "Saurav Sanjel <jobarsanjel2@gmail.com>",
@@ -29,7 +29,7 @@
     "test:integration": "VIDCALL_MEDIASOUP_INTEGRATION=1 node --conditions=development --test test/integration.mediasoup.test.ts"
   },
   "dependencies": {
-    "@vidcall/protocol": "0.1.0"
+    "@mbsks/protocol": "0.1.0"
   },
   "devDependencies": {
     "@types/node": "22.20.1",

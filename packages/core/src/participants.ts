@@ -1,7 +1,7 @@
 /**
  * Participant & track publication models (public API surface).
  */
-import type { DeviceProfile, JoinCapabilities, PresenceState } from '@vidcall/protocol';
+import type { DeviceProfile, JoinCapabilities, PresenceState } from '@mbsks/protocol';
 
 export type TrackSource = 'camera' | 'microphone' | 'screen' | 'custom';
 

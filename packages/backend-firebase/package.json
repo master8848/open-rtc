@@ -1,5 +1,5 @@
 {
-  "name": "@vidcall/backend-firebase",
+  "name": "@mbsks/backend-firebase",
   "version": "0.1.0",
   "description": "vidcall signaling backend adapter for Firebase Realtime Database (onChildAdded signal log + native onDisconnect presence).",
   "author": "Saurav Sanjel <jobarsanjel2@gmail.com>",
@@ -28,8 +28,8 @@
   },
   "dependencies": {
     "firebase": "12.16.0",
-    "@vidcall/protocol": "0.1.0",
-    "@vidcall/transport": "0.1.0"
+    "@mbsks/protocol": "0.1.0",
+    "@mbsks/transport": "0.1.0"
   },
   "devDependencies": {
     "@types/node": "22.20.1",

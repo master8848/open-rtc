@@ -7,7 +7,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { types as MediasoupTypes } from 'mediasoup';
-import type { IcePayload, OfferPayload } from '@vidcall/protocol';
+import type { IcePayload, OfferPayload } from '@mbsks/protocol';
 import { MediasoupAdapter, type MediasoupAdapterOptions } from '../src/mediasoup-adapter.ts';
 import {
   buildSdpAnswer,

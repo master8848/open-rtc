@@ -4,16 +4,16 @@
  * The canonical `SignalingTransport` interface lives in
  * `packages/core/src/transport.ts` (owned by the core agent). This package
  * declares a STRUCTURAL TWIN with the exact same members so that:
- *   - backend adapter packages can depend on the light `@vidcall/transport`
- *     package instead of the engine (`@vidcall/core`) — no engine coupling;
+ *   - backend adapter packages can depend on the light `@mbsks/transport`
+ *     package instead of the engine (`@mbsks/core`) — no engine coupling;
  *   - TypeScript's structural typing means any class implementing the twin
- *     below is assignable to `@vidcall/core`'s `SignalingTransport`, and vice
+ *     below is assignable to `@mbsks/core`'s `SignalingTransport`, and vice
  *     versa.
  *
- * Wire payloads use `Envelope` from `@vidcall/protocol`
+ * Wire payloads use `Envelope` from `@mbsks/protocol`
  * (protocol/schema.json mirror) — the single shared wire contract.
  */
-import type { Envelope, PresenceState } from '@vidcall/protocol';
+import type { Envelope, PresenceState } from '@mbsks/protocol';
 
 /** Static info a peer announces when joining a room (twin of core's). */
 export interface ParticipantInfo {

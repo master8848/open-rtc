@@ -37,7 +37,7 @@ test('packaging: drivers are optional peers + devDeps, not dependencies', () => 
   for (const dep of OPTIONAL_PEERS) {
     assert.ok(
       !(dep in (pkg.dependencies ?? {})),
-      `${dep} must not be a regular dependency of @vidcall/server`,
+      `${dep} must not be a regular dependency of @mbsks/server`,
     );
     const peer = pkg.peerDependencies?.[dep];
     assert.ok(peer, `${dep} must be listed in peerDependencies`);

@@ -1,16 +1,16 @@
-# @vidcall/react
+# @mbsks/react
 
 React bindings for vidcall: thin `useSyncExternalStore` hooks over
-`@vidcall/core`'s `Room` snapshot layer (`room.subscribe()` /
+`@mbsks/core`'s `Room` snapshot layer (`room.subscribe()` /
 `room.getSnapshot()`). StrictMode-safe.
 
 ```sh
-npm install @vidcall/react @vidcall/core react
+npm install @mbsks/react @mbsks/core react
 ```
 
 ```tsx
-import { useJoin, useParticipants, useRoomState } from '@vidcall/react';
-import { Room } from '@vidcall/core';
+import { useJoin, useParticipants, useRoomState } from '@mbsks/react';
+import { Room } from '@mbsks/core';
 
 function Call({ room }: { room: Room }) {
   useJoin(room); // auto-join on mount; aborts + leaves on unmount

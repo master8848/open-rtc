@@ -1,7 +1,7 @@
 /**
- * vidcall server example — ~30 lines: mount @vidcall/server inside Express.
+ * vidcall server example — ~30 lines: mount @mbsks/server inside Express.
  *
- *   npm run build        # from the repo root — builds @vidcall/server (dist)
+ *   npm run build        # from the repo root — builds @mbsks/server (dist)
  *   node examples/server/server.mjs
  *   # then, in another shell:
  *   node examples/server/client.mjs
@@ -10,11 +10,11 @@
  * packages/server/README.md for the full route table and error codes.
  */
 import express from 'express';
-import { attachWebSocketRelay, createServices, InMemoryStore } from '@vidcall/server';
-import { createExpressRouter } from '@vidcall/server/express';
+import { attachWebSocketRelay, createServices, InMemoryStore } from '@mbsks/server';
+import { createExpressRouter } from '@mbsks/server/express';
 
 // SQL-backed stores live behind subpath exports with optional drivers, e.g.:
-//   import { SqliteStore } from '@vidcall/server/stores/sqlite';  // + npm i better-sqlite3
+//   import { SqliteStore } from '@mbsks/server/stores/sqlite';  // + npm i better-sqlite3
 const store = new InMemoryStore();
 const services = createServices({ store }); // add recordingStorage for recordings
 

@@ -1,5 +1,5 @@
 /**
- * @vidcall/server — the `Store` contract.
+ * @mbsks/server — the `Store` contract.
  *
  * The server core is a set of pure functions (`core.ts`) that take a
  * `Store` as their first argument. A `Store` is a minimal KV + query
@@ -12,7 +12,7 @@
  *
  * Implementations: `InMemoryStore` ships from the default entry; the
  * SQL-backed ones live behind subpath exports so the core stays
- * driver-free — `@vidcall/server/stores/sqlite` (better-sqlite3),
+ * driver-free — `@mbsks/server/stores/sqlite` (better-sqlite3),
  * `/stores/postgres` (pg), `/stores/mysql` (mysql2). See
  * `integrations/DATABASES.md` for how to implement one for any other
  * database (MongoDB, DynamoDB, Redis, Firestore, ...).
@@ -25,7 +25,7 @@
  *    drop fields).
  */
 
-import type { Envelope } from '@vidcall/protocol';
+import type { Envelope } from '@mbsks/protocol';
 import type { Participant, RecordingSession, Room, StoredSignal } from './types.ts';
 
 /** A signal waiting to be persisted (seq is assigned by the Store). */

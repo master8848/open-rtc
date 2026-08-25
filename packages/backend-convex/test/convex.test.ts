@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { createEnvelope } from '@vidcall/protocol';
+import { createEnvelope } from '@mbsks/protocol';
 import type { ConvexClient } from 'convex/browser';
 import { ConvexBackend } from '../src/ConvexBackend.js';
-import { runAdapterTestSuite, type AdapterHarness } from '@vidcall/transport/shared-tests';
-import type { SignalingTransport } from '@vidcall/transport';
+import { runAdapterTestSuite, type AdapterHarness } from '@mbsks/transport/shared-tests';
+import type { SignalingTransport } from '@mbsks/transport';
 import { FakeConvexClient, FakeConvexServer } from './fakes.js';
 
 // one fake Convex deployment per test file

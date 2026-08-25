@@ -1,7 +1,7 @@
 //! SHARED store test suite — mirror of `packages/server/src/shared-tests.ts`.
 //!
 //! Every [`Store`] implementation must pass this exact matrix — the same idea
-//! as the client's shared adapter suite (`@vidcall/transport/shared-tests`).
+//! as the client's shared adapter suite (`@mbsks/transport/shared-tests`).
 //! Run it from each store's test file:
 //!
 //! ```

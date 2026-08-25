@@ -1,5 +1,5 @@
 {
-  "name": "@vidcall/test-utils",
+  "name": "@mbsks/test-utils",
   "version": "0.1.0",
   "description": "vidcall test utilities: fake RTCPeerConnection / tracks / data channels and envelope fixtures for engine and policy tests. Zero runtime dependencies.",
   "author": "Saurav Sanjel <jobarsanjel2@gmail.com>",
@@ -27,6 +27,6 @@
     "clean": "tsc -b --clean"
   },
   "dependencies": {
-    "@vidcall/protocol": "0.1.0"
+    "@mbsks/protocol": "0.1.0"
   }
 }

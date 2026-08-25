@@ -59,7 +59,7 @@ Scorecard:
 
 ---
 
-## A. Hono perspective — is `@vidcall/server` portable, and how should signaling be shaped for mounting anywhere?
+## A. Hono perspective — is `@mbsks/server` portable, and how should signaling be shaped for mounting anywhere?
 
 ### A1. The kernel is right; the concrete hosts are wrong-shaped
 
@@ -197,12 +197,12 @@ Issues, impact-ranked:
 ### A5. Would a Hono-style rewrite shrink the package?
 
 Not a rewrite — a re-plumbing (A1/A2). The *real* weight problem is
-dependencies, not architecture: installing `@vidcall/server` drags
+dependencies, not architecture: installing `@mbsks/server` drags
 **`pg`, `mysql2`, `better-sqlite3` (native!), and `ws`** as unconditional
 dependencies (`packages/server/package.json:34-40`) even though the core
 (`core.ts`, `store.ts`) needs none of them and `InMemoryStore` suffices for
 most embedders. Move stores to subpath exports
-(`@vidcall/server/store-pg`, `…/store-mysql`, `…/store-sqlite`) with the
+(`@mbsks/server/store-pg`, `…/store-mysql`, `…/store-sqlite`) with the
 drivers as optional peer deps; keep `ws` only behind the Node WS adapter.
 Combined with A1, the "core + InMemory + fetch handler" footprint approaches
 zero-dep. Effort **M**. This is the single biggest "small enough to fit
@@ -287,7 +287,7 @@ Comparison points:
 - For embedding inside existing Node/Bun apps (the primary distribution),
   size doesn't matter; for the "tiny sidecar next to Laravel/Django/Rails"
   story (`DJANGO.md`, `LARAVEL.md`, `RAILS.md`), a compiled Bun binary removes
-  the `npm install @vidcall/server better-sqlite3` step from those guides
+  the `npm install @mbsks/server better-sqlite3` step from those guides
   entirely — a genuine DX upgrade once `bun:sqlite` store exists (B1).
 - Add `--bytecode` for faster cold starts if the sidecar is scaled to zero.
 
@@ -402,7 +402,7 @@ only the esbuild used ad-hoc by `examples/vanilla/build.mjs`).
 fine for the client packages but means the *server* package is also compiled
 against DOM libs — harmless today, but if you adopt rslib per-package configs
 you can narrow libs per target (server: no DOM) and catch accidental DOM
-usage in `@vidcall/server` at compile time.
+usage in `@mbsks/server` at compile time.
 
 ### C5. dts strategy & verification
 
@@ -446,7 +446,7 @@ Options ranked for *this* repo's size (7 TS projects + 6 backend pkgs):
 ## D. Cross-cutting — the single decision that most reduces total weight
 
 **Canonicalize the Web-standard fetch handler (`Request → Response`) as the
-primary API of `@vidcall/server`, and derive every host (node:http, Express,
+primary API of `@mbsks/server`, and derive every host (node:http, Express,
 Fastify, Hono, `Bun.serve`, Workers) — plus the WS relay behind a minimal
 socket interface — from it.**
 
@@ -455,7 +455,7 @@ Why this one decision pays across all three lenses:
 - **Weight**: it demotes `node:http` and `ws` from required runtime facts to
   two adapters among many, enabling the dependency diet (stores → subpath
   exports with optional peers, §A5). Core + InMemory + fetch handler ≈ zero
-  runtime deps, matching `@vidcall/core`'s discipline on the other side of
+  runtime deps, matching `@mbsks/core`'s discipline on the other side of
   the wire.
 - **Any-runtime**: Bun/Deno/Workers/Hono compatibility stops being a porting
   exercise; the Bun single-binary sidecar and the (future) Workers target are

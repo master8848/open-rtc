@@ -24,10 +24,10 @@
  *
  * See README.md for usage + caveats.
  */
-import type { Envelope, PresenceState } from '@vidcall/protocol';
+import type { Envelope, PresenceState } from '@mbsks/protocol';
 import type { SupabaseClient, RealtimeChannel, RealtimePresenceState } from '@supabase/supabase-js';
-import { BaseSignalingTransport, type BaseOptions, type ParticipantInfo, type ParticipantPresence } from '@vidcall/transport';
-import { isChunkFrame } from '@vidcall/transport/internal';
+import { BaseSignalingTransport, type BaseOptions, type ParticipantInfo, type ParticipantPresence } from '@mbsks/transport';
+import { isChunkFrame } from '@mbsks/transport/internal';
 
 export interface SupabaseBackendOptions extends BaseOptions {
   /** Supabase client (create via `createClient(url, anonKey)`). */

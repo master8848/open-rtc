@@ -15,7 +15,7 @@
  * in which case the remote channel becomes active (this matches how
  * negotiation actually negotiates only the offerer's channel).
  */
-import type { ChatPayload, ReactionPayload } from '@vidcall/protocol';
+import type { ChatPayload, ReactionPayload } from '@mbsks/protocol';
 import { TypedEmitter } from './events.ts';
 
 export interface ControlMessage {

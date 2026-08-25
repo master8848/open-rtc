@@ -10,7 +10,7 @@
  *  - ICE candidates are buffered until the matching remote description is
  *    applied (see `PeerConnectionManager`).
  */
-import type { Envelope } from '@vidcall/protocol';
+import type { Envelope } from '@mbsks/protocol';
 
 export interface OrderedMessageBufferOptions {
   /**

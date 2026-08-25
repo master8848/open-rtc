@@ -15,7 +15,7 @@
  * room instance.
  */
 import { useEffect, useRef } from 'react';
-import type { Room } from '@vidcall/core';
+import type { Room } from '@mbsks/core';
 
 export interface UseJoinOptions {
   /**

@@ -12,8 +12,8 @@
  *
  * Subclasses implement the `do*` hooks against their SDK.
  */
-import type { Envelope, PresenceState } from '@vidcall/protocol';
-import { isEnvelope } from '@vidcall/protocol';
+import type { Envelope, PresenceState } from '@mbsks/protocol';
+import { isEnvelope } from '@mbsks/protocol';
 import type { ParticipantInfo, ParticipantPresence, SignalingTransport } from './types.js';
 import { ChunkAssembler, encodeChunks, isChunkFrame } from './internal/chunker.js';
 import { ReorderBuffer } from './internal/reorder.js';

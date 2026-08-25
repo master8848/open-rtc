@@ -118,7 +118,7 @@ moved from npm to Bun (`bun run <script>`).
 
 Releases are driven by [changesets](https://github.com/changesets/changesets)
 (`@changesets/cli`, configured in `.changeset/config.json`). All workspace
-packages under `packages/*` and `protocol/` are publishable (`@vidcall/*`,
+packages under `packages/*` and `protocol/` are publishable (`@mbsks/*`,
 independent versioning); the root package is private and never released.
 
 **Every PR that changes published behavior must include a changeset.** Run
@@ -146,7 +146,7 @@ updated in the same PR as notable user-facing changes. The root README links
 to it so newcomers can find it.
 
 Version commits follow the repo's conventional style via
-`.changeset/commits.mjs` (`chore: release @vidcall/core@0.2.0, ...`).
+`.changeset/commits.mjs` (`chore: release @mbsks/core@0.2.0, ...`).
 
 ## Commit style
 

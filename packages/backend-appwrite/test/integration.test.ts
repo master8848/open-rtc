@@ -13,8 +13,8 @@
 import { describe } from 'vitest';
 import { Client, Databases, Realtime } from 'appwrite';
 import { AppwriteBackend } from '../src/AppwriteBackend.js';
-import { runAdapterTestSuite, type AdapterHarness } from '@vidcall/transport/shared-tests';
-import type { SignalingTransport } from '@vidcall/transport';
+import { runAdapterTestSuite, type AdapterHarness } from '@mbsks/transport/shared-tests';
+import type { SignalingTransport } from '@mbsks/transport';
 
 const endpoint = process.env.VIDCALL_TEST_APPWRITE_ENDPOINT;
 const project = process.env.VIDCALL_TEST_APPWRITE_PROJECT;

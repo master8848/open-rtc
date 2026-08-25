@@ -7,10 +7,10 @@ backend-hosted signaling server.
 | ---------------------- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------- |
 | [`vanilla/`](vanilla/) | plain TypeScript, no framework | `Room` + the **sqlite BroadcastChannel** backend: two tabs of one browser = a 1:1 mesh call with **no server at all**. Mute/camera toggles, local adaptive-quality monitoring, start-recording wiring. | a browser (Chrome/Edge/Firefox/Safari) |
 | [`react/`](react/)     | Vite + React 19                | `Room` + the **Supabase** backend wired into React state: join/leave, mute/camera, `quality-warning` events, participant roster.                                                                       | a Supabase project (free tier is fine) |
-| [`server/`](server/)   | Express + `@vidcall/server`    | Host the signaling/state plane yourself: rooms, REST API, WebSocket relay. Ships a REST client snippet.                                                                                                | Node 18+                               |
+| [`server/`](server/)   | Express + `@mbsks/server`    | Host the signaling/state plane yourself: rooms, REST API, WebSocket relay. Ships a REST client snippet.                                                                                                | Node 18+                               |
 
 All examples consume the workspace packages exactly the way an external app
-would consume the unpublished `@vidcall/*` packages (via the npm workspace
+would consume the unpublished `@mbsks/*` packages (via the npm workspace
 symlinks / `file:` deps — see the install section of the [root README](../README.md)).
 
 ## Prerequisites
@@ -19,7 +19,7 @@ symlinks / `file:` deps — see the install section of the [root README](../READ
 git clone <repo-url> vidcall
 cd vidcall
 npm ci          # or: npm install
-npm run build   # builds @vidcall/core, @vidcall/transport, @vidcall/server, ...
+npm run build   # builds @mbsks/core, @mbsks/transport, @mbsks/server, ...
 ```
 
 > The vanilla example bundles directly from the TypeScript sources, so it
@@ -43,7 +43,7 @@ different room.
 ```sh
 cd examples/react
 cp .env.example .env       # fill in VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY
-npm install                # installs react/vite + links the workspace @vidcall/* packages
+npm install                # installs react/vite + links the workspace @mbsks/* packages
 npm run dev                # http://localhost:5173
 ```
 
@@ -53,11 +53,11 @@ for the roster, over one WebSocket. Mute/camera state and `quality-warning`
 events live in React state.
 
 > Production build (`npm run build` in `examples/react`) resolves the
-> `@vidcall/*` packages to their compiled `dist/`, so build the workspace
+> `@mbsks/*` packages to their compiled `dist/`, so build the workspace
 > first: `npm run build` at the repo root **plus**
 > `(cd packages/backend-supabase && npm run build)`.
 
-## server — mount @vidcall/server in Express
+## server — mount @mbsks/server in Express
 
 ```sh
 node examples/server/server.mjs    # terminal 1 — http://localhost:3000/vidcall

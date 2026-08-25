@@ -1,7 +1,7 @@
 /**
  * Test fixtures shared across packages.
  */
-import type { Envelope } from '@vidcall/protocol';
+import type { Envelope } from '@mbsks/protocol';
 
 let seqCounter = 0;
 

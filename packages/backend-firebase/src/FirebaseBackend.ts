@@ -18,7 +18,7 @@
  * chronologically, so SDP offer/answer arrive in order. The 16 MB SDK write
  * cap makes chunking unnecessary for signaling.
  */
-import type { Envelope, PresenceState } from '@vidcall/protocol';
+import type { Envelope, PresenceState } from '@mbsks/protocol';
 import type { FirebaseApp } from 'firebase/app';
 import {
   getDatabase,
@@ -36,7 +36,7 @@ import {
   type OnDisconnect,
   type Unsubscribe,
 } from 'firebase/database';
-import { BaseSignalingTransport, type BaseOptions, type ParticipantInfo, type ParticipantPresence } from '@vidcall/transport';
+import { BaseSignalingTransport, type BaseOptions, type ParticipantInfo, type ParticipantPresence } from '@mbsks/transport';
 
 export interface FirebaseBackendOptions extends BaseOptions {
   /** RTDB instance — or provide `app` and the adapter gets one via getDatabase(). */
