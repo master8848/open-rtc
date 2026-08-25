@@ -22,8 +22,8 @@
  * transport.onMessage(roomId, (env) => void router.handle(env));
  * ```
  */
-import type { Envelope, IcePayload, OfferPayload, SfuKind, SfuPayload } from '@mbsks/protocol';
-import { SFU_ACTIONS, SFU_KINDS } from '@mbsks/protocol';
+import type { Envelope, IcePayload, OfferPayload, SfuKind, SfuPayload } from '@mbsks/openrtc-protocol';
+import { SFU_ACTIONS, SFU_KINDS } from '@mbsks/openrtc-protocol';
 import { TypedEmitter } from './events.ts';
 import type { SfuGateway, SfuSession } from './sfu-gateway.ts';
 

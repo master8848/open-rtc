@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { createEnvelope } from '@mbsks/protocol';
+import { createEnvelope } from '@mbsks/openrtc-protocol';
 import { PostgresBackend, channelName, presenceChannelName } from '../src/PostgresBackend.js';
-import { runAdapterTestSuite, type AdapterHarness } from '@mbsks/transport/shared-tests';
-import type { SignalingTransport } from '@mbsks/transport';
+import { runAdapterTestSuite, type AdapterHarness } from '@mbsks/openrtc-transport/shared-tests';
+import type { SignalingTransport } from '@mbsks/openrtc-transport';
 import { FakePgBus, FakePgClient } from './fakes.js';
 
 // one fake "Postgres server" per test file

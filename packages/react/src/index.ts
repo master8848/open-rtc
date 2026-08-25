@@ -1,5 +1,5 @@
 /**
- * @mbsks/react — React bindings over the @mbsks/core snapshot layer.
+ * @mbsks/openrtc-react — React bindings over the @mbsks/openrtc-core snapshot layer.
  *
  * Thin `useSyncExternalStore` adapters: all caching and equality checks live
  * in core (`Room.getSnapshot()` / `Room.subscribe()`); these hooks never

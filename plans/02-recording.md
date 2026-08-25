@@ -45,7 +45,7 @@ room.recording.on('recording:error', ({ code, message }) => {})
 room.recording.getStatus(): 'idle'|'recording'|'finalizing'
 ```
 
-Transport-agnostic: `FetchRecordingUploader` stays `fetch`-based; no dependency on `@mbsks/server` (`room.ts:341-344` already no server dep). `uploadChunk` chunks are `index`-ordered (existing `saveChunk(sessionId, chunk, index)`).
+Transport-agnostic: `FetchRecordingUploader` stays `fetch`-based; no dependency on `@mbsks/openrtc-server` (`room.ts:341-344` already no server dep). `uploadChunk` chunks are `index`-ordered (existing `saveChunk(sessionId, chunk, index)`).
 
 ## API — Server
 
@@ -109,7 +109,7 @@ Browser -> SFU (mediasoup Router) -> Consumer(s) -> EgressWorker -> RecordingSto
 ## UI plug-and-play
 
 - `client` mode is zero infra: `room.recording.startRecording({localStream, remoteStreams})` works with `InMemoryStore` + `DiskRecordingStorage` (`examples/vanilla` pattern).
-- `sfu-*` modes are opt-in: `bun add @mbsks/sfu-gateway` + `RecordingStorage` (S3) + egress worker. App bundle doesn't grow unless imported.
+- `sfu-*` modes are opt-in: `bun add @mbsks/openrtc-sfu-gateway` + `RecordingStorage` (S3) + egress worker. App bundle doesn't grow unless imported.
 
 ## Acceptance
 

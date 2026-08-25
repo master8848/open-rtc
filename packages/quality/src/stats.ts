@@ -3,7 +3,7 @@
  * (webrtc-js.md §5.2). A snapshot is an aggregated, sanitized view of one
  * `getStats()` poll; the policy engine never touches WebRTC objects.
  */
-import type { QualityWarningDirection } from '@mbsks/protocol';
+import type { QualityWarningDirection } from '@mbsks/openrtc-protocol';
 
 export type QualityLimitationReason = 'none' | 'cpu' | 'bandwidth' | 'other';
 

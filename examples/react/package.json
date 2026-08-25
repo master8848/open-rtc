@@ -11,11 +11,11 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "2.110.9",
-    "@mbsks/backend-supabase": "file:../../packages/backend-supabase",
-    "@mbsks/core": "file:../../packages/core",
-    "@mbsks/protocol": "file:../../protocol",
-    "@mbsks/react": "file:../../packages/react",
-    "@mbsks/transport": "file:../../packages/transport",
+    "@mbsks/openrtc-backend-supabase": "file:../../packages/backend-supabase",
+    "@mbsks/openrtc-core": "file:../../packages/core",
+    "@mbsks/openrtc-protocol": "file:../../protocol",
+    "@mbsks/openrtc-react": "file:../../packages/react",
+    "@mbsks/openrtc-transport": "file:../../packages/transport",
     "react": "19.2.8",
     "react-dom": "19.2.8"
   },

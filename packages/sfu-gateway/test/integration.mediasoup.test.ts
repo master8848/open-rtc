@@ -17,7 +17,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import type { OfferPayload } from '@mbsks/protocol';
+import type { OfferPayload } from '@mbsks/openrtc-protocol';
 import { MediasoupAdapter } from '../src/mediasoup-adapter.ts';
 
 const ENABLED = process.env.VIDCALL_MEDIASOUP_INTEGRATION === '1';

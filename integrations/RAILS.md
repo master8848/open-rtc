@@ -1,6 +1,6 @@
-# Hosting @mbsks/server next to a Ruby on Rails app
+# Hosting @mbsks/openrtc-server next to a Ruby on Rails app
 
-Rails is Ruby — @mbsks/server is a Node component that speaks plain
+Rails is Ruby — @mbsks/openrtc-server is a Node component that speaks plain
 REST + WebSocket JSON. The recommended pattern is the **sidecar**: run the
 component as a tiny Node process and let Rails proxy the `/vidcall/` prefix
 (or put it behind the same domain with nginx).
@@ -8,14 +8,14 @@ component as a tiny Node process and let Rails proxy the `/vidcall/` prefix
 ## 1. Run the sidecar (Node)
 
 ```bash
-npm install @mbsks/server pg
+npm install @mbsks/openrtc-server pg
 ```
 
 ```js
 // sidecar.mjs — reuses your Rails Postgres via DATABASE_URL
 import http from 'node:http';
-import { attachWebSocketRelay, createNodeServer, createServices } from '@mbsks/server';
-import { PostgresStore } from '@mbsks/server/stores/postgres';
+import { attachWebSocketRelay, createNodeServer, createServices } from '@mbsks/openrtc-server';
+import { PostgresStore } from '@mbsks/openrtc-server/stores/postgres';
 
 const store = new PostgresStore(process.env.DATABASE_URL); // reuse your PG
 await store.bootstrap();

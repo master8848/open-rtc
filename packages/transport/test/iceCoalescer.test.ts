@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { createEnvelope, type Envelope } from '@mbsks/protocol';
+import { createEnvelope, type Envelope } from '@mbsks/openrtc-protocol';
 import { IceCoalescer } from '../src/internal/iceCoalescer.js';
 
 function ice(i: number): Envelope {

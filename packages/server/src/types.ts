@@ -1,14 +1,14 @@
 /**
- * @mbsks/server — domain types.
+ * @mbsks/openrtc-server — domain types.
  *
  * The server component owns ROOM/SESSION state (rooms, participants,
- * recordings) and relays signaling envelopes from `@mbsks/protocol`
+ * recordings) and relays signaling envelopes from `@mbsks/openrtc-protocol`
  * between room members. All types here are plain data: any framework
  * (Express, Fastify, Django, Laravel, Rails, ...) and any database can
  * host them via the function-based `Store` contract (see `store.ts`).
  */
 
-import type { Envelope } from '@mbsks/protocol';
+import type { Envelope } from '@mbsks/openrtc-protocol';
 
 /** Room lifecycle state. */
 export type RoomState = 'open' | 'closed';

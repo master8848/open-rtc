@@ -1,16 +1,16 @@
-# @mbsks/react
+# @mbsks/openrtc-react
 
 React bindings for vidcall: thin `useSyncExternalStore` hooks over
-`@mbsks/core`'s `Room` snapshot layer (`room.subscribe()` /
+`@mbsks/openrtc-core`'s `Room` snapshot layer (`room.subscribe()` /
 `room.getSnapshot()`). StrictMode-safe.
 
 ```sh
-npm install @mbsks/react @mbsks/core react
+npm install @mbsks/openrtc-react @mbsks/openrtc-core react
 ```
 
 ```tsx
-import { useJoin, useParticipants, useRoomState } from '@mbsks/react';
-import { Room } from '@mbsks/core';
+import { useJoin, useParticipants, useRoomState } from '@mbsks/openrtc-react';
+import { Room } from '@mbsks/openrtc-core';
 
 function Call({ room }: { room: Room }) {
   useJoin(room); // auto-join on mount; aborts + leaves on unmount

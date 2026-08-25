@@ -8,7 +8,7 @@
  *
  * Pure: no WebRTC imports. `detect()` reads `navigator` defensively.
  */
-import type { DeviceProfile as WireDeviceProfile, Platform } from '@mbsks/protocol';
+import type { DeviceProfile as WireDeviceProfile, Platform } from '@mbsks/openrtc-protocol';
 import { DEFAULT_QUALITY_TIERS, findTier, tierIndex } from './tiers.ts';
 import type { QualityTier } from './tiers.ts';
 

@@ -1,4 +1,4 @@
-# @mbsks/backend-firebase
+# @mbsks/openrtc-backend-firebase
 
 Firebase **Realtime Database** signaling adapter — the highest-connection
 backend in the lineup (200k concurrent), offline-first, with **native
@@ -10,7 +10,7 @@ server-side, no heartbeats required).
 ```ts
 import { initializeApp } from 'firebase/app';
 import { getDatabase } from 'firebase/database';
-import { FirebaseBackend } from '@mbsks/backend-firebase';
+import { FirebaseBackend } from '@mbsks/openrtc-backend-firebase';
 
 const app = initializeApp({
   apiKey: '...',
@@ -70,4 +70,4 @@ arrive in order.
   time; `firebase@12.17.1` is only 7 d old, rejected per the 14-day policy —
   re-verified `npm view firebase time`).
 - Runtime deps: `firebase` (modular: `firebase/app` + `firebase/database`
-  only), `@mbsks/transport`.
+  only), `@mbsks/openrtc-transport`.

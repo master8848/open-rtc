@@ -1,8 +1,8 @@
 /**
- * @mbsks/transport — signaling transport contract + helpers.
+ * @mbsks/openrtc-transport — signaling transport contract + helpers.
  *
  * Public surface:
- *  - `SignalingTransport`: structural twin of `@mbsks/core`'s interface
+ *  - `SignalingTransport`: structural twin of `@mbsks/openrtc-core`'s interface
  *    (join/leave/emit/onMessage/onPresence/setPresence/dispose) — backend
  *    adapters implement this; TypeScript structural typing makes them
  *    assignable to core's `SignalingTransport` directly.
@@ -11,9 +11,9 @@
  *  - `BaseSignalingTransport`: shared adapter plumbing (chunking, reorder,
  *    heartbeat, ICE coalescing) — extend this in backend adapters.
  *  - `InMemoryBackend`: in-process test double.
- *  - helpers under `@mbsks/transport/internal`: chunker, reorder buffer,
+ *  - helpers under `@mbsks/openrtc-transport/internal`: chunker, reorder buffer,
  *    heartbeat + presence sweeper, ICE coalescer.
- *  - `@mbsks/transport/shared-tests`: the shared adapter test suite every
+ *  - `@mbsks/openrtc-transport/shared-tests`: the shared adapter test suite every
  *    backend adapter must pass.
  */
 export * from './types.js';

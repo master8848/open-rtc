@@ -19,10 +19,10 @@
  * late joiners with their current state, and the shared presence sweeper
  * (heartbeat + stale timeout) drops peers whose tab died without a leave.
  */
-import type { Envelope, PresenceState } from '@mbsks/protocol';
-import { isEnvelope } from '@mbsks/protocol';
+import type { Envelope, PresenceState } from '@mbsks/openrtc-protocol';
+import { isEnvelope } from '@mbsks/openrtc-protocol';
 import { createClient, type Client } from '@libsql/client';
-import { BaseSignalingTransport, type BaseOptions, type ParticipantInfo, type ParticipantPresence } from '@mbsks/transport';
+import { BaseSignalingTransport, type BaseOptions, type ParticipantInfo, type ParticipantPresence } from '@mbsks/openrtc-transport';
 
 /**
  * Adapter frame cap. BroadcastChannel has no documented message-size limit

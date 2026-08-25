@@ -29,7 +29,7 @@ await room.stopEgress();
 
 - Reuses `MediasoupAdapter` `PlainTransport` / `DirectTransport` + `Consumer`. `RecordingStorage` abstraction already handles `S3` SigV4 (`recording.ts:154`) — extend to `EgressStorage` (same interface, different prefix).
 - Server: `POST /whip/:roomId` and `/whep/:roomId` are SFU-adjacent HTTP endpoints (not core `Store`). Guard with token (`Authorization: Bearer`) when `services.auth` set.
-- Install: `bun add @mbsks/sfu-gateway` already; WHIP/WHEP are subpaths, no new SDK. `ffmpeg` is an external binary — document as infra dep for egress.
+- Install: `bun add @mbsks/openrtc-sfu-gateway` already; WHIP/WHEP are subpaths, no new SDK. `ffmpeg` is an external binary — document as infra dep for egress.
 
 ## 2. Transcription / STT
 
@@ -102,12 +102,12 @@ services.webhooks = [{ url, secret, events }] // HMAC X-Vidcall-Signature
 
 | Add | What you pay |
 |-----|-------------|
-| `@mbsks/core` | <15 kB gz |
-| `+ @mbsks/sfu-gateway` | +mediasoup types only (no native) |
+| `@mbsks/openrtc-core` | <15 kB gz |
+| `+ @mbsks/openrtc-sfu-gateway` | +mediasoup types only (no native) |
 | `+ WHIP/WHEP/HLS` | +egress worker (server infra, not bundle) |
-| `+ transcription` | `+ @mbsks/transcription` (STT SDK isolated) |
+| `+ transcription` | `+ @mbsks/openrtc-transcription` (STT SDK isolated) |
 | `+ processors` (rnnoise/bg) | lazy WASM, 30–200 kB on demand |
-| `+ push` | `+ @mbsks/server/push` (FCM/APNs SDK isolated) |
+| `+ push` | `+ @mbsks/openrtc-server/push` (FCM/APNs SDK isolated) |
 
 No feature lands in `core` unless it is zero-dep or lazy.
 

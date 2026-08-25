@@ -1,5 +1,5 @@
 /**
- * @mbsks/server — Express adapter.
+ * @mbsks/openrtc-server — Express adapter.
  *
  * `createExpressRouter(services)` returns an `express.Router` mounting the
  * shared `dispatch()` handlers. express is an optional peer dependency —
@@ -8,8 +8,8 @@
  *
  * ```ts
  * import express from 'express';
- * import { createExpressRouter } from '@mbsks/server/express';
- * import { createServices, InMemoryStore } from '@mbsks/server';
+ * import { createExpressRouter } from '@mbsks/openrtc-server/express';
+ * import { createServices, InMemoryStore } from '@mbsks/openrtc-server';
  *
  * const app = express();
  * app.use('/vidcall', createExpressRouter(createServices({ store: new InMemoryStore() })));

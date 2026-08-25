@@ -1,5 +1,5 @@
 /**
- * @mbsks/server — TURN credentials (RFC 5389 TURN REST API, coturn).
+ * @mbsks/openrtc-server — TURN credentials (RFC 5389 TURN REST API, coturn).
  *
  * Short-lived `turn:` / `turns:` credentials without a DB: the server holds a
  * single HMAC key (`turn.secret`) and a set of URLs (`turn.urls`).  Clients

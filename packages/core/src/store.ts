@@ -17,7 +17,7 @@
  * suppresses redundant notifies), and listeners are isolated — one throwing
  * listener never prevents the others from running.
  */
-import type { PresenceState } from '@mbsks/protocol';
+import type { PresenceState } from '@mbsks/openrtc-protocol';
 import type {
   LocalParticipant,
   RemoteParticipant,

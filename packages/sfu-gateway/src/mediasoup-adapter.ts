@@ -26,7 +26,7 @@
  * a pinned devDependency (3.23.1, published 2026-07-28, >= 14-day age gate;
  * latest 3.24.x was < 14 days old at scaffold time).
  */
-import type { SfuKind } from '@mbsks/protocol';
+import type { SfuKind } from '@mbsks/openrtc-protocol';
 import type { types as MediasoupTypes } from 'mediasoup';
 import type {
   PublishOptions,

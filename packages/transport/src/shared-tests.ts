@@ -11,7 +11,7 @@
  * packages/core (room-bound, `Envelope` payloads).
  *
  * Usage:
- *   import { runAdapterTestSuite, type AdapterHarness } from '@mbsks/transport/shared-tests';
+ *   import { runAdapterTestSuite, type AdapterHarness } from '@mbsks/openrtc-transport/shared-tests';
  *   runAdapterTestSuite({
  *     name: 'supabase',
  *     createPeer: async (peerId) => new SupabaseBackend({ client, sessionId: 's-' + peerId }),
@@ -20,7 +20,7 @@
  *   });
  */
 import { describe, it, expect } from 'vitest';
-import { createEnvelope, type Envelope, type OfferPayload } from '@mbsks/protocol';
+import { createEnvelope, type Envelope, type OfferPayload } from '@mbsks/openrtc-protocol';
 import type { ParticipantPresence, SignalingTransport } from './types.js';
 
 export interface AdapterHarness {
@@ -74,7 +74,7 @@ function taggedSdp(tag: string, sdp: string): OfferPayload {
 }
 
 export function runAdapterTestSuite(h: AdapterHarness): void {
-  describe(`@mbsks/transport shared suite → ${h.name}`, () => {
+  describe(`@mbsks/openrtc-transport shared suite → ${h.name}`, () => {
     it('join resolves and binds the room', async () => {
       const p = await h.createPeer('a');
       const r = `${h.roomPrefix ?? 'shared'}-r${++suiteCounter}`;

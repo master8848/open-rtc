@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createEnvelope } from '@mbsks/protocol';
+import { createEnvelope } from '@mbsks/openrtc-protocol';
 import {
   buildJoinEnvelope,
   buildLeaveEnvelope,

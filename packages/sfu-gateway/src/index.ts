@@ -1,5 +1,5 @@
 /**
- * @mbsks/sfu-gateway — optional SFU path for vidcall (docs/architecture.md D2).
+ * @mbsks/openrtc-sfu-gateway — optional SFU path for vidcall (docs/architecture.md D2).
  *
  * Public surface:
  *  - `SfuGateway` / `SfuSession`: the transport-agnostic, media-agnostic

@@ -1,7 +1,7 @@
 /**
  * Test fixtures shared across packages.
  */
-import type { Envelope } from '@mbsks/protocol';
+import type { Envelope } from '@mbsks/openrtc-protocol';
 
 let seqCounter = 0;
 

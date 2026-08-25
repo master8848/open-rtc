@@ -1,5 +1,5 @@
 {
-  "name": "@mbsks/backend-supabase",
+  "name": "@mbsks/openrtc-backend-supabase",
   "version": "0.1.0",
   "description": "vidcall signaling backend adapter for Supabase Realtime (broadcast + presence) — the default backend.",
   "author": "Saurav Sanjel <jobarsanjel2@gmail.com>",
@@ -28,8 +28,8 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "2.110.9",
-    "@mbsks/protocol": "0.1.0",
-    "@mbsks/transport": "0.1.0"
+    "@mbsks/openrtc-protocol": "0.1.0",
+    "@mbsks/openrtc-transport": "0.1.0"
   },
   "devDependencies": {
     "@types/node": "22.20.1",

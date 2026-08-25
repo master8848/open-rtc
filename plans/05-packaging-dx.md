@@ -11,20 +11,20 @@
 
 ## Goal
 
-`bun add @mbsks/core` is <15 kB gz zero-dep; adding a capability is one extra `bun add`. Heavy peers are optional + lazy-imported. Types are correct, dual publish works, and the React layer feels like TanStack.
+`bun add @mbsks/openrtc-core` is <15 kB gz zero-dep; adding a capability is one extra `bun add`. Heavy peers are optional + lazy-imported. Types are correct, dual publish works, and the React layer feels like TanStack.
 
 ## Package map — keep sharding, fix boundaries
 
 ```
-@mbsks/protocol        zero dep, every package -> it
-@mbsks/quality         -> protocol only (pure)
-@mbsks/transport       -> protocol (contract + chunker/reorder/heartbeat/iceCoalescer)
-@mbsks/core            -> protocol, quality (mesh engine, MediaTransport seam from 03)
-@mbsks/react           -> core (peer react>=18)
-@mbsks/server          core HTTP/WS kernel + Store contract; subpaths for drivers
-@mbsks/sfu-gateway     -> protocol (router + mediasoup ref, devDep only)
-@mbsks/backend-{supabase,firebase,convex,appwrite,postgres,sqlite}  one SDK each
-@mbsks/test-utils      dev only
+@mbsks/openrtc-protocol        zero dep, every package -> it
+@mbsks/openrtc-quality         -> protocol only (pure)
+@mbsks/openrtc-transport       -> protocol (contract + chunker/reorder/heartbeat/iceCoalescer)
+@mbsks/openrtc-core            -> protocol, quality (mesh engine, MediaTransport seam from 03)
+@mbsks/openrtc-react           -> core (peer react>=18)
+@mbsks/openrtc-server          core HTTP/WS kernel + Store contract; subpaths for drivers
+@mbsks/openrtc-sfu-gateway     -> protocol (router + mediasoup ref, devDep only)
+@mbsks/openrtc-backend-{supabase,firebase,convex,appwrite,postgres,sqlite}  one SDK each
+@mbsks/openrtc-test-utils      dev only
 ```
 
 Do not merge. Subpath isolation via `exports`, not folders.
@@ -57,7 +57,7 @@ Do not merge. Subpath isolation via `exports`, not folders.
 
 Peer vs dep policy:
 
-- `backend-*` SDKs stay `dependencies` (one SDK per adapter, `npm i @mbsks/backend-supabase` just works).
+- `backend-*` SDKs stay `dependencies` (one SDK per adapter, `npm i @mbsks/openrtc-backend-supabase` just works).
 - `server` drivers (`pg`, `mysql2`, `better-sqlite3`, `ws`, `express`, `fastify`) stay `optional peerDependencies` + `peerDependenciesMeta.optional` (`packages/server/package.json:85-101`) with lazy `await import('pg')` (`stores/PostgresStore.ts:62` pattern). Client never pays.
 - `react` peer `react>=18` (`packages/react/package.json:30`) + `externals: react` in bundler.
 
@@ -90,27 +90,27 @@ export default defineConfig({
 
 ```sh
 # minimal — 1:1 or mesh 2-4, <15 kB gz
-bun add @mbsks/core
+bun add @mbsks/openrtc-core
 
 # with React
-bun add @mbsks/core @mbsks/react
+bun add @mbsks/openrtc-core @mbsks/openrtc-react
 
 # pick one signaling backend (each is one SDK)
-bun add @mbsks/backend-supabase   # or firebase | convex | appwrite | postgres | sqlite
+bun add @mbsks/openrtc-backend-supabase   # or firebase | convex | appwrite | postgres | sqlite
 
 # optional server relay (REST+WS sidecar beside Express/Fastify/Django/Rails/Laravel)
-bun add @mbsks/server ws
+bun add @mbsks/openrtc-server ws
 
 # optional large rooms (adds mediasoup types only; worker is server-side)
-bun add @mbsks/sfu-gateway
+bun add @mbsks/openrtc-sfu-gateway
 
 # E2EE / processors are inside core (no extra dep); WHIP / transcription are separate subpaths
-bun add @mbsks/core  # useProcessor() chain from 03
+bun add @mbsks/openrtc-core  # useProcessor() chain from 03
 ```
 
 Bundle budgets (enforce with `size-limit`):
 
-- `@mbsks/core` <15 kB gz, `@mbsks/quality` <5 kB gz, `@mbsks/react` <3 kB gz. Backend/SFU/server budgets track peer SDK weight (document, not fail — `firebase` is ~2 MB gz, user opts in knowingly).
+- `@mbsks/openrtc-core` <15 kB gz, `@mbsks/openrtc-quality` <5 kB gz, `@mbsks/openrtc-react` <3 kB gz. Backend/SFU/server budgets track peer SDK weight (document, not fail — `firebase` is ~2 MB gz, user opts in knowingly).
 
 ## TanStack-inspired DX (additive, no new deps)
 
@@ -136,7 +136,7 @@ room.sendChat / sendReaction / setPresence gain isPending/error.code (typed Vidc
 
 - `VidcallClient` solves StrictMode double-mount ghost (`Room.JoinOptions.signal:157` already handles abort — client adds dedup).
 - Chat/reactions become separate cache keys with optimistic `setQueryData`, not emitter-only (`room.ts:392-393` explains they were excluded from snapshot — move to separate keys).
-- Devtools: `@mbsks/react-devtools` panel rendering `RoomSnapshot` tree + last-N envelope ring buffer (replaces single `debug` fn `room.ts:249`).
+- Devtools: `@mbsks/openrtc-react-devtools` panel rendering `RoomSnapshot` tree + last-N envelope ring buffer (replaces single `debug` fn `room.ts:249`).
 
 ## Pre-1.0 gates
 

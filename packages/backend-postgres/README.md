@@ -1,4 +1,4 @@
-# @mbsks/backend-postgres
+# @mbsks/openrtc-backend-postgres
 
 PostgreSQL LISTEN/NOTIFY signaling adapter — zero extra services if your app
 already runs Postgres. ~ms latency, transactional `NOTIFY`, and the smallest
@@ -8,7 +8,7 @@ footprint of the managed backends.
 
 ```ts
 import pg from 'pg';
-import { PostgresBackend } from '@mbsks/backend-postgres';
+import { PostgresBackend } from '@mbsks/openrtc-backend-postgres';
 
 // DEDICATED client — never a pool. Notifications are only delivered on the
 // connection that ran LISTEN, and pooled connections get multiplexed away.

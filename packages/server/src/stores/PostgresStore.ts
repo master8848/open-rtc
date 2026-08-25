@@ -8,14 +8,14 @@
  *
  * `pg` is an **optional peer dependency** and is loaded lazily (only when
  * this store is constructed with a connection string), so importing the
- * module never loads the driver. Install it next to `@mbsks/server`:
+ * module never loads the driver. Install it next to `@mbsks/openrtc-server`:
  *
  * ```
  * npm i pg
  * ```
  *
  * ```
- * import { PostgresStore } from '@mbsks/server/stores/postgres';
+ * import { PostgresStore } from '@mbsks/openrtc-server/stores/postgres';
  * const store = new PostgresStore('postgres://user:pass@localhost/vidcall');
  * await store.bootstrap();
  * ```
@@ -26,7 +26,7 @@
  */
 
 import type { Pool, PoolClient } from 'pg';
-import type { Envelope } from '@mbsks/protocol';
+import type { Envelope } from '@mbsks/openrtc-protocol';
 import type { Store } from '../store.ts';
 import type { Participant, RecordingSession, Room, StoredSignal } from '../types.ts';
 
@@ -72,7 +72,7 @@ async function loadPg(): Promise<PgModule> {
   } catch {
     throw new Error(
       "PostgresStore requires the optional peer dependency 'pg'. " +
-        'Install it next to @mbsks/server: npm i pg',
+        'Install it next to @mbsks/openrtc-server: npm i pg',
     );
   }
 }

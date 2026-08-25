@@ -10,7 +10,7 @@ import {
   type IcePayload,
   type OfferPayload,
   type SfuPayload,
-} from '@mbsks/protocol';
+} from '@mbsks/openrtc-protocol';
 import { SfuRouter, type SfuRouterErrorCode } from '../src/sfu-router.ts';
 import type {
   PublishOptions,

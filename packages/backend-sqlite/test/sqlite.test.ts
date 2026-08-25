@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { createEnvelope, type Envelope } from '@mbsks/protocol';
+import { createEnvelope, type Envelope } from '@mbsks/openrtc-protocol';
 import { createClient, type Client } from '@libsql/client';
 import { SqliteBackend } from '../src/SqliteBackend.js';
-import { runAdapterTestSuite, type AdapterHarness } from '@mbsks/transport/shared-tests';
-import type { SignalingTransport } from '@mbsks/transport';
+import { runAdapterTestSuite, type AdapterHarness } from '@mbsks/openrtc-transport/shared-tests';
+import type { SignalingTransport } from '@mbsks/openrtc-transport';
 
 function makePeer(): SqliteBackend {
   return new SqliteBackend({

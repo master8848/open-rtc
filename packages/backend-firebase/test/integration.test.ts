@@ -15,8 +15,8 @@ import { describe, it, expect } from 'vitest';
 import { initializeApp, type FirebaseApp } from 'firebase/app';
 import { getDatabase, type Database } from 'firebase/database';
 import { FirebaseBackend } from '../src/FirebaseBackend.js';
-import { runAdapterTestSuite, type AdapterHarness } from '@mbsks/transport/shared-tests';
-import type { SignalingTransport } from '@mbsks/transport';
+import { runAdapterTestSuite, type AdapterHarness } from '@mbsks/openrtc-transport/shared-tests';
+import type { SignalingTransport } from '@mbsks/openrtc-transport';
 
 const apiKey = process.env.VIDCALL_TEST_FIREBASE_API_KEY;
 const projectId = process.env.VIDCALL_TEST_FIREBASE_PROJECT_ID;

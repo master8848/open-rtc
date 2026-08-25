@@ -1,7 +1,7 @@
 /**
  * InMemoryBackend — an in-process SignalingTransport test double.
  *
- * Semantics mirror `@mbsks/core`'s `InMemoryTransport` (and real dumb
+ * Semantics mirror `@mbsks/openrtc-core`'s `InMemoryTransport` (and real dumb
  * broadcast pub/sub backends):
  *  - one room per instance; `emit` delivers envelopes to every other joined
  *    peer in the same room (unless `echo`);
@@ -11,8 +11,8 @@
  * Used by the SHARED adapter test suite as the reference implementation and
  * by unit tests/examples as the "no backend" dev default.
  */
-import type { Envelope, PresenceState } from '@mbsks/protocol';
-import { isEnvelope } from '@mbsks/protocol';
+import type { Envelope, PresenceState } from '@mbsks/openrtc-protocol';
+import { isEnvelope } from '@mbsks/openrtc-protocol';
 import type { ParticipantInfo, ParticipantPresence, SignalingTransport } from './types.js';
 
 export interface InMemoryBackendOptions {

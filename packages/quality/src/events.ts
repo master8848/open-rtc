@@ -2,8 +2,8 @@
  * Minimal typed event emitter for the policy engine.
  *
  * Deliberately in-workspace (CONTRIBUTING: small helpers live in-workspace)
- * so `@mbsks/quality` stays a standalone pure package with zero runtime
- * dependencies and no WebRTC imports. Mirrors `@mbsks/core`'s TypedEmitter.
+ * so `@mbsks/openrtc-quality` stays a standalone pure package with zero runtime
+ * dependencies and no WebRTC imports. Mirrors `@mbsks/openrtc-core`'s TypedEmitter.
  */
 export type EventMap = Record<string, unknown[]>;
 

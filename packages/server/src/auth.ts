@@ -1,5 +1,5 @@
 /**
- * @mbsks/server — HMAC-signed room tokens.
+ * @mbsks/openrtc-server — HMAC-signed room tokens.
  *
  * Zero-dependency auth (node:crypto only): compact JWT-style tokens
  * (`header.payload.signature`, base64url, HS256) that bind a caller to one

@@ -1,7 +1,7 @@
 {
-  "name": "@mbsks/transport",
+  "name": "@mbsks/openrtc-transport",
   "version": "0.1.0",
-  "description": "vidcall signaling transport contract (structural twin of @mbsks/core SignalingTransport) + helpers: chunker, reorder buffer, heartbeat, ICE coalescer, InMemoryBackend, shared adapter test suite.",
+  "description": "vidcall signaling transport contract (structural twin of @mbsks/openrtc-core SignalingTransport) + helpers: chunker, reorder buffer, heartbeat, ICE coalescer, InMemoryBackend, shared adapter test suite.",
   "author": "Saurav Sanjel <jobarsanjel2@gmail.com>",
   "license": "MIT",
   "type": "module",
@@ -38,7 +38,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@mbsks/protocol": "0.1.0"
+    "@mbsks/openrtc-protocol": "0.1.0"
   },
   "devDependencies": {
     "@types/node": "22.20.1",

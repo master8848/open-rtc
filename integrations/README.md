@@ -1,6 +1,6 @@
 # vidcall server — integration guides
 
-`@mbsks/server` is a small Node service that does your video-call plumbing:
+`@mbsks/openrtc-server` is a small Node service that does your video-call plumbing:
 rooms, participant rosters, and the signaling relay. Three ways to run it —
 pick the row that matches your stack:
 

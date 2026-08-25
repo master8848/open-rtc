@@ -14,7 +14,7 @@
  *  - `quality:changed` — `{ from, to, reason, direction, tier, stats }`
  *  - `quality:warning`  — same fields + `{ level, message }` for app toasts.
  */
-import type { QualityWarningDirection, QualityWarningReason } from '@mbsks/protocol';
+import type { QualityWarningDirection, QualityWarningReason } from '@mbsks/openrtc-protocol';
 import { TypedEmitter } from './events.ts';
 import type { RTCStatsSnapshot } from './stats.ts';
 import {

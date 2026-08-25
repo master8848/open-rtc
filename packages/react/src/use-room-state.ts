@@ -8,8 +8,8 @@
  *    the stable snapshot (arrays/records), never freshly-built objects.
  */
 import { useCallback, useSyncExternalStore } from 'react';
-import type { Room } from '@mbsks/core';
-import type { RoomParticipantSnapshot, RoomSnapshot } from '@mbsks/core';
+import type { Room } from '@mbsks/openrtc-core';
+import type { RoomParticipantSnapshot, RoomSnapshot } from '@mbsks/openrtc-core';
 
 /**
  * The room's current immutable snapshot. Re-renders only when the engine

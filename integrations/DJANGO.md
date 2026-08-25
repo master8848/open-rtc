@@ -1,6 +1,6 @@
-# Hosting @mbsks/server next to a Django app
+# Hosting @mbsks/openrtc-server next to a Django app
 
-Django apps are Python — @mbsks/server is a Node component that speaks
+Django apps are Python — @mbsks/openrtc-server is a Node component that speaks
 plain REST + WebSocket JSON. The recommended pattern is the **sidecar**: run
 the component as a tiny Node process next to your Django deployment and let
 Django proxy the `/vidcall/` prefix to it (or point clients straight at the
@@ -9,15 +9,15 @@ sidecar URL in production behind the same domain).
 ## 1. Run the sidecar (Node)
 
 ```bash
-npm install @mbsks/server better-sqlite3
+npm install @mbsks/openrtc-server better-sqlite3
 ```
 
 ```js
 // sidecar.mjs
 import http from 'node:http';
 import Database from 'better-sqlite3';
-import { attachWebSocketRelay, createNodeServer, createServices } from '@mbsks/server';
-import { SqliteStore } from '@mbsks/server/stores/sqlite';
+import { attachWebSocketRelay, createNodeServer, createServices } from '@mbsks/openrtc-server';
+import { SqliteStore } from '@mbsks/openrtc-server/stores/sqlite';
 
 const store = new SqliteStore(new Database('/var/lib/vidcall/vidcall.db'));
 await store.bootstrap();

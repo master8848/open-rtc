@@ -1,5 +1,5 @@
 {
-  "name": "@mbsks/quality",
+  "name": "@mbsks/openrtc-quality",
   "version": "0.1.0",
   "description": "vidcall adaptive quality policy engine: DeviceCapability + AdaptiveQualityController (pure; consumes RTCStatsSnapshot, no WebRTC imports).",
   "author": "Saurav Sanjel <jobarsanjel2@gmail.com>",
@@ -27,6 +27,6 @@
     "clean": "tsc -b --clean"
   },
   "dependencies": {
-    "@mbsks/protocol": "0.1.0"
+    "@mbsks/openrtc-protocol": "0.1.0"
   }
 }

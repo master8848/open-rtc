@@ -1,5 +1,5 @@
 /**
- * @mbsks/server — framework-agnostic REST handlers + `node:http` server.
+ * @mbsks/openrtc-server — framework-agnostic REST handlers + `node:http` server.
  *
  * `dispatch()` is the single router every hosting layer shares: the bare
  * `node:http` server here, the Express router (`express.ts`), the Fastify
@@ -521,7 +521,7 @@ async function moderateHandler(services: Services, ctx: RouteContext): Promise<R
   const result = await moderateRoom(services.store, roomId, claims.participantId, action, targetId);
   // For kick, broadcast leave to remaining members
   if (action === 'kick' && result.kicked) {
-    const envelope = { v: 1 as const, type: 'leave' as const, roomId, senderId: result.kicked, sessionId: '', ts: Date.now(), seq: 0, payload: { reason: 'kicked' } } as unknown as import('@mbsks/protocol').Envelope;
+    const envelope = { v: 1 as const, type: 'leave' as const, roomId, senderId: result.kicked, sessionId: '', ts: Date.now(), seq: 0, payload: { reason: 'kicked' } } as unknown as import('@mbsks/openrtc-protocol').Envelope;
     services.relay?.broadcast(roomId, envelope);
   }
   return { status: 200, body: { room: result.room, ...(result.kicked ? { kicked: result.kicked } : {}) } };

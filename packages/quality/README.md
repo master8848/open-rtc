@@ -1,4 +1,4 @@
-# @mbsks/quality
+# @mbsks/openrtc-quality
 
 Adaptive-quality **policy engine** for vidcall: watches `getStats()` polls and
 decides when a peer's video should step down (network congestion, CPU
@@ -6,19 +6,19 @@ pressure) or step back up (stable for 10 s with headroom).
 
 **Pure by design** — consumes `RTCStatsSnapshot`s, never touches WebRTC
 objects, **zero runtime dependencies**. Works in browsers, Node, and tests;
-the engine (`@mbsks/core`) and your own monitors both feed it.
+the engine (`@mbsks/openrtc-core`) and your own monitors both feed it.
 
 ## Install
 
 ```sh
-npm i @mbsks/quality             # once published
+npm i @mbsks/openrtc-quality             # once published
 # today (workspace): npm i file:../vidcall/packages/quality
 ```
 
 ## Usage
 
 ```ts
-import { AdaptiveQualityController, detectDeviceCapability } from '@mbsks/quality';
+import { AdaptiveQualityController, detectDeviceCapability } from '@mbsks/openrtc-quality';
 
 const controller = new AdaptiveQualityController({
   direction: 'send', // or 'receive'
@@ -46,7 +46,7 @@ The policy ladder is ordered high → low (`1080p@30` → `720p@30` → `480p@30
   `maxUpgradeSteps` per change;
 - never exceeds the device/plan cap (`DeviceCapability`, D5a);
 - emits `quality:changed` and `quality:warning` events (the latter becomes
-  the room-level `quality-warning` event in `@mbsks/core`).
+  the room-level `quality-warning` event in `@mbsks/openrtc-core`).
 
 ## API surface
 

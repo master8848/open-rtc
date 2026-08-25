@@ -55,7 +55,7 @@ Composite `transport: SignalingTransport[]` sugar, `ReconnectingTransport` (back
 
 ### M4 — DX & Scale polish
 
-`roomOptions`/`participantsOptions` factories, `useRoomState(select)`, `useSuspenseRoomState`, `VidcallClient` dedup, `useChat`/`usePublish` mutations with optimistic echo, `@mbsks/react-devtools` + `publint`/`attw`/`size-limit` CI gates, Redis SFU cascading `router.pipeToRouter`. `05` acceptance.
+`roomOptions`/`participantsOptions` factories, `useRoomState(select)`, `useSuspenseRoomState`, `VidcallClient` dedup, `useChat`/`usePublish` mutations with optimistic echo, `@mbsks/openrtc-react-devtools` + `publint`/`attw`/`size-limit` CI gates, Redis SFU cascading `router.pipeToRouter`. `05` acceptance.
 
 ### M5 — Advanced (shippable one at a time)
 

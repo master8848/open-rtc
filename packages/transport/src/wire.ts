@@ -1,7 +1,7 @@
 /**
  * Small helpers for envelope plumbing: per-sender sequencer, session ids,
  * byte measurement. The envelope itself (`Envelope`, `createEnvelope`,
- * `isEnvelope`) lives in `@mbsks/protocol`.
+ * `isEnvelope`) lives in `@mbsks/openrtc-protocol`.
  */
 
 /** Bytes of a UTF-8 string. */

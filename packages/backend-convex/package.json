@@ -1,5 +1,5 @@
 {
-  "name": "@mbsks/backend-convex",
+  "name": "@mbsks/openrtc-backend-convex",
   "version": "0.1.0",
   "description": "vidcall signaling backend adapter for Convex (mutations + live queries; signals table + presence table pattern).",
   "author": "Saurav Sanjel <jobarsanjel2@gmail.com>",
@@ -29,8 +29,8 @@
   },
   "dependencies": {
     "convex": "1.42.3",
-    "@mbsks/protocol": "0.1.0",
-    "@mbsks/transport": "0.1.0"
+    "@mbsks/openrtc-protocol": "0.1.0",
+    "@mbsks/openrtc-transport": "0.1.0"
   },
   "devDependencies": {
     "@types/node": "22.20.1",

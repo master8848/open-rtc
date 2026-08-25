@@ -1,7 +1,7 @@
 /**
  * Participant & track publication models (public API surface).
  */
-import type { DeviceProfile, JoinCapabilities, PresenceState } from '@mbsks/protocol';
+import type { DeviceProfile, JoinCapabilities, PresenceState } from '@mbsks/openrtc-protocol';
 
 export type TrackSource = 'camera' | 'microphone' | 'screen' | 'custom';
 

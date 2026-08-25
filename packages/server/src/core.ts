@@ -1,5 +1,5 @@
 /**
- * @mbsks/server — core room/session/recording logic.
+ * @mbsks/openrtc-server — core room/session/recording logic.
  *
  * Pure functions: no framework imports, no WebSocket imports, no database
  * imports. Every function takes a `Store` as its first argument, so the
@@ -14,7 +14,7 @@
  *  - recording sessions (metadata only; bytes live in `RecordingStorage`)
  */
 
-import { createEnvelope, isEnvelope, type Envelope } from '@mbsks/protocol';
+import { createEnvelope, isEnvelope, type Envelope } from '@mbsks/openrtc-protocol';
 import { errors } from './errors.ts';
 import type { Store } from './store.ts';
 import type {

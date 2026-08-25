@@ -24,10 +24,10 @@
  *
  * See README.md for usage + caveats.
  */
-import type { Envelope, PresenceState } from '@mbsks/protocol';
+import type { Envelope, PresenceState } from '@mbsks/openrtc-protocol';
 import type { SupabaseClient, RealtimeChannel, RealtimePresenceState } from '@supabase/supabase-js';
-import { BaseSignalingTransport, type BaseOptions, type ParticipantInfo, type ParticipantPresence } from '@mbsks/transport';
-import { isChunkFrame } from '@mbsks/transport/internal';
+import { BaseSignalingTransport, type BaseOptions, type ParticipantInfo, type ParticipantPresence } from '@mbsks/openrtc-transport';
+import { isChunkFrame } from '@mbsks/openrtc-transport/internal';
 
 export interface SupabaseBackendOptions extends BaseOptions {
   /** Supabase client (create via `createClient(url, anonKey)`). */

@@ -10,7 +10,7 @@
  *  - ICE candidates are buffered until the matching remote description is
  *    applied (see `PeerConnectionManager`).
  */
-import type { Envelope } from '@mbsks/protocol';
+import type { Envelope } from '@mbsks/openrtc-protocol';
 
 export interface OrderedMessageBufferOptions {
   /**

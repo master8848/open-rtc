@@ -1,5 +1,5 @@
 /**
- * @mbsks/server — public API (zero-database core).
+ * @mbsks/openrtc-server — public API (zero-database core).
  *
  * A backend component for vidcall that attaches to OTHER backends:
  *  - core room/session/recording logic (pure functions over a `Store`);
@@ -10,14 +10,14 @@
  *  - recording byte storage (Disk + S3 via minimal SigV4 fetch client).
  *
  * Everything with a heavy/native dependency lives behind a subpath export,
- * so installing `@mbsks/server` alone pulls in only `@mbsks/protocol`
+ * so installing `@mbsks/openrtc-server` alone pulls in only `@mbsks/openrtc-protocol`
  * and the pure-JS `ws` package (see "Dependencies" in README.md):
  *
- *  - `@mbsks/server/express`         → createExpressRouter (needs express)
- *  - `@mbsks/server/fastify`         → createFastifyPlugin (types only)
- *  - `@mbsks/server/stores/sqlite`   → SqliteStore   (+ better-sqlite3)
- *  - `@mbsks/server/stores/postgres` → PostgresStore (+ pg)
- *  - `@mbsks/server/stores/mysql`    → MysqlStore    (+ mysql2)
+ *  - `@mbsks/openrtc-server/express`         → createExpressRouter (needs express)
+ *  - `@mbsks/openrtc-server/fastify`         → createFastifyPlugin (types only)
+ *  - `@mbsks/openrtc-server/stores/sqlite`   → SqliteStore   (+ better-sqlite3)
+ *  - `@mbsks/openrtc-server/stores/postgres` → PostgresStore (+ pg)
+ *  - `@mbsks/openrtc-server/stores/mysql`    → MysqlStore    (+ mysql2)
  */
 
 // Core domain
@@ -41,5 +41,5 @@ export * from './recording.ts';
 // subpath exports so no database driver is loaded from this entry.
 export { InMemoryStore } from './stores/InMemoryStore.ts';
 
-// Shared test suite (also importable from '@mbsks/server/shared-tests')
+// Shared test suite (also importable from '@mbsks/openrtc-server/shared-tests')
 export { runStoreTestSuite, type StoreHarness } from './shared-tests.ts';

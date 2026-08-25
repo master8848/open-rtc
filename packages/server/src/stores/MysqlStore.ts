@@ -7,21 +7,21 @@
  *
  * `mysql2` is an **optional peer dependency** and is loaded lazily (only
  * when this store has to create its own pool), so importing the module
- * never loads the driver. Install it next to `@mbsks/server`:
+ * never loads the driver. Install it next to `@mbsks/openrtc-server`:
  *
  * ```
  * npm i mysql2
  * ```
  *
  * ```
- * import { MysqlStore } from '@mbsks/server/stores/mysql';
+ * import { MysqlStore } from '@mbsks/openrtc-server/stores/mysql';
  * const store = new MysqlStore({ host: '127.0.0.1', port: 3306, user: 'vidcall', password: '...', database: 'vidcall' });
  * await store.bootstrap();
  * ```
  */
 
 import type { Pool, PoolOptions } from 'mysql2/promise';
-import type { Envelope } from '@mbsks/protocol';
+import type { Envelope } from '@mbsks/openrtc-protocol';
 import type { Store } from '../store.ts';
 import type { Participant, RecordingSession, Room, StoredSignal } from '../types.ts';
 
@@ -64,7 +64,7 @@ async function loadMysql(): Promise<MysqlPromiseModule> {
   } catch {
     throw new Error(
       "MysqlStore requires the optional peer dependency 'mysql2'. " +
-        'Install it next to @mbsks/server: npm i mysql2',
+        'Install it next to @mbsks/openrtc-server: npm i mysql2',
     );
   }
 }

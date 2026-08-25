@@ -12,8 +12,8 @@ import {
   AdaptiveQualityController,
   DeviceCapability,
   DEFAULT_QUALITY_TIERS,
-} from '@mbsks/quality';
-import type { RTCStatsSnapshot } from '@mbsks/quality';
+} from '@mbsks/openrtc-quality';
+import type { RTCStatsSnapshot } from '@mbsks/openrtc-quality';
 import { Room } from '../src/room.ts';
 import { InMemoryTransport } from '../src/transport.ts';
 import type { RoomQualityHost, StatsSampler, QualityPolicyEngine } from '../src/room-quality.ts';

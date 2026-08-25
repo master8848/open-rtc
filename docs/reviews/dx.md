@@ -1,7 +1,7 @@
 # vidcall — Developer-Experience & Code-Quality Review (new-user perspective)
 
 Reviewed: 2026-08-12 · Repo HEAD at review start: `73c0521` (review finished at `ebbadbe`)
-Scope: README + docs + quickstarts (all docs), API ergonomics of `@mbsks/core`
+Scope: README + docs + quickstarts (all docs), API ergonomics of `@mbsks/openrtc-core`
 (Room / transport / events / recording), code-quality pass on `packages/core`,
 `packages/backend-supabase`, and the Kotlin binding (`packages/kotlin`).
 Read-only review; only this file was written.
@@ -14,7 +14,7 @@ The engineering underneath is **genuinely good**: strict TypeScript, zero-dep
 core, a disciplined shared wire protocol, clean perfect-negotiation mesh code,
 and green tests (183 passing + 2 env-skipped; typecheck + build green). But
 **the new-user story does not exist yet**. There is no install path, no example
-app, no root-README quickstart, no README for the flagship `@mbsks/core`
+app, no root-README quickstart, no README for the flagship `@mbsks/openrtc-core`
 package, and the headline feature ("adaptive quality switches by network speed
 AND device capability, with warnings") is **not wired into the Room at all** —
 the quality engine is a standalone package with no integration code. A fresh
@@ -28,7 +28,7 @@ user would have to reverse-engineer the API from JSDoc comments.
 |---|---|---|
 | **Onboarding** (fresh app → first call) | **1/5** | No install instructions anywhere (`package.json` is `private`, nothing published to npm); no `examples/` dir; only working `Room` usage example is a JSDoc comment in `room.ts`; no "create backend → new Room → join → publish" walkthrough. |
 | **API ergonomics** (join/leave, transport wiring, events, controls, recording) | **3/5** | `Room`/`TypedEmitter`/`SignalingTransport` are clean and typed; but two parallel `SignalingTransport` definitions (core + transport) that must never drift, no quality integration, no convenience helpers (getUserMedia/stream attach), no published event reference. |
-| **Docs** (README, architecture, per-package, quickstarts) | **2/5** | `docs/architecture.md` is a good blueprint; per-backend READMEs (supabase/convex/firebase/postgres) are solid; but root README is ~6 lines, `@mbsks/core`/`@mbsks/quality`/`swift`/`appwrite`/`sqlite` have **no README**, `@mbsks/transport` README documents a **stale interface shape**, no API reference or guides. |
+| **Docs** (README, architecture, per-package, quickstarts) | **2/5** | `docs/architecture.md` is a good blueprint; per-backend READMEs (supabase/convex/firebase/postgres) are solid; but root README is ~6 lines, `@mbsks/openrtc-core`/`@mbsks/openrtc-quality`/`swift`/`appwrite`/`sqlite` have **no README**, `@mbsks/openrtc-transport` README documents a **stale interface shape**, no API reference or guides. |
 | **Errors** (client + server) | **4/5** | Server has stable machine-readable error codes (`room_not_found`, `room_full`, …) and an `{error:{code,message}}` envelope; engine throws meaningful errors ("Room is closed", "unknown participant"). Gap: no client-side error taxonomy doc, several silent no-ops (e.g. `InMemoryTransport.emit` when not joined). |
 | **Examples** (runnable code) | **1/5** | Zero runnable examples in the repo. The only code is snippets inside READMEs/JSDoc. Dart has an `example/main.dart`; JS has nothing. |
 
@@ -44,7 +44,7 @@ Imagined flow: *"I want to add video calls to my React/Next app."*
    implementation in progress". No install command, no quickstart, no links to
    packages or docs. Dead end. *(committed version; the package table added in
    the working tree during this review helps but still has no quickstart)*
-2. **Find the package** → `npm install @mbsks/core` fails: nothing is
+2. **Find the package** → `npm install @mbsks/openrtc-core` fails: nothing is
    published (root `package.json` is `"private": true`, all packages are
    `0.1.0` workspaces). No note anywhere on how to consume (git dep? build
    locally?). The Kotlin README says "until the first release, depend via git
@@ -59,11 +59,11 @@ Imagined flow: *"I want to add video calls to my React/Next app."*
    `new Room({ transport: new SupabaseBackend({ client }) })` appears
    **nowhere** in the repo. The backend READMEs only show the low-level adapter
    API (join/emit/onMessage), not the Room integration.
-5. **Try the transport package** → `@mbsks/transport` README shows an
+5. **Try the transport package** → `@mbsks/openrtc-transport` README shows an
    interface snippet with `join(room, opts?)`, `emit(room, msg)` and
    `SignalingMessage = {kind, payload, from, seq?, ts}`. The actual code
    (`src/types.ts`) is envelope-based: `join(roomId, self)`, `emit(envelope)`
-   with `Envelope` from `@mbsks/protocol`. Code written against the README
+   with `Envelope` from `@mbsks/openrtc-protocol`. Code written against the README
    **does not compile**. The README even claims "the shape is intentionally
    identical" to core while showing the legacy shape.
 6. **Look for quality/recording/screen-share docs** → nothing user-facing.
@@ -92,7 +92,7 @@ Compared to simple-peer / PeerJS / LiveKit:
   simple-peer's callback soup. Pain points: no `getUserMedia`/stream-attach
   helpers (users hand-roll `new MediaStream([track])` for `<video>`), no
   auto device-profile detection (`deviceProfile`/`capabilities` are
-  caller-supplied even though `@mbsks/quality` ships a `DeviceCapability`
+  caller-supplied even though `@mbsks/openrtc-quality` ships a `DeviceCapability`
   helper that is never used by Room).
 - **Signaling adapter wiring** — the seam is good (one interface, 6 backend
   impls, shared adapter test suite), but **two definitions** of
@@ -105,12 +105,12 @@ Compared to simple-peer / PeerJS / LiveKit:
   (promised in architecture D5 and README) does **not exist on Room** — only
   `quality-warning` is forwarded from the wire.
 - **Adaptive quality** — the README/architecture headline feature is a
-  **separate pure package** (`@mbsks/quality`) with zero integration: no
+  **separate pure package** (`@mbsks/openrtc-quality`) with zero integration: no
   `getStats()` polling, no `setParameters`/`applyConstraints` application, no
   `DeviceCapability` use anywhere in `packages/core`. A new user gets **no
   adaptive quality out of the box** and no example of how to add it.
 - **Recording** — solid hook/facade design (`room.recording.startRecording`/
-  `stopRecording`, chunked upload to `@mbsks/server`), documented only in
+  `stopRecording`, chunked upload to `@mbsks/openrtc-server`), documented only in
   JSDoc; the server side exists and is tested, but there is no end-to-end guide.
 - **Controls (mute/quality/ICE)** — `publish`/`unpublish`, `subscribe(...)
   .setEnabled()`, `restartIce`, `announceScreenShare` exist and are coherent.
@@ -185,9 +185,9 @@ Compared to simple-peer / PeerJS / LiveKit:
 2. **Publish/consumption path + root README quickstart.** Either publish
    `@mbsks/*` to npm or document the git-dependency/build instructions, and
    turn README.md into a 60-line quickstart (install → backend → Room → events
-   → recording) with links. Rationale: today `npm install @mbsks/core` fails
+   → recording) with links. Rationale: today `npm install @mbsks/openrtc-core` fails
    and there is no entry point to the whole repo.
-3. **Wire `@mbsks/quality` into `Room` (or explicitly document it as
+3. **Wire `@mbsks/openrtc-quality` into `Room` (or explicitly document it as
    opt-in).** Add stats polling (`pc.getStats()` → `RTCStatsSnapshot`),
    tier application (`setParameters`/`applyConstraints`), and
    `quality:changed` events; if out of scope, ship a worked integration
@@ -199,11 +199,11 @@ Compared to simple-peer / PeerJS / LiveKit:
    (unused `asFake`), `test-utils/src/fake-rtc.ts:538` (unused `options`),
    `transport/test/InMemoryBackend.test.ts:87` (unused `peerId`). Rationale:
    CI's `npm run lint` step is red on committed code.
-5. **Fix the stale `@mbsks/transport` README interface snippet** (shows the
+5. **Fix the stale `@mbsks/openrtc-transport` README interface snippet** (shows the
    legacy `SignalingBackend`/`SignalingMessage` shape as current; the code is
    envelope-based `join(roomId, self)`/`emit(envelope)`). Rationale: code
    copied from the README does not compile.
-6. **Add READMEs for `@mbsks/core`, `@mbsks/quality`, `swift`,
+6. **Add READMEs for `@mbsks/openrtc-core`, `@mbsks/openrtc-quality`, `swift`,
    `backend-appwrite`, `backend-sqlite`.** Rationale: the engine — the package
    every user imports — has zero documentation, and two shipped backends plus
    one binding have none.

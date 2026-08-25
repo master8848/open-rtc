@@ -1,4 +1,4 @@
-# @mbsks/core
+# @mbsks/openrtc-core
 
 The vidcall client mesh engine: `Room` wraps the full WebRTC lifecycle —
 perfect negotiation, trickle ICE, renegotiation, ICE restart, data channel,
@@ -11,15 +11,15 @@ small typed API.
 ## Install
 
 ```sh
-npm i @mbsks/core            # once published
+npm i @mbsks/openrtc-core            # once published
 # today (workspace): npm i file:../vidcall/packages/core  — see the root README
 ```
 
 ## The 30-second tour
 
 ```ts
-import { Room } from '@mbsks/core';
-import { SupabaseBackend } from '@mbsks/backend-supabase';
+import { Room } from '@mbsks/openrtc-core';
+import { SupabaseBackend } from '@mbsks/openrtc-backend-supabase';
 
 const room = new Room({
   roomId: 'demo',
@@ -43,7 +43,7 @@ await room.publish(camera); // your camera to everyone in the room
 
 The transport is any object with the six-method signaling contract
 (`join/leave/emit/onMessage/onPresence/setPresence/dispose` — see
-[`@mbsks/transport`](../transport/README.md)). The engine is backend-agnostic:
+[`@mbsks/openrtc-transport`](../transport/README.md)). The engine is backend-agnostic:
 swap Supabase for Convex, Firebase, Appwrite, Postgres, or SQLite by swapping
 one line.
 
@@ -65,7 +65,7 @@ one line.
 | `dataChannelName`   | `'vidcall'`                  | data channel label                                                          |
 | `deviceProfile`     | —                            | adaptive-quality device capability                                          |
 | `quality`           | auto (browsers only)         | `{ intervalMs, simulcast, enabled, … }` — local adaptive-quality controller |
-| `recordingEndpoint` | —                            | base URL for uploading recording chunks to `@mbsks/server`                |
+| `recordingEndpoint` | —                            | base URL for uploading recording chunks to `@mbsks/openrtc-server`                |
 
 ### Events
 
@@ -97,11 +97,11 @@ one line.
     createObjectUrl, // recording-store factory
   });
   ```
-- `room.getStats()` — per-peer `RTCStatsSnapshot`s for `@mbsks/quality` or
+- `room.getStats()` — per-peer `RTCStatsSnapshot`s for `@mbsks/openrtc-quality` or
   your own monitors.
 - `room.quality` — local adaptive-quality controller (docs/architecture.md D5):
   samples `getStats()` every `intervalMs` (default 2s) while video is
-  published, feeds the `@mbsks/quality` policy ladder, and applies tier
+  published, feeds the `@mbsks/openrtc-quality` policy ladder, and applies tier
   changes via `setParameters` (simulcast) or `track.applyConstraints`
   (single-encoding). Emits `quality:changed` and `quality:warning` on the
   room: payloads carry `{ from, to, reason, tier, stats }` and
@@ -122,4 +122,4 @@ one line.
 
 See [`docs/architecture.md`](../../docs/architecture.md) for the full
 blueprint, and `packages/core/test/` for the engine test suite (fake RTC from
-`@mbsks/test-utils`).
+`@mbsks/openrtc-test-utils`).

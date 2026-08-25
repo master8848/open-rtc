@@ -118,7 +118,7 @@ Ship `docs/limits.md` (new) with per-backend ceiling:
 
 | Backend | Ordering | Max payload | Rate note | Use WS relay? |
 |---------|----------|-------------|-----------|---------------|
-| `@mbsks/server` WS (`ws.ts`) | `seq-required` | 8 MB (`maxPayloadBytes:104`) | coalesce ICE | required for bursts |
+| `@mbsks/openrtc-server` WS (`ws.ts`) | `seq-required` | 8 MB (`maxPayloadBytes:104`) | coalesce ICE | required for bursts |
 | Supabase broadcast | `guaranteed` | ~256 KB | channel/emit throttle | optional |
 | Firebase RTDB | `guaranteed` | ~256 KB | `onDisconnect` best | optional |
 | Convex | `seq-required` | ~1 MB | mutation rate | optional |
@@ -141,8 +141,8 @@ interface RoomConfig {
 interface Services { store, relay?: Relay, auth?, turn?, recordingStorage? }
 
 // New packages
-@mbsks/transport/composite, @mbsks/transport/reconnecting
-@mbsks/server/relays/redis, @mbsks/server/relays/postgres-notify
+@mbsks/openrtc-transport/composite, @mbsks/openrtc-transport/reconnecting
+@mbsks/openrtc-server/relays/redis, @mbsks/openrtc-server/relays/postgres-notify
 ```
 
 ## Efficiency notes

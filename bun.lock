@@ -13,11 +13,11 @@
       },
     },
     "packages/backend-appwrite": {
-      "name": "@mbsks/backend-appwrite",
+      "name": "@mbsks/openrtc-backend-appwrite",
       "version": "0.1.0",
       "dependencies": {
-        "@mbsks/protocol": "0.1.0",
-        "@mbsks/transport": "0.1.0",
+        "@mbsks/openrtc-protocol": "0.1.0",
+        "@mbsks/openrtc-transport": "0.1.0",
         "appwrite": "26.2.0",
       },
       "devDependencies": {
@@ -27,11 +27,11 @@
       },
     },
     "packages/backend-convex": {
-      "name": "@mbsks/backend-convex",
+      "name": "@mbsks/openrtc-backend-convex",
       "version": "0.1.0",
       "dependencies": {
-        "@mbsks/protocol": "0.1.0",
-        "@mbsks/transport": "0.1.0",
+        "@mbsks/openrtc-protocol": "0.1.0",
+        "@mbsks/openrtc-transport": "0.1.0",
         "convex": "1.42.3",
       },
       "devDependencies": {
@@ -41,11 +41,11 @@
       },
     },
     "packages/backend-firebase": {
-      "name": "@mbsks/backend-firebase",
+      "name": "@mbsks/openrtc-backend-firebase",
       "version": "0.1.0",
       "dependencies": {
-        "@mbsks/protocol": "0.1.0",
-        "@mbsks/transport": "0.1.0",
+        "@mbsks/openrtc-protocol": "0.1.0",
+        "@mbsks/openrtc-transport": "0.1.0",
         "firebase": "12.16.0",
       },
       "devDependencies": {
@@ -55,11 +55,11 @@
       },
     },
     "packages/backend-postgres": {
-      "name": "@mbsks/backend-postgres",
+      "name": "@mbsks/openrtc-backend-postgres",
       "version": "0.1.0",
       "dependencies": {
-        "@mbsks/protocol": "0.1.0",
-        "@mbsks/transport": "0.1.0",
+        "@mbsks/openrtc-protocol": "0.1.0",
+        "@mbsks/openrtc-transport": "0.1.0",
         "pg": "8.22.0",
       },
       "devDependencies": {
@@ -70,12 +70,12 @@
       },
     },
     "packages/backend-sqlite": {
-      "name": "@mbsks/backend-sqlite",
+      "name": "@mbsks/openrtc-backend-sqlite",
       "version": "0.1.0",
       "dependencies": {
         "@libsql/client": "0.17.4",
-        "@mbsks/protocol": "0.1.0",
-        "@mbsks/transport": "0.1.0",
+        "@mbsks/openrtc-protocol": "0.1.0",
+        "@mbsks/openrtc-transport": "0.1.0",
       },
       "devDependencies": {
         "@types/node": "22.20.1",
@@ -84,12 +84,12 @@
       },
     },
     "packages/backend-supabase": {
-      "name": "@mbsks/backend-supabase",
+      "name": "@mbsks/openrtc-backend-supabase",
       "version": "0.1.0",
       "dependencies": {
+        "@mbsks/openrtc-protocol": "0.1.0",
+        "@mbsks/openrtc-transport": "0.1.0",
         "@supabase/supabase-js": "2.110.9",
-        "@mbsks/protocol": "0.1.0",
-        "@mbsks/transport": "0.1.0",
       },
       "devDependencies": {
         "@types/node": "22.20.1",
@@ -98,36 +98,36 @@
       },
     },
     "packages/core": {
-      "name": "@mbsks/core",
+      "name": "@mbsks/openrtc-core",
       "version": "0.1.0",
       "dependencies": {
-        "@mbsks/protocol": "0.1.0",
-        "@mbsks/quality": "0.1.0",
+        "@mbsks/openrtc-protocol": "0.1.0",
+        "@mbsks/openrtc-quality": "0.1.0",
       },
       "devDependencies": {
-        "@mbsks/test-utils": "0.1.0",
+        "@mbsks/openrtc-test-utils": "0.1.0",
       },
     },
     "packages/quality": {
-      "name": "@mbsks/quality",
+      "name": "@mbsks/openrtc-quality",
       "version": "0.1.0",
       "dependencies": {
-        "@mbsks/protocol": "0.1.0",
+        "@mbsks/openrtc-protocol": "0.1.0",
       },
     },
     "packages/react": {
-      "name": "@mbsks/react",
+      "name": "@mbsks/openrtc-react",
       "version": "0.1.0",
       "dependencies": {
-        "@mbsks/core": "0.1.0",
+        "@mbsks/openrtc-core": "0.1.0",
       },
       "devDependencies": {
+        "@mbsks/openrtc-test-utils": "0.1.0",
         "@testing-library/dom": "10.4.1",
         "@testing-library/react": "16.3.2",
         "@types/node": "22.20.1",
         "@types/react": "19.2.17",
         "@types/react-dom": "19.2.3",
-        "@mbsks/test-utils": "0.1.0",
         "jsdom": "30.0.1",
         "react": "19.2.8",
         "react-dom": "19.2.8",
@@ -139,10 +139,10 @@
       },
     },
     "packages/server": {
-      "name": "@mbsks/server",
+      "name": "@mbsks/openrtc-server",
       "version": "0.1.0",
       "dependencies": {
-        "@mbsks/protocol": "0.1.0",
+        "@mbsks/openrtc-protocol": "0.1.0",
         "ws": "8.9.0",
       },
       "devDependencies": {
@@ -174,10 +174,10 @@
       ],
     },
     "packages/sfu-gateway": {
-      "name": "@mbsks/sfu-gateway",
+      "name": "@mbsks/openrtc-sfu-gateway",
       "version": "0.1.0",
       "dependencies": {
-        "@mbsks/protocol": "0.1.0",
+        "@mbsks/openrtc-protocol": "0.1.0",
       },
       "devDependencies": {
         "@types/node": "22.20.1",
@@ -186,17 +186,17 @@
       },
     },
     "packages/test-utils": {
-      "name": "@mbsks/test-utils",
+      "name": "@mbsks/openrtc-test-utils",
       "version": "0.1.0",
       "dependencies": {
-        "@mbsks/protocol": "0.1.0",
+        "@mbsks/openrtc-protocol": "0.1.0",
       },
     },
     "packages/transport": {
-      "name": "@mbsks/transport",
+      "name": "@mbsks/openrtc-transport",
       "version": "0.1.0",
       "dependencies": {
-        "@mbsks/protocol": "0.1.0",
+        "@mbsks/openrtc-protocol": "0.1.0",
       },
       "devDependencies": {
         "@types/node": "22.20.1",
@@ -205,7 +205,7 @@
       },
     },
     "protocol": {
-      "name": "@mbsks/protocol",
+      "name": "@mbsks/openrtc-protocol",
       "version": "0.1.0",
     },
   },
@@ -462,6 +462,34 @@
 
     "@manypkg/tools": ["@manypkg/tools@2.1.2", "", { "dependencies": { "jju": "^1.4.0", "tinyglobby": "^0.2.13", "yaml": "^2.9.0" } }, "sha512-6QEf6yqFbETdwGITKq57aYoPfX/3K8XFNwsAlx0C1M7o8cb79sv1M3w+tWuWvIcSbNqrLF7OD7YpZMVVz335hQ=="],
 
+    "@mbsks/openrtc-backend-appwrite": ["@mbsks/openrtc-backend-appwrite@workspace:packages/backend-appwrite"],
+
+    "@mbsks/openrtc-backend-convex": ["@mbsks/openrtc-backend-convex@workspace:packages/backend-convex"],
+
+    "@mbsks/openrtc-backend-firebase": ["@mbsks/openrtc-backend-firebase@workspace:packages/backend-firebase"],
+
+    "@mbsks/openrtc-backend-postgres": ["@mbsks/openrtc-backend-postgres@workspace:packages/backend-postgres"],
+
+    "@mbsks/openrtc-backend-sqlite": ["@mbsks/openrtc-backend-sqlite@workspace:packages/backend-sqlite"],
+
+    "@mbsks/openrtc-backend-supabase": ["@mbsks/openrtc-backend-supabase@workspace:packages/backend-supabase"],
+
+    "@mbsks/openrtc-core": ["@mbsks/openrtc-core@workspace:packages/core"],
+
+    "@mbsks/openrtc-protocol": ["@mbsks/openrtc-protocol@workspace:protocol"],
+
+    "@mbsks/openrtc-quality": ["@mbsks/openrtc-quality@workspace:packages/quality"],
+
+    "@mbsks/openrtc-react": ["@mbsks/openrtc-react@workspace:packages/react"],
+
+    "@mbsks/openrtc-server": ["@mbsks/openrtc-server@workspace:packages/server"],
+
+    "@mbsks/openrtc-sfu-gateway": ["@mbsks/openrtc-sfu-gateway@workspace:packages/sfu-gateway"],
+
+    "@mbsks/openrtc-test-utils": ["@mbsks/openrtc-test-utils@workspace:packages/test-utils"],
+
+    "@mbsks/openrtc-transport": ["@mbsks/openrtc-transport@workspace:packages/transport"],
+
     "@neon-rs/load": ["@neon-rs/load@0.0.4", "", {}, "sha512-kTPhdZyTQxB+2wpiRcFWrDcejc4JI6tkPuS7UZCG4l6Zvc5kU/gGQ/ozvHTh1XR5tS+UlfAfGuPajjzQjCiHCw=="],
 
     "@oxc-project/types": ["@oxc-project/types@0.146.0", "", {}, "sha512-XC0QsnnhVe7sLIWmYmdPw7x5P0h4W8vUU3Nv1ySgWXtvCz8NizoAEpGXA0sOYoJQV2Rl13LgURAHQ5cI5ILCSA=="],
@@ -693,34 +721,6 @@
     "@typescript/typescript-win32-arm64": ["@typescript/typescript-win32-arm64@7.0.2", "", { "os": "win32", "cpu": "arm64" }, "sha512-Gyl1Vy6OsWesLzmq+EP0Fb7b4Nid5232AvcA2SFcdYreldpNtYFFofPjnt62y9hQy7VTaZp65ICJjuAQRaVcIQ=="],
 
     "@typescript/typescript-win32-x64": ["@typescript/typescript-win32-x64@7.0.2", "", { "os": "win32", "cpu": "x64" }, "sha512-0BQ3HkAHHlKLSp1qRvf3SUhGpGsDuhB/jgFw75guyqbxJqEaS0Cw/VFO8i2nHglJUzQCRtMMR/IBAKE3ETMC4g=="],
-
-    "@mbsks/backend-appwrite": ["@mbsks/backend-appwrite@workspace:packages/backend-appwrite"],
-
-    "@mbsks/backend-convex": ["@mbsks/backend-convex@workspace:packages/backend-convex"],
-
-    "@mbsks/backend-firebase": ["@mbsks/backend-firebase@workspace:packages/backend-firebase"],
-
-    "@mbsks/backend-postgres": ["@mbsks/backend-postgres@workspace:packages/backend-postgres"],
-
-    "@mbsks/backend-sqlite": ["@mbsks/backend-sqlite@workspace:packages/backend-sqlite"],
-
-    "@mbsks/backend-supabase": ["@mbsks/backend-supabase@workspace:packages/backend-supabase"],
-
-    "@mbsks/core": ["@mbsks/core@workspace:packages/core"],
-
-    "@mbsks/protocol": ["@mbsks/protocol@workspace:protocol"],
-
-    "@mbsks/quality": ["@mbsks/quality@workspace:packages/quality"],
-
-    "@mbsks/react": ["@mbsks/react@workspace:packages/react"],
-
-    "@mbsks/server": ["@mbsks/server@workspace:packages/server"],
-
-    "@mbsks/sfu-gateway": ["@mbsks/sfu-gateway@workspace:packages/sfu-gateway"],
-
-    "@mbsks/test-utils": ["@mbsks/test-utils@workspace:packages/test-utils"],
-
-    "@mbsks/transport": ["@mbsks/transport@workspace:packages/transport"],
 
     "@vitest/expect": ["@vitest/expect@4.1.10", "", { "dependencies": { "@standard-schema/spec": "^1.1.0", "@types/chai": "^5.2.2", "@vitest/spy": "4.1.10", "@vitest/utils": "4.1.10", "chai": "^6.2.2", "tinyrainbow": "^3.1.0" } }, "sha512-YsCn+qAk1GWjQOWFEsEcL2gNQ0zmVmQu3T03qP6UyjhtmdtwtbuI+DASn/7iQB3HGTXkdBwGddzxPlmiql5vlA=="],
 

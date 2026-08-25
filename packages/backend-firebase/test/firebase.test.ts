@@ -8,11 +8,11 @@
  * `sharedFakeDb.simulateDisconnect()` — exactly like the RTDB server).
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { createEnvelope } from '@mbsks/protocol';
+import { createEnvelope } from '@mbsks/openrtc-protocol';
 import type { Database } from 'firebase/database';
 import { FirebaseBackend } from '../src/FirebaseBackend.js';
-import { runAdapterTestSuite, type AdapterHarness } from '@mbsks/transport/shared-tests';
-import type { SignalingTransport } from '@mbsks/transport';
+import { runAdapterTestSuite, type AdapterHarness } from '@mbsks/openrtc-transport/shared-tests';
+import type { SignalingTransport } from '@mbsks/openrtc-transport';
 import { sharedFakeDb } from './fakes.js';
 
 vi.mock('firebase/database', async () => {

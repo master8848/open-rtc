@@ -1,5 +1,5 @@
 {
-  "name": "@mbsks/core",
+  "name": "@mbsks/openrtc-core",
   "version": "0.1.0",
   "description": "vidcall mesh engine: Room, PeerConnectionManager (perfect negotiation, trickle ICE, renegotiation, ICE restart), SignalingTransport interface, DataChannelBus. Zero runtime dependencies.",
   "author": "Saurav Sanjel <jobarsanjel2@gmail.com>",
@@ -27,10 +27,10 @@
     "clean": "tsc -b --clean"
   },
   "dependencies": {
-    "@mbsks/protocol": "0.1.0",
-    "@mbsks/quality": "0.1.0"
+    "@mbsks/openrtc-protocol": "0.1.0",
+    "@mbsks/openrtc-quality": "0.1.0"
   },
   "devDependencies": {
-    "@mbsks/test-utils": "0.1.0"
+    "@mbsks/openrtc-test-utils": "0.1.0"
   }
 }

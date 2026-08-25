@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { StrictMode } from 'react';
 import { renderHook, act } from '@testing-library/react';
-import { Room, InMemoryTransport } from '@mbsks/core';
-import { resetFakeRTC } from '@mbsks/test-utils';
+import { Room, InMemoryTransport } from '@mbsks/openrtc-core';
+import { resetFakeRTC } from '@mbsks/openrtc-test-utils';
 import { sleep } from '../../test-utils/src/fixtures.ts';
 import { useParticipants, useRoomState } from '../src/index.ts';
 

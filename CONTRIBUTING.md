@@ -146,7 +146,7 @@ updated in the same PR as notable user-facing changes. The root README links
 to it so newcomers can find it.
 
 Version commits follow the repo's conventional style via
-`.changeset/commits.mjs` (`chore: release @mbsks/core@0.2.0, ...`).
+`.changeset/commits.mjs` (`chore: release @mbsks/openrtc-core@0.2.0, ...`).
 
 ## Commit style
 

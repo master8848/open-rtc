@@ -11,7 +11,7 @@
  * in the room; presence is a merged per-room view with join/leave/sync
  * events. Delivery is asynchronous (microtask), like a real WebSocket.
  */
-import type { Envelope } from '@mbsks/protocol';
+import type { Envelope } from '@mbsks/openrtc-protocol';
 
 export interface TrackedPresence {
   id: string;
@@ -189,7 +189,7 @@ export class FakeSupabaseClient {
 }
 
 /** Create an envelope helper for tests. */
-export function makeEnv(room: string, sender: string, seq: number, session = 's'): Parameters<typeof import('@mbsks/protocol').createEnvelope>[1] {
+export function makeEnv(room: string, sender: string, seq: number, session = 's'): Parameters<typeof import('@mbsks/openrtc-protocol').createEnvelope>[1] {
   return { roomId: room, senderId: sender, sessionId: session, seq, ts: Date.now() };
 }
 

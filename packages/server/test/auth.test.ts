@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { AddressInfo } from 'node:net';
 import WebSocket from 'ws';
-import { createEnvelope, type Envelope } from '@mbsks/protocol';
+import { createEnvelope, type Envelope } from '@mbsks/openrtc-protocol';
 import { createNodeServer } from '../src/http.ts';
 import { createServices } from '../src/services.ts';
 import { attachWebSocketRelay } from '../src/ws.ts';

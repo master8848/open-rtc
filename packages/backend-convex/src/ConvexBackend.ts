@@ -20,10 +20,10 @@
  * — copy them into your Convex project (`convex/schema.ts`, `signals.ts`,
  * `presence.ts`) or use them as reference.
  */
-import type { Envelope, PresenceState } from '@mbsks/protocol';
+import type { Envelope, PresenceState } from '@mbsks/openrtc-protocol';
 import type { ConvexClient } from 'convex/browser';
 import type { FunctionReference } from 'convex/server';
-import { BaseSignalingTransport, type BaseOptions, type ParticipantInfo, type ParticipantPresence } from '@mbsks/transport';
+import { BaseSignalingTransport, type BaseOptions, type ParticipantInfo, type ParticipantPresence } from '@mbsks/openrtc-transport';
 
 /** Name of the mutation that appends one frame (from convex/signals.ts). */
 export const SIGNALS_SEND_MUTATION = 'signals:send';

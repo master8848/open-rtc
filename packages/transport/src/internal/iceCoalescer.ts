@@ -6,7 +6,7 @@
  * a handful of batched transport calls over a burst. Each envelope is still
  * delivered individually — coalescing only batches the backend calls.
  */
-import type { Envelope } from '@mbsks/protocol';
+import type { Envelope } from '@mbsks/openrtc-protocol';
 
 export interface IceCoalescerOptions {
   /** coalescing window in ms. Default 100. */

@@ -15,7 +15,7 @@ This plan takes vidcall to **ultimate calling lib** in 5 additive phases: API de
 3. **Transports:** signaling pluggable per-kind (primary + reconnect + fallback composite), reconnect-resilient, horizontally fan-out; media behind a `MediaTransport` seam so `Room` never constructs `RTCPeerConnection` directly (test seam + SFU/WHIP swap).
 4. **Secure + non-secure:** open mode stays zero-config; secure mode is token-scoped `room+identity` (existing `packages/server/src/auth.ts:107` HS256) + optional E2EE/SFrame with key rotation + TURN + recording ACL — same API, flag-driven.
 5. **Recording as product feature:** client composite (`MediaRecorder`) + server selective (SFU consumer→file) + mixed/composited egress behind one `room.recording` surface (`RecordingStorage` `Disk`/`S3` via SigV4 already in place).
-6. **Plug-and-play installs:** `bun add @mbsks/core` is <15 kB gz zero-dep; adding a backend or SFU is one extra `add`. Heavy peers (`pg`, `mediasoup`, `firebase`) are optional + lazy-imported, tree-shakable via `sideEffects:false` and `exports` subpaths.
+6. **Plug-and-play installs:** `bun add @mbsks/openrtc-core` is <15 kB gz zero-dep; adding a backend or SFU is one extra `add`. Heavy peers (`pg`, `mediasoup`, `firebase`) are optional + lazy-imported, tree-shakable via `sideEffects:false` and `exports` subpaths.
 7. **DX at TanStack level:** `roomOptions` factories, `select` for derived slices, `useSuspenseRoomState`, mutations with optimistic local echo, `VidcallClient` deduping `Room` by `[roomId,selfId]`, devtools envelope ring buffer. Snapshot stays `useSyncExternalStore`-compatible.
 
 ## Non-goals / constraints
@@ -40,9 +40,9 @@ This plan takes vidcall to **ultimate calling lib** in 5 additive phases: API de
 ## Target architecture (end state)
 
 ```
-App ── @mbsks/react (useRoomState/select/suspense, VidcallClient)
+App ── @mbsks/openrtc-react (useRoomState/select/suspense, VidcallClient)
         │
-       @mbsks/core  Room ─┬─ SignalingTransport (composite: primary+fallback+reconnect, per-kind)
+       @mbsks/openrtc-core  Room ─┬─ SignalingTransport (composite: primary+fallback+reconnect, per-kind)
                             │   ├─ composite over backends: supabase|convex|firebase|postgres|...
                             │   └─ WS relay coalesces ICE, Redis pub/sub fans out
                             ├─ MediaTransport seam (mesh vs SFU vs WHIP/WHEP) — Room never new RTCPeerConnection
@@ -52,9 +52,9 @@ App ── @mbsks/react (useRoomState/select/suspense, VidcallClient)
                             ├─ ProcessorChain (per-track: denoise/bg/SFrame E2EE, simulcast/SVC)
                             └─ RecordingFacade (client composite + SFU egress)
         │
-       @mbsks/server  WS relay + Store (Redis pub/sub RoomHub, Postgres/SQLite/MySQL stores)
-       @mbsks/sfu-gateway  SfuGateway adapter surface (mediasoup ref, lazy peer dep)
-       @mbsks/transport  chunker/reorder/heartbeat/IceCoalescer/shared-tests
+       @mbsks/openrtc-server  WS relay + Store (Redis pub/sub RoomHub, Postgres/SQLite/MySQL stores)
+       @mbsks/openrtc-sfu-gateway  SfuGateway adapter surface (mediasoup ref, lazy peer dep)
+       @mbsks/openrtc-transport  chunker/reorder/heartbeat/IceCoalescer/shared-tests
 ```
 
 ## Phases (dependency order)
@@ -75,7 +75,7 @@ Phases 1 and 5 can start in parallel with 2; 3 needs 2; 4 is independent of 3 bu
 - **Topologies:** 1:1 and mesh-4 p2p work with zero infra; SFU 30-participant fan-out <150 ms p95 `publish→subscribe`; `auto` switches mesh→SFU at configurable N (default 4→5) without media loss; cascading: 2 SFU routers share roster/signals.
 - **Transport/media:** composite fallback delivers when primary backend throttles (inject 20 ICE/s, zero drops); `MediaTransport` seam lets tests inject fake without touching `Room`; E2EE/SFrame round-trips; simulcast/SVC layer switch via `setPreferredLayers`.
 - **Scale:** 2 server instances behind LB share signals+presence via Redis pub/sub; InMemoryStore replaced by pluggable `Store` with `ioredis`/`redis` peer dep; WS relay coalesces ICE; Postgres `LISTEN` on dedicated client, no 7 KB loss.
-- **Bundle:** `bun add @mbsks/core` <15 kB gz zero-dep; backend/SFU/server are optional imports (optional peers, `await import()`); `publint` + `attw --pack` + `size-limit` green; dual ESM+CJS where needed without breaking `type:module`.
+- **Bundle:** `bun add @mbsks/openrtc-core` <15 kB gz zero-dep; backend/SFU/server are optional imports (optional peers, `await import()`); `publint` + `attw --pack` + `size-limit` green; dual ESM+CJS where needed without breaking `type:module`.
 - **DX:** `useRoomState(room, select)` has referential stability (`roomSnapshotsEqual`); `useSuspenseRoomState` suspends while `status==='joining'`; `VidcallClient` dedupes `Room` by `[roomId,selfId]` (StrictMode-safe via `JoinOptions.signal`); devtools ring buffer replaces single `debug` fn.
 - **Quality gates:** `bun run build` (`tsc -b`), `bun run test` + transport `vitest`, SFU `VIDCALL_MEDIASOUP_INTEGRATION=1` real-worker pass, `oxlint`/`oxfmt`, `publint`/`attw`, changesets.
 
