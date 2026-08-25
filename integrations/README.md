@@ -1,6 +1,14 @@
 # vidcall server — integration guides
 
-`@vidcall/server` attaches to other backends. Pick your host:
+`@vidcall/server` is a small Node service that does your video-call plumbing:
+rooms, participant rosters, and the signaling relay. Three ways to run it —
+pick the row that matches your stack:
+
+- **Node app (Express/Fastify)?** Mount it in-process. No extra service.
+- **Python / PHP / Ruby backend?** Run it as a tiny Node sidecar behind your
+  usual web server or proxy.
+- **Your own database?** Implement the ~10-method `Store` contract instead of
+  using the built-in stores.
 
 | Host                | Native or sidecar?                              | Guide                        |
 | ------------------- | ----------------------------------------------- | ---------------------------- |

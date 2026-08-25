@@ -1,8 +1,12 @@
 # vidcall testing — L0 / L1 / L2 matrix
 
-This document defines how vidcall is validated. The wire protocol
-(`protocol/schema.json`) is the single source of truth; every layer is tested
-against it.
+One library speaks one protocol from several languages, so tests come in
+three rings. **L0** checks that TypeScript, Kotlin, Swift, and Dart all read
+and write the exact same wire messages. **L1** is the everyday TypeScript
+suite: unit tests plus one shared suite that every signaling backend must
+pass. **L2** builds and runs each mobile binding on its own native toolchain.
+The wire protocol (`protocol/schema.json`) is the single source of truth;
+every layer is tested against it.
 
 ## Layer model
 

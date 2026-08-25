@@ -1,137 +1,119 @@
 # vidcall
 
-Add video calls to any app in minutes. vidcall is a JS/TS mesh WebRTC engine
-with a pluggable signaling layer: bring your own Supabase, Convex, Firebase,
-Appwrite, PostgreSQL, SQLite, or host the included server component — the
-engine, the wire protocol, and the 3 mobile bindings (Kotlin, Swift, Dart)
-don't care which one you picked.
+Add video calling to any web app with a small, pluggable library. vidcall
+connects your users' browsers directly (WebRTC mesh), adapts quality to their
+network, and doesn't care which signaling backend you have.
+
+## Why it exists
+
+Video calls are genuinely hard: peer connections, ICE, negotiation races,
+out-of-order messages, flaky networks. vidcall handles all of that inside the
+engine so your app code stays boring — usually around 20 lines:
+
+- **Mesh WebRTC**: perfect negotiation, trickle ICE, renegotiation, restarts.
+- **Adaptive quality**: fast downgrade under pressure, careful upgrades, visible warnings.
+- **Any signaling backend**: six adapters plus a self-hostable server; mobile bindings share the protocol.
+
+## Quick start
+
+Nothing is on npm yet (see [Status](#status)), so start in the repo:
 
 ```sh
-# the fastest "hello call" — two tabs, zero infra (full walkthrough in examples/)
 git clone <repo-url> vidcall && cd vidcall
-npm ci && npm run build
-node examples/vanilla/build.mjs && npx serve examples/vanilla
-# open http://localhost:3000 in TWO tabs → both auto-join the room → Camera on in each = a call
+bun install && bun run build
 ```
 
-The API in 5 lines:
+### Option A — React
 
-```ts
+```tsx
+import { createClient } from '@supabase/supabase-js';
 import { Room } from '@vidcall/core';
 import { SupabaseBackend } from '@vidcall/backend-supabase';
+import { useJoin, useParticipants, useRoomState } from '@vidcall/react';
 
-const room = new Room({ roomId: 'demo', selfId: 'me', transport: new SupabaseBackend({ client }) });
-room.on('track', ({ participant, track }) => attach(participant, track)); // remote media
-room.on('quality-warning', (e) => toast(`${e.from} → ${e.to} · ${e.reason}`));
-await room.join();
-await room.publish(cameraTrack); // your camera to everyone in the room
-```
+const room = new Room({
+  roomId: 'demo',
+  selfId: `user-${Math.random().toString(36).slice(2, 8)}`,
+  transport: new SupabaseBackend({
+    client: createClient(SUPABASE_URL, SUPABASE_ANON_KEY),
+  }),
+});
 
-## What you get
-
-| Feature                   | What it is                                                                                                                                                                             |
-| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **1:1 + multi-user mesh** | perfect negotiation, trickle ICE, renegotiation, ICE restart (`PeerConnectionManager`) — works over any dumb pub/sub                                                                   |
-| **Adaptive quality**      | `@vidcall/quality` policy engine: instant downgrade on network/CPU pressure, 10 s-stable upgrade, device-capability caps, user-visible warnings                                        |
-| **6 pluggable backends**  | Supabase, Convex, Firebase, Appwrite, PostgreSQL, SQLite — one `SignalingTransport` interface, one shared adapter test suite                                                           |
-| **Server component**      | `@vidcall/server`: rooms, participant roster, signal log, envelope relay (REST + WebSocket), recording storage — hosts inside Express/Fastify or as a sidecar for Django/Laravel/Rails |
-| **Recording**             | `room.recording` — composite MediaRecorder of local + remote streams, chunked upload to `@vidcall/server`                                                                              |
-| **3 mobile bindings**     | Kotlin, Swift, Dart (Flutter) — same wire protocol, L0 conformance fixtures in CI                                                                                                      |
-| **Wire protocol**         | one versioned JSON envelope (`protocol/schema.json`) shared by every client and backend                                                                                                |
-| **Controls**              | mute/camera/screen-share/raise-hand/device selection (`room.controls`) and reactions + chat over backend pub/sub or the data channel                                                   |
-
-## Install
-
-Nothing is published to npm yet (`0.1.0` workspace packages, root is
-`"private": true`). Two supported paths until the first release:
-
-**1. Workspace setup (what the examples use).** Clone, install, build, then
-consume the packages from the workspace:
-
-```sh
-git clone <repo-url> vidcall && cd vidcall
-npm ci && npm run build
-```
-
-Your app can then depend on the packages with `file:` deps (npm symlinks
-them, no publish needed):
-
-```json
-{
-  "dependencies": {
-    "@vidcall/core": "file:../vidcall/packages/core",
-    "@vidcall/backend-supabase": "file:../vidcall/packages/backend-supabase"
-  }
+function Call() {
+  useJoin(room); // auto-join on mount, clean leave on unmount
+  const state = useRoomState(room); // status: 'new' | 'joining' | 'joined' | 'closed'
+  const participants = useParticipants(room);
+  return <p>{state.status} · {participants.length} people here</p>;
 }
 ```
 
-**2. From a git URL.** `npm i git+https://github.com/<owner>/vidcall.git`
-installs the repository root — today that is the workspace container, not a
-publishable package, so combine it with the `file:` deps above (or wait for
-the first npm release: `npm i @vidcall/core`). Either way, follow
-`examples/` for a working setup.
+### Option B — vanilla JS (any framework, or none)
 
-> `npm i <git-url>` accuracy note: npm installs the root package of a git
-> repo as-is; this repo's root is the private workspace container, which is
-> why the `file:`/workspace paths above are the supported ones today.
+```js
+import { Room } from '@vidcall/core';
+import { SupabaseBackend } from '@vidcall/backend-supabase'; // any adapter works
+import { createClient } from '@supabase/supabase-js';
 
-## Quickstart → working room
+const room = new Room({
+  roomId: 'demo',
+  selfId: `user-${Math.random().toString(36).slice(2, 8)}`,
+  transport: new SupabaseBackend({ client: createClient(SUPABASE_URL, KEY) }),
+});
 
-1. **Zero-infra, two tabs, no server** — [`examples/vanilla`](examples/vanilla):
-   `Room` + the sqlite BroadcastChannel backend; build with one esbuild step,
-   serve with `npx serve` or `python3 -m http.server`.
-2. **React + Supabase** — [`examples/react`](examples/react): Vite + React 19
-   wiring `Room` + `SupabaseBackend` into React state (mute, camera, quality
-   events, roster).
-3. **Self-hosted signaling** — [`examples/server`](examples/server): a ~30-line
-   Express app mounting `@vidcall/server` (`createExpressRouter`) + a REST
-   client snippet.
+// Remote media arrives on its own; put each track on a <video>.
+room.on('track', ({ participant, track }) => {
+  document.getElementById('remote-' + participant.id).srcObject =
+    new MediaStream([track]);
+});
 
-Each example is documented in [`examples/README.md`](examples/README.md).
+await room.join();
+
+// Send your camera to everyone in the room:
+const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+await room.publish(stream.getVideoTracks()[0], { source: 'camera' });
+```
+
+```sh
+# No Supabase handy? Two tabs of ONE browser can call each other, no server:
+node examples/vanilla/build.mjs && npx serve examples/vanilla
+# open http://localhost:3000 in TWO tabs → Camera on in each tab = a call
+```
 
 ## Packages
 
-| Package                                              | What it is                                                                                                                                                                                                                                                                                                    |
-| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`@vidcall/core`](packages/core/README.md)           | client mesh engine: `Room`, `PeerConnectionManager`, `DataChannelBus`, controls, recording facade — **zero runtime deps**                                                                                                                                                                                     |
-| [`@vidcall/quality`](packages/quality/README.md)     | adaptive-quality policy engine (`AdaptiveQualityController`, `DeviceCapability`) — pure, no WebRTC imports                                                                                                                                                                                                    |
-| [`@vidcall/transport`](packages/transport/README.md) | `SignalingTransport` contract + helpers (chunker, reorder, heartbeat, ICE coalescer) + the shared adapter test suite                                                                                                                                                                                          |
-| [`@vidcall/server`](packages/server/README.md)       | backend component: rooms/sessions, REST + WebSocket relay, recording storage; function-based `Store` works with any database                                                                                                                                                                                  |
-| [`@vidcall/protocol`](protocol/)                     | the wire protocol — `protocol/schema.json` + TS mirror (`Envelope`, `createEnvelope`, payload types)                                                                                                                                                                                                          |
+| Package                                             | What it gives you                                                                                             |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| [`@vidcall/core`](packages/core/README.md)           | The client engine — `Room`, peer connections, devices, recording. Zero runtime deps.                           |
+| [`@vidcall/react`](packages/react/README.md)         | Hooks: `useJoin`, `useRoomState`, `useParticipants`.                                                            |
+| [`@vidcall/quality`](packages/quality/README.md)     | Adaptive-quality policy engine (pure functions, no WebRTC imports).                                             |
+| [`@vidcall/transport`](packages/transport/README.md) | The `SignalingTransport` contract, helpers, and the shared test suite every backend must pass.                  |
+| [`@vidcall/server`](packages/server/README.md)       | Rooms, REST + WebSocket relay, recording storage. Stores: `/stores/sqlite`, `/stores/postgres`, `/stores/mysql`; adapters: `/express`, `/fastify`. |
+| [`@vidcall/sfu-gateway`](packages/sfu-gateway/README.md) | Optional SFU path (mediasoup reference adapter; not yet wired into `Room`).                                 |
 | backends                                             | [`supabase`](packages/backend-supabase/README.md) · [`convex`](packages/backend-convex/README.md) · [`firebase`](packages/backend-firebase/README.md) · [`appwrite`](packages/backend-appwrite/README.md) · [`postgres`](packages/backend-postgres/README.md) · [`sqlite`](packages/backend-sqlite/README.md) |
-| bindings                                             | [`kotlin`](packages/kotlin/README.md) · [`swift`](packages/swift/) · [`dart`](packages/dart/README.md)                                                                                                                                                                                                        |
+| mobile bindings                                      | [`kotlin`](packages/kotlin/README.md) · [`swift`](packages/swift/README.md) · [`dart`](packages/dart/README.md) — same wire protocol |
+| [`protocol`](protocol/)                              | The versioned JSON envelope everyone speaks (`schema.json` + fixtures).                                         |
 
-## Docs
+## Works everywhere
 
-- [Architecture](docs/architecture.md) — the blueprint behind the engine.
-- [Testing matrix](docs/testing.md) — L0 protocol conformance / L1 unit +
-  shared adapter suites / L2 cross-language integration, and how to run each
-  layer locally.
-- [Server hosting guides](integrations/README.md) — Express, Fastify, Django,
-  Laravel, Rails + the `Store` contract.
-- [Research & reviews](docs/) — backend adapters, WebRTC JS options, mobile
-  bindings, competitive analysis, DX review.
-
-## Testing
-
-```sh
-npm run build && npm test && npm run typecheck && npm run lint   # L1 (workspace)
-for p in packages/backend-*; do (cd "$p" && npm run test --if-present); done  # L1 (backends, shared suite)
-cd packages/swift && swift test                                   # L2 swift
-cd packages/dart && dart test                                     # L2 dart
-cd packages/kotlin && ./gradlew test                              # L2 kotlin (JDK 21)
-```
-
-CI (`.github/workflows/ci.yml`) runs the full matrix on every push: node
-20/22 (build, test, typecheck, lint + every backend suite), swift, dart,
-kotlin.
+- **Any frontend**: React gets hooks; every other framework (or none) drives `@vidcall/core` directly.
+- **Any backend language**: REST + WebSocket to `@vidcall/server` — mount it in Express/Fastify,
+  sidecar beside Django/Laravel/Rails, or try the Rust relay (`server/rust`). Guides:
+  [integrations/README.md](integrations/README.md).
+- **Any database**: implement the ~10-method `Store` contract ([integrations/DATABASES.md](integrations/DATABASES.md)).
+- **Mobile**: Kotlin, Swift, and Dart bindings speak the same protocol.
 
 ## Status
 
-Implementation in progress — the engine, quality policy, all 6 backends, the
-server component, and the 3 bindings exist and are tested; the first npm
-release is not out yet (see Install). Tracked in `docs/architecture.md`.
-Notable changes are summarized in [CHANGELOG.md](CHANGELOG.md).
+The honest version: this is v0.1.0 pre-release. Nothing is published to npm
+yet — consume the packages from this repo for now (the examples show how).
+Everything here exists and is tested, but expect breaking changes until the
+first release. Recent changes: [CHANGELOG.md](CHANGELOG.md).
+
+## Keep reading
+
+- [Getting started](docs/getting-started.md) — build a call step by step, gotchas included.
+- [Testing matrix](docs/testing.md) — what L0/L1/L2 mean and how to run them.
+- [Contributing](CONTRIBUTING.md) — policies, local development, releases.
 
 ## License
 

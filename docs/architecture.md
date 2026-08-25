@@ -1,5 +1,14 @@
 # vidcall — Architecture Blueprint (synthesized from research)
 
+The big picture, in plain words: each person's app creates a `Room`, which
+finds the other callers through a messaging channel you choose — Supabase,
+Postgres, your own server, anything that can pass small JSON messages along.
+Once introductions are made, browsers connect directly to each other and the
+actual video flows peer-to-peer. All the fiddly parts of WebRTC — negotiation
+races, message reordering, reconnects, quality drops — are handled inside the
+engine, not in your app code. The rest of this document is the technical
+blueprint of how that works.
+
 > Status: draft v1, synthesized 2026-08-11 from `docs/research/webrtc-js.md`, `docs/research/backend-adapters.md`, `docs/research/mobile-bindings.md`. All policy from `CONTRIBUTING.md` applies (14-day dep age, exact pins, in-workspace sub-libs, ≥2 impls per interface, open-source docs).
 
 ## 1. Positioning
