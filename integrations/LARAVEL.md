@@ -22,10 +22,13 @@ import {
 } from '@vidcall/server';
 import Database from 'better-sqlite3';
 
-const store = new SqliteStore(new Database(storage_path('vidcall.db')));
+const store = new SqliteStore(
+  new Database(process.env.VIDCALL_DB_PATH ?? '/var/lib/vidcall/vidcall.db'),
+);
 await store.bootstrap();
-const server = createNodeServer(createServices({ store }));
-attachWebSocketRelay(server, createServices({ store }));
+const services = createServices({ store });
+const server = createNodeServer(services);
+attachWebSocketRelay(server, services);
 server.listen(8787);
 ```
 

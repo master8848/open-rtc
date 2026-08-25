@@ -26,8 +26,9 @@ import Database from 'better-sqlite3';
 const store = new SqliteStore(new Database('/var/lib/vidcall/vidcall.db'));
 await store.bootstrap();
 
-const server = createNodeServer(createServices({ store }));
-attachWebSocketRelay(server, createServices({ store })); // /ws?roomId=
+const services = createServices({ store });
+const server = createNodeServer(services);
+attachWebSocketRelay(server, services); // /ws?roomId=
 server.listen(8787, () => console.log('vidcall sidecar on :8787'));
 ```
 

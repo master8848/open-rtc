@@ -30,4 +30,4 @@ const server = app.listen(Number(process.env.PORT ?? 3000), () => {
 
 // Upgrades GET /vidcall/ws?roomId=... to the envelope relay. REST mutations
 // (join/leave/signal) fan out to the same connected sockets.
-attachWebSocketRelay(server, services);
+attachWebSocketRelay(server, services, { path: '/vidcall/ws' });

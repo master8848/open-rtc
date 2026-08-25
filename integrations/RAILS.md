@@ -23,8 +23,9 @@ import {
 
 const store = new PostgresStore(process.env.DATABASE_URL); // reuse your PG
 await store.bootstrap();
-const server = createNodeServer(createServices({ store }));
-attachWebSocketRelay(server, createServices({ store }));
+const services = createServices({ store });
+const server = createNodeServer(services);
+attachWebSocketRelay(server, services);
 server.listen(8787);
 ```
 
