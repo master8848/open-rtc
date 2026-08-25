@@ -8,7 +8,6 @@ function msg(seq: number, type: 'offer' | 'ice' | 'chat' = 'offer', sender = 'a'
     senderId: sender,
     sessionId: 's',
     seq,
-    payload: { seq },
   });
 }
 
