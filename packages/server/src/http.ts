@@ -166,7 +166,8 @@ async function joinHandler(services: Services, ctx: RouteContext): Promise<Route
   const sessionId = requireString(nested.sessionId ?? body.sessionId, 'sessionId');
   const displayName = asString(nested.displayName ?? body.displayName);
   const metadata = (asRecord(nested.metadata) ?? asRecord(body.metadata)) as
-    Record<string, unknown> | undefined;
+    | Record<string, unknown>
+    | undefined;
 
   // Token must be scoped to this room and bound to the joining participant.
   requireAuth(services, ctx, roomId, { asParticipantId: participantId });

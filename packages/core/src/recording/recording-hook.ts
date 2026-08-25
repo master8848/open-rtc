@@ -17,7 +17,13 @@ import type { TypedEmitter } from '../events.ts';
 
 /** Hook lifecycle state. */
 export type RecordingState =
-  'idle' | 'starting' | 'recording' | 'paused' | 'stopping' | 'error' | 'unavailable';
+  | 'idle'
+  | 'starting'
+  | 'recording'
+  | 'paused'
+  | 'stopping'
+  | 'error'
+  | 'unavailable';
 
 /** Which side of the call a recorded stream came from. */
 export type RecordingStreamKind = 'local' | 'remote';

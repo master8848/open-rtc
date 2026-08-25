@@ -1,0 +1,29 @@
+// Oxlint replaces ESLint (+ @eslint/js / typescript-eslint recommended).
+// Ported from eslint.config.mjs: the recommended baseline maps to the default
+// `correctness` category, with the same two customizations:
+//   - no-unused-vars keeps the `^_` ignore patterns for args and vars
+//   - no-explicit-any stays off (the codebase uses `any` deliberately at boundaries)
+// Capability note: typescript-eslint's type-aware rules have no oxlint equivalent
+// without --type-aware; the old config used none of them, so coverage is unchanged.
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  // Mirror eslint.config.mjs, which used only @eslint/js + typescript-eslint:
+  // the native `unicorn`/`react`/`jest` plugins were NOT enabled before.
+  "plugins": ["eslint", "typescript"],
+  "categories": {
+    "correctness": "error"
+  },
+  "rules": {
+    "eslint/no-unused-vars": ["error", { "argsIgnorePattern": "^_", "varsIgnorePattern": "^_" }],
+    "typescript/no-explicit-any": "off"
+  },
+  "ignorePatterns": [
+    "node_modules/",
+    "dist/",
+    "coverage/",
+    "**/*.tsbuildinfo",
+    "package-lock.json",
+    "docs/",
+    "protocol/schema.json"
+  ]
+}

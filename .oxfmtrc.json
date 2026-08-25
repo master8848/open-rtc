@@ -1,0 +1,13 @@
+// Oxfmt replaces Prettier (.prettierrc.json = { singleQuote: true, printWidth: 100,
+// trailingComma: "all" }). All three settings are supported natively; printWidth/trailingComma
+// already default to 100/"all" but are pinned explicitly for clarity.
+// sortPackageJson is disabled to keep package.json key order stable across the migration
+// (.prettierignore content lives in ignorePatterns below).
+{
+  "$schema": "./node_modules/oxfmt/configuration_schema.json",
+  "singleQuote": true,
+  "printWidth": 100,
+  "trailingComma": "all",
+  "sortPackageJson": false,
+  "ignorePatterns": ["node_modules/", "dist/", "coverage/", "**/*.tsbuildinfo", "package-lock.json"]
+}
