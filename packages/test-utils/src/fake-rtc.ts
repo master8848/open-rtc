@@ -218,7 +218,7 @@ export class FakeDataChannel implements RTCDataChannel {
 export class FakeRTCRtpSender implements RTCRtpSender {
   readonly track: MediaStreamTrack | null;
   transport: RTCDtlsTransport | null = null;
-  transform: RTCRtpTransform | null = null;
+  transform: RTCRtpScriptTransform | null = null;
   readonly dtmf: RTCDTMFSender | null = null;
   private parameters: RTCRtpSendParameters;
 
@@ -259,7 +259,7 @@ export class FakeRTCRtpSender implements RTCRtpSender {
 export class FakeRTCRtpReceiver implements RTCRtpReceiver {
   readonly track: MediaStreamTrack;
   transport: RTCDtlsTransport | null = null;
-  transform: RTCRtpTransform | null = null;
+  transform: RTCRtpScriptTransform | null = null;
   jitterBufferTarget: number | null = null;
 
   constructor(track: MediaStreamTrack) {

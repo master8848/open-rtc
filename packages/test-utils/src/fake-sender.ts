@@ -138,7 +138,7 @@ export class FakeSenderStats {
 export class FakeSender {
   readonly track: MediaStreamTrack | null;
   transport: RTCDtlsTransport | null = null;
-  transform: RTCRtpTransform | null = null;
+  transform: RTCRtpScriptTransform | null = null;
   readonly dtmf: RTCDTMFSender | null = null;
   /** Every setParameters call, deep-cloned (assertions read this). */
   readonly setParametersCalls: RTCRtpSendParameters[] = [];
