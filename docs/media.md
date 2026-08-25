@@ -1,0 +1,21 @@
+# Media — transport seam, topology, processors
+
+Current behavior for `packages/core/src/media/*`, `packages/sfu-gateway/*`, `packages/core/src/e2ee.ts`.
+
+`Room` is topology-agnostic and delegates `publish`/`unpublish`/`subscribe`/`restartIce`/`getPeerConnections`/`getSenders` to a `MediaTransport` (`packages/core/src/media/media-transport.ts:47`). `MediaTransportKind` is `mesh|sfu|whip|whep|custom`.
+
+`MeshMediaTransport` (`packages/core/src/media/mesh-transport.ts`) holds `Map<string,PeerEntry{pc,manager,bus}>`, `peerFactory` injection, `PeerConnectionManager` perfect negotiation / trickle ICE / renegotiation / `restartIce`. This is the extracted prior `Room.ensurePeer` path.
+
+`SfuMediaTransport` (`packages/core/src/media/sfu-transport.ts`) holds one `RTCPeerConnection` to an `SfuSession` (`packages/sfu-gateway/src/sfu-gateway.ts:146`) obtained via `SfuGateway.join` (`packages/sfu-gateway/src/sfu-gateway.ts:109`); `publishTrack`/`subscribe`/`setPreferredLayers`/`requestKeyframe`/`handleOffer`/`handleAnswer`/`addIceCandidate` map to `SfuSession` methods; `sfu` envelopes are routed via `handleSfuEnvelope` → `SfuSession` then `SfuRouter.handle` (`packages/sfu-gateway/src/sfu-router.ts:179`) validates `isParticipant` (`packages/sfu-gateway/src/sfu-router.ts:126`) and `sfuParticipantId='sfu'`.
+
+`WhipMediaTransport` (`packages/core/src/media/whip-transport.ts:35`) `POST` SDP offer to `whipUrl` (default `POST /whip/:roomId`) and consumes answer; `WhepMediaTransport` (`packages/core/src/media/whep-transport.ts`) is the egress counterpart `POST /whep/:roomId`. SFU maintains `PlainTransport`/`DirectTransport` for WHIP/WHEP (`packages/server/src/egress.ts`, `packages/sfu-gateway/src/mediasoup-adapter.ts`).
+
+`TopologyController` (`packages/core/src/media/topology.ts:11`) type `Topology mesh|sfu|auto` default `auto` with `autoThreshold` default `4`. `shouldBeSfu`/`maybeMigrate` (`packages/core/src/media/topology.ts:39`) flips `mesh→sfu` when participant count exceeds threshold via `switchTransport('sfu')` re-publishing local tracks; manual `room.setTopology('mesh'|'sfu'|'auto')` (`packages/core/src/room.ts`) overrides. Downgrade `sfu→mesh` is manual in v1.
+
+`ProcessorChain` (`packages/core/src/media/processor.ts:20`) orders `MediaProcessor` by `denoise(0)→background(1)→custom(2)→e2ee(3)`; `Room` exposes `useProcessor(p)` (`packages/core/src/room.ts:742`); heavy processors are lazy imports. `e2ee` last is enforced; missing `RTCRtpScriptTransform`/insertable streams warns `e2ee:unsupported` (`packages/core/src/media/processor.ts:32`, `packages/core/src/e2ee.ts:48`). See `docs/security.md` for SFrame details.
+
+Simulcast/SVC/codecs: `room.publish(track,{source, simulcast:{layers,encodings}, svc:{scalabilityMode}, codecPreferences, metadata})` (`packages/core/src/media/media-transport.ts:15`) maps `simulcast` to `RTCRtpEncodingParameters` and `codecPreferences` to `RTCRtpTransceiver.setCodecPreferences` (Safari H.264 fallback). Receiver `setPreferredLayers(trackId,'l'|'m'|'h')` and `requestKeyframe(trackId)` (`packages/core/src/media/media-transport.ts:52`) map to `consumer.setPreferredLayers`/`producer.requestKeyFrame` (`packages/sfu-gateway/src/mediasoup-adapter.ts`); `room.setTile({visible,width,height,priority})` drives layer choice; `AdaptiveQualityController` (`packages/quality/src/adaptive-quality-controller.ts:115`, `packages/core/src/room-quality.ts:216`) still polls `media.getPeerConnections()`/`getSenders()`.
+
+Active-speaker: `ActiveSpeakerDetector` (`packages/core/src/media/active-speaker.ts`) polls `inbound-rtp.audioLevel`+`AnalyserNode` hysteresis and emits `room.on('active-speaker', string[])`; `speaker {speaking,audioLevel}` envelope is in `protocol/schema.json`. Transcription: `TranscriptionController` (`packages/core/src/media/transcription.ts:31`) emits `room.on('transcript',{participantId,text,isFinal,lang})` from client `SpeechRecognition` then SFU `Consumer→STT→transcript` envelope.
+
+Related: `docs/features/call-models.md` (topology choice), `docs/features/scaling.md` (SFU comparison), `docs/security.md` (E2EE), `docs/recording.md` (egress), `docs/plans/archive/03-media-topology.md`, `docs/plans/archive/06-advanced-media.md`.

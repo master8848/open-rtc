@@ -1,0 +1,21 @@
+# Security — auth, policy, E2EE, TURN
+
+Current behavior for `packages/server/src/auth.ts`, `packages/server/src/ws.ts`, `packages/server/src/turn.ts`, `packages/server/src/core.ts`, `packages/core/src/e2ee.ts`.
+
+Open mode: `createServices({ store })` with no `auth` — any client joins any room. Dev only. `packages/server/src/ws.ts:218` returns early when `services.auth` is undefined.
+
+Token mode: `createServices({ store, auth: { secret, requireToken?, previousSecrets? } })`. Tokens are compact JWT `header.payload.signature` HS256 via `node:crypto` `createHmac` (`packages/server/src/auth.ts:101`). Claims `TokenClaims` (`packages/server/src/auth.ts:37`) are `roomId`, `participantId`, `role: 'participant'|'admin'`, `exp`/`iat` epoch seconds, optional `jti`, `caps`, `e2ee`. `issueToken` (`packages/server/src/auth.ts:127`) mints; `verifyToken` (`packages/server/src/auth.ts:164`) validates signature with `timingSafeEqual` (`packages/server/src/auth.ts:106`) and expiry; `verifyTokenWithRotation` (`packages/server/src/auth.ts:278`) tries `secrets: [current, previous]`; `revokeToken`/`isRevoked` (`packages/server/src/auth.ts:306`) is in-memory `jti` set.
+
+Guards: WS `GET /ws?roomId=&token=` captures `?token=` (`packages/server/src/ws.ts:155`) and `authenticateSocket` (`packages/server/src/ws.ts:210`) verifies before `join` and on policy checks; failure sends error envelope and `close(4401)`. HTTP `POST /rooms/:id/join`, `/signal`, `/recordings/*`, `/turn/credentials` check `Authorization: Bearer <token>` when `services.auth` is set (`packages/server/src/http.ts`). `POST /auth/token` mints participant tokens openly and admin tokens only with `adminToken` header.
+
+Policy: `RoomPolicy` (`packages/server/src/core.ts:129`) is `locked`, `allowRecording`, `allowedCodecs`, `moderatorIds`, `e2eeRequired`, `maxParticipants`. Enforced in `joinRoom`/`handleSignal` (`packages/server/src/core.ts`) and `SfuRouter` `isParticipant` (`packages/sfu-gateway/src/sfu-router.ts:126`) and WS `handleJoin` (`packages/server/src/ws.ts:342`).
+
+E2EE: `packages/core/src/e2ee.ts` `SFrameProcessor` encrypts raw bytes with AES-GCM 12-byte IV prepended (`packages/core/src/e2ee.ts:114`) and decrypts (`packages/core/src/e2ee.ts:124`). Feature-detect prefers `RTCRtpScriptTransform` then `RTCRtpSender.createEncodedStreams`/`MediaStreamTrackProcessor` (`packages/core/src/e2ee.ts:48`); otherwise `detectE2eeSupport() === 'none'` and `ProcessorChain` warns `e2ee:unsupported` (`packages/core/src/media/processor.ts:32`). Key is app-provided `CryptoKey|Uint8Array`, `deriveE2eeKey` via PBKDF2 (`packages/core/src/e2ee.ts:72`), rotation via `room.setE2eeKey`/`SFrameProcessor.setKey` (`packages/core/src/e2ee.ts:160`). SFU forwards ciphertext opaque; recording with `e2eeRequired` either fails egress `code:'e2ee-blocks-egress'` or stores ciphertext with `keyId` (see `docs/recording.md`).
+
+TURN: `packages/server/src/turn.ts` `issueTurnCredentials` (`packages/server/src/turn.ts:38`) mints coturn REST `username=expiry:participantId`, `credential=HMAC-SHA1(username, secret)` base64; `toIceServers` (`packages/server/src/turn.ts:63`) maps to `RTCIceServer`. Server endpoint `GET /turn/credentials` is bearer-guarded; client fetches lazily before first `RTCPeerConnection` and caches until `expiry-60s`. See `packages/server/README.md` for `turn.secret`/`turn.urls`/`ttlSec` and coturn `static-auth-secret`.
+
+Client: `new Room({ auth: { token, onTokenExpired } })` refreshes at `exp-120s`; WS 4401 surfaces as `room.emit('auth:error')` with one retry. `caps` gate `publish`/`subscribe`/`record`/`moderate` without overloading `role`.
+
+Operator vars: `VIDCALL_SECRET`, `VIDCALL_ADMIN_TOKEN`, `VIDCALL_TURN_SECRET`, `VIDCALL_TURN_URLS` consumed by `packages/server/src/services.ts` helpers and `examples/server`. Rotation: set `previousSecrets` for grace window, then promote.
+
+Related: `packages/server/README.md#authentication--tokens` (HTTP surface), `docs/media.md` (processor chain order), `docs/limits.md` (backend matrix), `docs/plans/archive/01-security.md` (archived rationale).

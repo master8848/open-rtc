@@ -62,7 +62,7 @@ vidcall/
 │   ├── backend-appwrite/      # adapter (doc-write signaling + heartbeat presence)
 │   ├── backend-postgres/      # adapter (LISTEN/NOTIFY + chunker + optional ws bridge)
 │   ├── backend-sqlite/        # adapter (libSQL; same-device BroadcastChannel; dev/test mode)
-│   ├── sfu-gateway/           # SfuGateway interface + SfuRouter + mediasoup reference adapter (scaffolded; Room wiring TODO)
+│   ├── sfu-gateway/           # SfuGateway interface + SfuRouter + mediasoup reference adapter (Room wiring via MediaTransport — see docs/media.md)
 │   ├── kotlin/                # Kotlin binding (mirrors core, same protocol)
 │   ├── swift/                 # Swift binding
 │   └── dart/                  # Dart/Flutter binding
@@ -123,7 +123,7 @@ packages/sfu-gateway/
 ## 6. Open items (from research, verify at implementation)
 
 - Re-verify pin publish dates (packages ship weekly); Supabase per-publisher broadcast FIFO; Ably/Firebase/Turso pricing numbers.
-- SFU: `packages/sfu-gateway` scaffolded (protocol `sfu` envelopes routed, mediasoup reference adapter compiled, integration env-gated and verified against a real worker — §4.1). TODO: wire `SfuGateway` into `Room` (create sessions on join, route envelopes, forward `onTrack` to subscriptions), plus a LiveKit adapter guide.
+- SFU: `packages/sfu-gateway` wired via `SfuMediaTransport` (see docs/media.md); LiveKit adapter as second impl remains open.
 - Postgres NOTIFY: confirm relay design (browser clients need ws bridge; keep LISTEN on dedicated `pg` client, NOT pool).
 - iOS Safari: no getDisplayMedia / no send-side simulcast / no VP9-AV1 / AEC quirks → capability-aware warnings in docs + engine.
 
