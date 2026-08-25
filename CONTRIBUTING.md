@@ -94,8 +94,8 @@ npm ci                 # install
 npm run build          # tsc -b across workspace projects
 npm test               # L1 TS suites (core, quality, test-utils, server, sfu-gateway)
 npm run typecheck      # tsconfig.test.json project-wide type check
-npm run lint           # eslint + prettier --check
-npm run format         # prettier --write
+npm run lint           # oxlint + oxfmt --check
+npm run format         # oxfmt (write pass)
 
 # Backend adapters (each runs the shared transport adapter suite via vitest)
 for p in packages/backend-*; do (cd "$p" && npm run test); done
@@ -105,6 +105,40 @@ for p in packages/backend-*; do (cd "$p" && npm run test); done
 (cd packages/swift  && swift test)
 (cd packages/kotlin && ./gradlew test)
 ```
+
+## Changelog & releases
+
+Releases are driven by [changesets](https://github.com/changesets/changesets)
+(`@changesets/cli`, configured in `.changeset/config.json`). All workspace
+packages under `packages/*` and `protocol/` are publishable (`@vidcall/*`,
+independent versioning); the root package is private and never released.
+
+**Every PR that changes published behavior must include a changeset.** Run
+
+```sh
+npm run changeset
+```
+
+and pick affected packages and bump types (patch for fixes, minor for
+features). Commit the generated `.changeset/*.md` file with your PR. Changes
+that don't affect published packages (docs, CI, examples) need no changeset.
+
+When maintainers are ready to release:
+
+```sh
+npm run version   # changeset version — consumes pending changesets:
+                  #   bumps package versions, updates internal dependency ranges,
+                  #   and writes each released package's CHANGELOG.md
+npm run release   # npm run build && changeset publish — builds and publishes
+```
+
+`changeset version` updates **package-level** changelogs only; the root
+[`CHANGELOG.md`](CHANGELOG.md) is the hand-curated repo-wide summary and is
+updated in the same PR as notable user-facing changes. The root README links
+to it so newcomers can find it.
+
+Version commits follow the repo's conventional style via
+`.changeset/commits.mjs` (`chore: release @vidcall/core@0.2.0, ...`).
 
 ## Commit style
 

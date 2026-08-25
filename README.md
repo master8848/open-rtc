@@ -131,6 +131,7 @@ kotlin.
 Implementation in progress — the engine, quality policy, all 6 backends, the
 server component, and the 3 bindings exist and are tested; the first npm
 release is not out yet (see Install). Tracked in `docs/architecture.md`.
+Notable changes are summarized in [CHANGELOG.md](CHANGELOG.md).
 
 ## License
 
