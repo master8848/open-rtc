@@ -15,7 +15,7 @@
  * in which case the remote channel becomes active (this matches how
  * negotiation actually negotiates only the offerer's channel).
  */
-import type { ChatPayload, ReactionPayload } from '@mbsks/openrtc-protocol';
+import type { ChatPayload, ReactionPayload, TranscriptPayload } from '@mbsks/openrtc-protocol';
 import { TypedEmitter } from './events.ts';
 
 export interface ControlMessage {
@@ -25,8 +25,8 @@ export interface ControlMessage {
 
 interface WireMessage {
   v: 1;
-  t: 'reaction' | 'chat' | 'control';
-  d: ReactionPayload | ChatPayload | ControlMessage;
+  t: 'reaction' | 'chat' | 'transcript' | 'control';
+  d: ReactionPayload | ChatPayload | TranscriptPayload | ControlMessage;
 }
 
 export type DataChannelBusEventMap = {
@@ -35,6 +35,7 @@ export type DataChannelBusEventMap = {
   error: [Error];
   reaction: [ReactionPayload];
   chat: [ChatPayload];
+  transcript: [TranscriptPayload];
   control: [ControlMessage];
 };
 
@@ -187,6 +188,10 @@ export class DataChannelBus extends TypedEmitter<DataChannelBusEventMap> {
     this.send('chat', { text, replyTo });
   }
 
+  sendTranscript(payload: TranscriptPayload): void {
+    this.send('transcript', payload);
+  }
+
   sendControl(message: ControlMessage): void {
     this.send('control', message);
   }
@@ -223,6 +228,9 @@ export class DataChannelBus extends TypedEmitter<DataChannelBusEventMap> {
         break;
       case 'chat':
         this.emit('chat', wire.d as ChatPayload);
+        break;
+      case 'transcript':
+        this.emit('transcript', wire.d as TranscriptPayload);
         break;
       case 'control':
         this.emit('control', wire.d as ControlMessage);

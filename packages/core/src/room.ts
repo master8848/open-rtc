@@ -27,6 +27,7 @@ import type {
   QualityWarningPayload,
   ReactionPayload,
   ScreenSharePayload,
+  TranscriptPayload,
 } from '@mbsks/openrtc-protocol';
 import { TypedEmitter } from './events.ts';
 import { OrderedMessageBuffer } from './ordering.ts';
@@ -49,6 +50,8 @@ import { SfuMediaTransport, type SfuGatewayLike } from './media/sfu-transport.ts
 import { ProcessorChain, type MediaProcessor } from './media/processor.ts';
 import { TopologyController, type Topology, type TopologyConfig } from './media/topology.ts';
 import { ActiveSpeakerDetector } from './media/active-speaker.ts';
+import { EgressController, type EgressOptions } from './media/egress.ts';
+import { TranscriptionController, type TranscriptEvent, type TranscriptionOptions } from './media/transcription.ts';
 import type { MediaRecorderConstructor } from './recording/media-recorder-recording-hook.ts';
 import type {
   RecordingChunk,
@@ -106,6 +109,12 @@ export interface RoomQualityWarningEvent extends QualityWarningPayload {
   participantId: string;
 }
 
+export interface RoomTranscriptEvent extends TranscriptPayload {
+  senderId: string;
+  participantId: string;
+  isFinal: boolean;
+}
+
 export type RoomEventMap = {
   /** A remote participant announced their join. */
   'participant-joined': [RemoteParticipant];
@@ -126,6 +135,7 @@ export type RoomEventMap = {
   chat: [RoomChatEvent];
   'screen-share': [RoomScreenShareEvent];
   'quality-warning': [RoomQualityWarningEvent];
+  transcript: [RoomTranscriptEvent];
   /** Active speaker list changed (polls inbound-rtp audioLevel). */
   'active-speaker': [string[]];
   /**
@@ -378,6 +388,8 @@ export class Room extends TypedEmitter<RoomEventMap> implements RoomQualityHost 
   private readonly processorChain: ProcessorChain;
   private readonly topologyController: TopologyController;
   private readonly activeSpeaker: ActiveSpeakerDetector;
+  private readonly egress: EgressController;
+  private readonly transcription: TranscriptionController;
 
   constructor(config: RoomConfig) {
     super();
@@ -541,6 +553,9 @@ export class Room extends TypedEmitter<RoomEventMap> implements RoomQualityHost 
       participantIds: () => [...this.remoteById.keys()],
     });
     this.activeSpeaker.on('active-speaker', (ids) => this.emit('active-speaker', ids));
+    this.egress = new EgressController();
+    this.transcription = new TranscriptionController();
+    this.transcription.onTranscript((e) => this.emit('transcript', { ...e, senderId: e.participantId }));
     this.media.onTrack((e) => {
       if (this.media.kind === 'sfu') {
         let p = this.remoteById.get(e.participantId);
@@ -689,6 +704,35 @@ export class Room extends TypedEmitter<RoomEventMap> implements RoomQualityHost 
       const p = this.remoteById.get(_participantId);
       if (p) for (const pub of p.publications) if (pub.track) pub.track.enabled = true;
     }
+  }
+
+  // -------------------------------------------------------- egress / transcription
+
+  async startEgress(options: EgressOptions = {}): Promise<{ hlsUrl?: string; whepUrl?: string }> {
+    const handle = this.egress.start(this.roomId, options);
+    return { ...(handle.hlsUrl ? { hlsUrl: handle.hlsUrl } : {}), ...(handle.whepUrl ? { whepUrl: handle.whepUrl } : {}) };
+  }
+
+  async stopEgress(): Promise<void> {
+    this.egress.stop(this.roomId);
+  }
+
+  async startTranscription(options: TranscriptionOptions = {}): Promise<void> {
+    await this.transcription.start(options);
+  }
+
+  async stopTranscription(): Promise<void> {
+    await this.transcription.stop();
+  }
+
+  async sendTranscript(text: string, opts: { isFinal?: boolean; lang?: string } = {}): Promise<void> {
+    const payload: TranscriptPayload = { text, isFinal: opts.isFinal ?? true, ...(opts.lang ? { lang: opts.lang } : {}) };
+    this.transcription.emitTranscript({ ...payload, participantId: this.local.id });
+    // Fan-out via DataChannel where mesh, and via signaling as transcript envelope
+    for (const bus of this.enumerateBuses()) {
+      try { (bus as unknown as { sendTranscript?: (p: unknown) => void }).sendTranscript?.(payload); } catch { /* best effort */ }
+    }
+    await this.emitEnvelope('transcript', payload).catch(() => {});
   }
 
   private async switchMediaTransport(kind: 'mesh' | 'sfu'): Promise<void> {
@@ -1052,6 +1096,18 @@ export class Room extends TypedEmitter<RoomEventMap> implements RoomQualityHost 
     await this.emitEnvelope('screen-share', { action, label });
   }
 
+  private enumerateBuses(): unknown[] {
+    const out: unknown[] = [];
+    if (this.media.kind === 'mesh') {
+      const mesh = this.media as unknown as { getDataChannelBus?: (id: string) => unknown };
+      for (const id of this.remoteById.keys()) {
+        const bus = mesh.getDataChannelBus?.(id);
+        if (bus) out.push(bus);
+      }
+    }
+    return out;
+  }
+
   // ------------------------------------------------------------- ICE control
 
   /** Restart ICE for one peer (default: all peers). */
@@ -1273,6 +1329,13 @@ export class Room extends TypedEmitter<RoomEventMap> implements RoomQualityHost 
             senderId: envelope.senderId,
             participantId: envelope.senderId,
           });
+        }
+        break;
+      case 'transcript':
+        if (envelope.payload?.text !== undefined) {
+          const tp = envelope.payload as TranscriptPayload;
+          this.transcription.emitTranscript({ ...tp, participantId: envelope.senderId });
+          this.emit('transcript', { ...tp, senderId: envelope.senderId, participantId: envelope.senderId });
         }
         break;
       case 'ping':

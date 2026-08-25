@@ -82,6 +82,7 @@ test('schema.json if/then payload refs match the MessagePayloadMap definitions',
     'screen-share': 'ScreenSharePayload',
     'quality-warning': 'QualityWarningPayload',
     sfu: 'SfuPayload',
+    transcript: 'TranscriptPayload',
     error: 'ErrorPayload',
   };
   const actualMapping: Record<string, string> = {};

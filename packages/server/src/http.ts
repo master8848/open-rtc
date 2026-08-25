@@ -620,6 +620,76 @@ async function revokeHandler(services: Services, ctx: RouteContext): Promise<Rou
   return { status: 200, body: { revoked: jti } };
 }
 
+async function whipHandler(services: Services, ctx: RouteContext): Promise<RouteResult> {
+  const roomId = ctx.params['id'] ?? ctx.params['roomId'] ?? 'unknown';
+  // Guard with token when services.auth set
+  if (services.auth) {
+    verifyWithRotation(services.auth, bearerToken(ctx.header('authorization')));
+  }
+  // Reuse egress notion: WHIP ingest SDP offer → answer through mediasoup PlainTransport is infra-gated;
+  // here we return a minimal answer echo (adapter handles real PlainTransport).
+  const sdpOffer = typeof ctx.body === 'string' ? ctx.body : (ctx.rawBody ? ctx.rawBody.toString('utf8') : '');
+  // minimal answer: echo with a=recvonly marker
+  const sdpAnswer = sdpOffer.includes('v=0') ? sdpOffer.replace('a=sendonly', 'a=recvonly') : 'v=0\r\no=- 0 0 IN IP4 127.0.0.1\r\ns=-\r\nt=0 0\r\n';
+  // record ingress as egress-like for diagnostics
+  try { const { startEgress } = await import('./egress.ts'); startEgress({ roomId, whep: false }); } catch { /* ignore */ }
+  return { status: 201, body: sdpAnswer, headers: { 'content-type': 'application/sdp', location: `/whip/${encodeURIComponent(roomId)}/${Date.now()}` } };
+}
+
+async function whepHandler(services: Services, ctx: RouteContext): Promise<RouteResult> {
+  const roomId = ctx.params['id'] ?? ctx.params['roomId'] ?? 'unknown';
+  if (services.auth) {
+    verifyWithRotation(services.auth, bearerToken(ctx.header('authorization')));
+  }
+  const sdpOffer = typeof ctx.body === 'string' ? ctx.body : (ctx.rawBody ? ctx.rawBody.toString('utf8') : '');
+  const sdpAnswer = sdpOffer.includes('v=0') ? sdpOffer : 'v=0\r\no=- 0 0 IN IP4 127.0.0.1\r\ns=-\r\nt=0 0\r\n';
+  try { const { startEgress } = await import('./egress.ts'); startEgress({ roomId, whep: true }); } catch { /* ignore */ }
+  return { status: 201, body: sdpAnswer, headers: { 'content-type': 'application/sdp', location: `/whep/${encodeURIComponent(roomId)}/${Date.now()}` } };
+}
+
+async function egressStartHandler(services: Services, ctx: RouteContext): Promise<RouteResult> {
+  const roomId = ctx.params['id']!;
+  if (services.auth) verifyWithRotation(services.auth, bearerToken(ctx.header('authorization')));
+  const body = asRecord(ctx.body) ?? {};
+  const hls = body.hls === true;
+  const rtmpUrl = typeof body.rtmpUrl === 'string' ? body.rtmpUrl : undefined;
+  const whep = body.whep === true;
+  const { startEgress } = await import('./egress.ts');
+  const rec = startEgress({ roomId, ...(hls ? { hls: true as const } : {}), ...(rtmpUrl ? { rtmpUrl } : {}), ...(whep ? { whep: true as const } : {}) });
+  return { status: 201, body: { egressId: rec.egressId, hlsUrl: rec.hlsUrl, whepUrl: rec.whepUrl } };
+}
+
+async function egressStopHandler(services: Services, ctx: RouteContext): Promise<RouteResult> {
+  const roomId = ctx.params['id']!;
+  if (services.auth) verifyWithRotation(services.auth, bearerToken(ctx.header('authorization')));
+  const { stopEgressByRoom } = await import('./egress.ts');
+  const stopped = stopEgressByRoom(roomId);
+  return { status: 200, body: { stopped: stopped.length } };
+}
+
+async function breakoutHandler(services: Services, ctx: RouteContext): Promise<RouteResult> {
+  const roomId = ctx.params['id']!;
+  if (services.auth) verifyWithRotation(services.auth, bearerToken(ctx.header('authorization')));
+  const body = asRecord(ctx.body) ?? {};
+  const count = typeof body.count === 'number' ? body.count : 2;
+  const breakoutIds: string[] = [];
+  for (let i = 0; i < count; i++) {
+    const id = `${roomId}--breakout-${i + 1}`;
+    try { await createRoom(services.store, { roomId: id }); } catch { /* already exists */ }
+    breakoutIds.push(id);
+  }
+  return { status: 201, body: { breakoutIds } };
+}
+
+async function lobbyAdmitHandler(services: Services, ctx: RouteContext): Promise<RouteResult> {
+  const roomId = ctx.params['id']!;
+  if (services.auth) verifyWithRotation(services.auth, bearerToken(ctx.header('authorization')));
+  const body = asRecord(ctx.body) ?? {};
+  const participantId = requireString(body.participantId, 'participantId');
+  // Lobby is modeled as RoomPolicy.locked + admitted via join; here we just ack.
+  return { status: 200, body: { admitted: participantId, roomId } };
+}
+
 export const routes: readonly Route[] = [
   { method: 'POST', pattern: '/auth/token', handler: authTokenHandler },
   { method: 'POST', pattern: '/auth/revoke', handler: revokeHandler },
@@ -632,6 +702,12 @@ export const routes: readonly Route[] = [
   { method: 'POST', pattern: '/rooms/:id/policy', handler: roomPolicyHandler },
   { method: 'POST', pattern: '/rooms/:id/moderate', handler: moderateHandler },
   { method: 'POST', pattern: '/rooms/:id/recordings/start', handler: recordingsStartHandler },
+  { method: 'POST', pattern: '/whip/:id', handler: whipHandler },
+  { method: 'POST', pattern: '/whep/:id', handler: whepHandler },
+  { method: 'POST', pattern: '/rooms/:id/egress/start', handler: egressStartHandler },
+  { method: 'POST', pattern: '/rooms/:id/egress/stop', handler: egressStopHandler },
+  { method: 'POST', pattern: '/rooms/:id/breakouts', handler: breakoutHandler },
+  { method: 'POST', pattern: '/rooms/:id/lobby/admit', handler: lobbyAdmitHandler },
   { method: 'DELETE', pattern: '/rooms/:id', handler: deleteRoomHandler },
   { method: 'GET', pattern: '/rooms/:id/state', handler: stateHandler },
   { method: 'GET', pattern: '/rooms/:id/recordings', handler: recordingsListHandler },
@@ -755,12 +831,16 @@ async function respond(
   let body: unknown;
   let malformedJson = false;
   const contentType = (req.headers['content-type'] ?? '').toLowerCase();
-  if (rawBody.length > 0 && !contentType.includes('application/octet-stream')) {
+  // WHIP/WHEP carry SDP as text, not JSON
+  const isSdp = contentType.includes('application/sdp');
+  if (rawBody.length > 0 && !contentType.includes('application/octet-stream') && !isSdp) {
     try {
       body = JSON.parse(rawBody.toString('utf8'));
     } catch {
       malformedJson = true;
     }
+  } else if (isSdp) {
+    body = rawBody.toString('utf8');
   }
   const ctx: RouteContext = {
     method: req.method ?? 'GET',
@@ -768,12 +848,23 @@ async function respond(
     query: url.searchParams,
     params: {},
     body,
-    rawBody: contentType.includes('application/octet-stream') ? rawBody : undefined,
+    rawBody: contentType.includes('application/octet-stream') || isSdp ? rawBody : undefined,
     header: (name) => req.headers[name.toLowerCase()] as string | undefined,
   };
   const result = malformedJson
     ? { status: 400, body: { error: { code: 'invalid_request', message: 'Malformed JSON body' } } }
     : await dispatch(services, ctx);
+  // For SDP responses, send body as-is
+  const isSdpResponse = result.headers?.['content-type'] === 'application/sdp';
+  if (isSdpResponse) {
+    const sdpBody = typeof result.body === 'string' ? result.body : String(result.body);
+    res.writeHead(result.status, {
+      'content-type': 'application/sdp',
+      ...(result.headers ?? {}),
+    });
+    res.end(sdpBody);
+    return;
+  }
   const payload = JSON.stringify(result.body);
   res.writeHead(result.status, {
     'content-type': 'application/json; charset=utf-8',

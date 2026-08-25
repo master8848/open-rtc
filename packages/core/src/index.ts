@@ -32,6 +32,12 @@ export { TopologyController, type Topology, type TopologyConfig } from './media/
 export { MeshMediaTransport, type MeshMediaTransportOptions } from './media/mesh-transport.ts';
 export { SfuMediaTransport, type SfuMediaTransportOptions, type SfuGatewayLike, type SfuSessionLike } from './media/sfu-transport.ts';
 export { ActiveSpeakerDetector, type ActiveSpeakerEventMap, type ActiveSpeakerOptions } from './media/active-speaker.ts';
+export { WhipMediaTransport, type WhipMediaTransportOptions } from './media/whip-transport.ts';
+export { WhepMediaTransport, type WhepMediaTransportOptions } from './media/whep-transport.ts';
+export { DenoiseProcessor, type DenoiseProcessorOptions } from './media/denoise-processor.ts';
+export { VirtualBackgroundProcessor, type VirtualBackgroundProcessorOptions } from './media/virtual-background-processor.ts';
+export { EgressController, type EgressOptions, type EgressHandle } from './media/egress.ts';
+export { TranscriptionController, type TranscriptEvent, type TranscriptionOptions, type TranscriptionHandle } from './media/transcription.ts';
 
 export type { Envelope } from '@mbsks/openrtc-protocol';
 export { PROTOCOL_VERSION, MESSAGE_TYPES, createEnvelope, isEnvelope } from '@mbsks/openrtc-protocol';
@@ -51,6 +57,7 @@ export type {
   QualityWarningReason,
   QualityWarningDirection,
   SfuPayload,
+  TranscriptPayload,
   ErrorPayload,
   JoinCapabilities,
 } from '@mbsks/openrtc-protocol';

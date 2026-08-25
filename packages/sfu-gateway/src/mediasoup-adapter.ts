@@ -170,6 +170,34 @@ export class MediasoupAdapter implements SfuGateway {
     this.onAnswer?.(roomId, participantId, sdp);
   }
 
+  async createWhipTransport(roomId: string): Promise<{ transport: import('mediasoup').types.PlainTransport }> {
+    const transport = await this.router.createPlainTransport({
+      listenIp: '127.0.0.1',
+      rtcpMux: true,
+      comedia: true,
+      appData: { roomId, kind: 'whip' },
+    } as unknown as import('mediasoup').types.PlainTransportOptions);
+    return { transport };
+  }
+
+  async createWhepTransport(roomId: string): Promise<{ transport: import('mediasoup').types.PlainTransport }> {
+    const transport = await this.router.createPlainTransport({
+      listenIp: '127.0.0.1',
+      rtcpMux: true,
+      comedia: false,
+      appData: { roomId, kind: 'whep' },
+    } as unknown as import('mediasoup').types.PlainTransportOptions);
+    return { transport };
+  }
+
+  async startEgress(roomId: string, opts: { hls?: boolean; rtmpUrl?: string }): Promise<{ hlsUrl?: string; whepUrl?: string }> {
+    void roomId; void opts;
+    const hlsUrl = opts.hls ? `/hls/${encodeURIComponent(roomId)}/index.m3u8` : undefined;
+    return { ...(hlsUrl ? { hlsUrl } : {}) };
+  }
+
+  async stopEgress(roomId: string): Promise<void> { void roomId; }
+
   // ------------------------------------------------------------------ utils
 
   /** Map the generic transport options onto mediasoup `WebRtcTransportOptions`. */

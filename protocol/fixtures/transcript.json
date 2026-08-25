@@ -1,0 +1,14 @@
+{
+  "v": 1,
+  "type": "transcript",
+  "roomId": "room-42",
+  "senderId": "user-ada",
+  "sessionId": "sess-abc-0001",
+  "ts": 1786000007000,
+  "seq": 14,
+  "payload": {
+    "text": "hello from transcript",
+    "isFinal": true,
+    "lang": "en-US"
+  }
+}

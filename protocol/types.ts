@@ -36,6 +36,7 @@ export const MESSAGE_TYPES = [
   'screen-share',
   'quality-warning',
   'sfu',
+  'transcript',
   'error',
   'ping',
   'pong',
@@ -170,6 +171,12 @@ export interface ErrorPayload {
   message: string;
 }
 
+export interface TranscriptPayload {
+  text: string;
+  isFinal: boolean;
+  lang?: string;
+}
+
 /** Payload type per envelope `type` (schema.json `definitions`). */
 export type MessagePayloadMap = {
   join: JoinPayload;
@@ -183,6 +190,7 @@ export type MessagePayloadMap = {
   'screen-share': ScreenSharePayload;
   'quality-warning': QualityWarningPayload;
   sfu: SfuPayload;
+  transcript: TranscriptPayload;
   error: ErrorPayload;
   ping: Record<string, never>;
   pong: Record<string, never>;

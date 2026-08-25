@@ -51,6 +51,7 @@ test('fixture filenames map to known envelope types', () => {
     'screen-share',
     'quality-warning',
     'sfu',
+    'transcript',
     'error',
     'ping',
     'pong',

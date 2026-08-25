@@ -122,6 +122,42 @@
       "development": "./src/recording/index.ts",
       "default": "./dist/recording/index.js"
     },
+    "./media/whip-transport": {
+      "types": "./dist/media/whip-transport.d.ts",
+      "import": "./dist/media/whip-transport.js",
+      "development": "./src/media/whip-transport.ts",
+      "default": "./dist/media/whip-transport.js"
+    },
+    "./media/whep-transport": {
+      "types": "./dist/media/whep-transport.d.ts",
+      "import": "./dist/media/whep-transport.js",
+      "development": "./src/media/whep-transport.ts",
+      "default": "./dist/media/whep-transport.js"
+    },
+    "./media/denoise-processor": {
+      "types": "./dist/media/denoise-processor.d.ts",
+      "import": "./dist/media/denoise-processor.js",
+      "development": "./src/media/denoise-processor.ts",
+      "default": "./dist/media/denoise-processor.js"
+    },
+    "./media/virtual-background-processor": {
+      "types": "./dist/media/virtual-background-processor.d.ts",
+      "import": "./dist/media/virtual-background-processor.js",
+      "development": "./src/media/virtual-background-processor.ts",
+      "default": "./dist/media/virtual-background-processor.js"
+    },
+    "./media/egress": {
+      "types": "./dist/media/egress.d.ts",
+      "import": "./dist/media/egress.js",
+      "development": "./src/media/egress.ts",
+      "default": "./dist/media/egress.js"
+    },
+    "./media/transcription": {
+      "types": "./dist/media/transcription.d.ts",
+      "import": "./dist/media/transcription.js",
+      "development": "./src/media/transcription.ts",
+      "default": "./dist/media/transcription.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [

@@ -38,6 +38,7 @@ export const FIXTURE_NAMES: readonly string[] = [
   'screen-share',
   'quality-warning',
   'sfu',
+  'transcript',
   'error',
   'ping',
   'pong',

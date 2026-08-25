@@ -77,6 +77,10 @@ export interface RecordingQuotaConfig {
   maxBytesPerRoom?: number;
 }
 
+export interface WebhookServicesConfig {
+  webhooks?: import('./webhooks.ts').WebhookConfig[];
+}
+
 export interface Services {
   store: Store;
   /** Optional recording byte storage; without it, recording routes 501. */
@@ -94,6 +98,8 @@ export interface Services {
   recordingWebhooks?: RecordingWebhookHandler;
   recordingQuota?: RecordingQuotaConfig;
   recordingTtlMs?: number;
+  webhooks?: import('./webhooks.ts').WebhookConfig[];
+  push?: import('./push.ts').PushService;
 }
 
 /** Build a `Services` object (convenience factory). */
@@ -108,6 +114,8 @@ export function createServices(partial: {
   recordingWebhooks?: RecordingWebhookHandler;
   recordingQuota?: RecordingQuotaConfig;
   recordingTtlMs?: number;
+  webhooks?: import('./webhooks.ts').WebhookConfig[];
+  push?: import('./push.ts').PushService;
 }): Services {
   return { ...partial };
 }

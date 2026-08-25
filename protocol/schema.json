@@ -23,6 +23,7 @@
         "screen-share",
         "quality-warning",
         "sfu",
+        "transcript",
         "error",
         "ping",
         "pong"
@@ -227,6 +228,22 @@
         "properties": {
           "payload": {
             "$ref": "#/definitions/SfuPayload"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "transcript"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/definitions/TranscriptPayload"
           }
         }
       }
@@ -445,6 +462,22 @@
           "type": "string"
         },
         "layer": {
+          "type": "string"
+        }
+      }
+    },
+    "TranscriptPayload": {
+      "type": "object",
+      "required": ["text", "isFinal"],
+      "properties": {
+        "text": {
+          "type": "string",
+          "maxLength": 4000
+        },
+        "isFinal": {
+          "type": "boolean"
+        },
+        "lang": {
           "type": "string"
         }
       }

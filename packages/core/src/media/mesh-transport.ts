@@ -304,6 +304,7 @@ export class MeshMediaTransport implements MediaTransport {
     });
     bus.on('reaction', (payload) => this.opts.emit('reaction', { ...payload, senderId: participantId, participantId }));
     bus.on('chat', (payload) => this.opts.emit('chat', { ...payload, senderId: participantId, participantId }));
+    bus.on('transcript', (payload) => this.opts.emit('transcript', { ...payload, senderId: participantId, participantId }));
     bus.on('control', (m) => this.opts.debug('datachannel:control', { participantId, message: m }));
     for (const pub of this.opts.local.publications) {
       if (pub.track) {

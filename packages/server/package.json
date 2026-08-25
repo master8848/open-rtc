@@ -68,6 +68,24 @@
       "development": "./src/relays/postgres-notify-relay.ts",
       "default": "./dist/relays/postgres-notify-relay.js"
     },
+    "./egress": {
+      "types": "./dist/egress.d.ts",
+      "import": "./dist/egress.js",
+      "development": "./src/egress.ts",
+      "default": "./dist/egress.js"
+    },
+    "./webhooks": {
+      "types": "./dist/webhooks.d.ts",
+      "import": "./dist/webhooks.js",
+      "development": "./src/webhooks.ts",
+      "default": "./dist/webhooks.js"
+    },
+    "./push": {
+      "types": "./dist/push.d.ts",
+      "import": "./dist/push.js",
+      "development": "./src/push.ts",
+      "default": "./dist/push.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [

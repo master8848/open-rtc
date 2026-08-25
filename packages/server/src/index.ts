@@ -36,6 +36,9 @@ export * from './services.ts';
 export * from './http.ts';
 export * from './ws.ts';
 export * from './recording.ts';
+export * from './egress.ts';
+export * from './webhooks.ts';
+export * from './push.ts';
 
 // Store implementations: InMemoryStore here; SQL-backed stores behind
 // subpath exports so no database driver is loaded from this entry.
