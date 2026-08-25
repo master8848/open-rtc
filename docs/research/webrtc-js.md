@@ -2,7 +2,7 @@
 
 > **Status:** Research input for implementation (implementation blueprint for the next build day).
 > **Scope:** JS/TS video-calling library for "vibe coders": pluggable signaling backends (Convex, Supabase, PostgreSQL, SQLite, Appwrite, Firebase…), video calling + reactions + simple Zoom clones, **adaptive quality switching driven by network speed AND device processing capability, with warnings emitted to the app**.
-> **Policies applied (from `lib-prj/CONTRIBUTING.md`):** dependency publish-date ≥ 14 days (verified via npm registry `time.created`), exact version pins, prefer in-workspace sub-libraries over micro-deps, prefer base/std utilities, every adapter interface needs ≥ 2 implementations, docs written for open source with source links.
+> **Policies applied (see `CONTRIBUTING.md`):** dependency publish-date ≥ 14 days (verified via npm registry `time.created`), exact version pins, prefer in-workspace sub-libraries over micro-deps, prefer base/std utilities, every adapter interface needs ≥ 2 implementations, docs written for open source with source links.
 > **All facts below were verified against primary sources (W3C specs, MDN, npm registry, project repos) on the day this doc was written.** Publish dates are from `https://registry.npmjs.org/<pkg>` → `time.created`.
 
 ---

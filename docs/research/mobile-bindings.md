@@ -40,8 +40,7 @@ sub-libraries over micro-deps.
    conformance suite = the same JSON fixtures + scenario scripts executed by every binding. (§4)
 5. **Architecture:** mirror the JS core 1:1; each binding is a thin adapter over the platform's native
    WebRTC + a platform WebSocket client. No FFI needed for WebRTC (each platform has native WebRTC);
-   FFI (UniFFI/cdylib) applies to `provider-connect`'s Rust core, which can expose JSON-RPC signaling
-   helpers to all four languages. (§5)
+   FFI (UniFFI/cdylib) would only matter for a shared non-media core, which is not part of v1. (§5)
 6. **Publishing:** Maven Central via the Central Portal (verified namespace + GPG), SwiftPM first
    (CocoaPods trunk is being deprecated → read-only), pub.dev with a verified publisher. (§6)
 
@@ -358,9 +357,8 @@ core (one language, the source of truth)
 
 Two variants:
 1. **Core = Rust/C++ with FFI.** The core exposes a C ABI (`cdylib`) or UniFFI-generated bindings;
-   each language gets a thin wrapper. This is what **provider-connect** does: Rust (tokio) core, with
-   JSON-RPC over stdio/WebSocket/HTTP, direct Rust calls, and FFI
-   (`README.md`: "FFI" listed as an interface; `cdylib + C ABI / UniFFI` per the mission brief).
+   each language gets a thin wrapper. This maximizes logic sharing but couples all bindings to one
+   native build toolchain and adds an FFI hop on every call.
 2. **Core = TS/JS with per-platform native reimplementations.** The "core" is a *spec + shared
    protocol*; each binding reimplements the room/signaling logic against native WebRTC. This is what
    **vidcall** does (README: "TypeScript, Kotlin, Swift, Dart" packages in one npm-workspace repo).
@@ -376,11 +374,11 @@ core (<https://github.com/mozilla/uniffi-rs>, <https://mozilla.github.io/uniffi-
   Rust core for media would add a hop with no benefit. The JS core's *engine* (peer management,
   quality adaptation) is re-implemented per binding, or the JS core's logic is ported and shared as
   fixtures/scenarios for parity testing (§4 L0/L1).
-- **Do use FFI for shared non-media logic.** provider-connect's Rust core (JSON-RPC signaling helpers,
-  backend adapters) can be exposed to Kotlin/Swift via UniFFI (Kotlin + Swift generated bindings) or
-  a C ABI, and to Dart via FFI (`dart:ffi`) or, simpler, by speaking JSON-RPC over stdio/WebSocket —
-  the same JSON-RPC surface it already exposes to Node. This gives all four bindings one implementation
-  of "connect to provider, authenticate, relay signaling JSON" without re-implementing it four times.
+- **Do use FFI for shared non-media logic.** If a non-media core (signaling helpers, backend
+  adapters) is ever implemented natively once (e.g. Rust), it can be exposed to Kotlin/Swift via
+  UniFFI (generated bindings) or a C ABI, and to Dart via FFI (`dart:ffi`) or by speaking JSON over
+  stdio/WebSocket. This would give all four bindings one implementation of connection/auth/relay
+  logic instead of four — but it is an optimization, not a v1 requirement.
 - **Kotlin Multiplatform (KMP) is optional glue, not a requirement.** KMP is stable and production-ready
   (kotlinlang.org/multiplatform; developer.android.com/kotlin/multiplatform) and can share the Kotlin
   room/state machine between Android and iOS. Recommendation: start with a pure JVM/Android Kotlin
@@ -482,7 +480,6 @@ listed are **not** adopted until they age past 14 days.
 | `org.postgresql:postgresql` | Kotlin/JVM | 42.7.7 | 2025-06-11 | server-side relay support |
 | `postgres` (dart) | Dart | 3.5.12 | 2026-06-11 | server-side relay support |
 | `sqflite` | Flutter | 2.4.3 | 2026-06-02 | local cache only (not signaling) |
-| `uniffi` (crate) | Rust core | 0.32.0 | 2026-06-30 | FFI bindings for provider-connect → Kotlin/Swift |
 | protoc / protobuf-kotlin / SwiftProtobuf / dart protobuf | (if protobuf chosen) | 35.1 / 4.35.0 / 1.38.1 / 6.0.0 | 2026-06-11 / 05-19 / 06-23 / 2025-11-26 | not needed for recommended JSON path |
 
 ---
@@ -493,9 +490,9 @@ listed are **not** adopted until they age past 14 days.
    Flutter/dart_webrtc (recommended: defer).
 2. **Convex Dart:** decide raw-WebSocket adapter vs `convex_dart` — track
    get-convex/convex-backend#54.
-3. **Signaling server transport:** WebSocket directly, or JSON-RPC (provider-connect) over WebSocket?
-   Protocol §2 is transport-agnostic; provider-connect's JSON-RPC surface can carry the envelope
-   without change.
+3. **Signaling server transport:** plain WebSocket envelopes, or a JSON-RPC framing over WebSocket?
+   Protocol §2 is transport-agnostic; current decision is plain envelopes over WS (see
+   `protocol/schema.json`).
 4. **Re-check "too fresh" versions** (flutter_webrtc 1.6.0, WebRTC 151.0.0, supabase-dart 2.16.0,
    appwrite 25.4.0, firebase_core 4.13.0, firestore 26.5.0, supabase-swift 2.54.1) once they age
    past 14 days and bump pins in the same PR that adopts them.

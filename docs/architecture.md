@@ -1,6 +1,6 @@
 # vidcall — Architecture Blueprint (synthesized from research)
 
-> Status: draft v1, synthesized 2026-08-11 from `docs/research/webrtc-js.md`, `docs/research/backend-adapters.md`, `docs/research/mobile-bindings.md`. All policy from `../CONTRIBUTING.md` applies (14-day dep age, exact pins, in-workspace sub-libs, ≥2 impls per interface, open-source docs).
+> Status: draft v1, synthesized 2026-08-11 from `docs/research/webrtc-js.md`, `docs/research/backend-adapters.md`, `docs/research/mobile-bindings.md`. All policy from `CONTRIBUTING.md` applies (14-day dep age, exact pins, in-workspace sub-libs, ≥2 impls per interface, open-source docs).
 
 ## 1. Positioning
 

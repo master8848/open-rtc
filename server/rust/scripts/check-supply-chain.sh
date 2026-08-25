@@ -3,7 +3,6 @@
 # crates.io at least 14 days ago (per CONTRIBUTING.md dependency policy).
 #
 # Usage: ./scripts/check-supply-chain.sh
-# Reuses the provider-connect gate (scripts/check-supply-chain.sh).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 

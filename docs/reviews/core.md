@@ -30,7 +30,7 @@
 | Signaling pub/sub | dumb envelope relay | `socket.io` | **Keep dumb** — socket.io's rooms/acks add server coupling; the wire protocol is JSON-RPC-ish envelopes over WS/REST already. |
 | SQLite client adapter | `@libsql/client` 0.17.4 (BroadcastChannel) | `node:sqlite` (builtin, Node 22) | node:sqlite has no cross-tab BroadcastChannel story and no server-push; libsql keeps the same-device dev flow + remote `wss://` path. OK. |
 | SQLite server store | `better-sqlite3` 13.0.1 | `node:sqlite` | better-sqlite3 is synchronous + battle-tested; fine pinned at 13.0.1 (21d at audit). |
-| JSON-RPC framing | hand-rolled in `provider-transport` (Rust) | `jsonrpsee` | See `provider-connect/docs/reviews/architecture.md` — verdict there: keep hand-rolled for the sidecar, jsonrpsee only if a full JSON-RPC server API is needed later. |
+| JSON-RPC framing | n/a — plain envelopes over WS/REST | `jsonrpsee` | Not applicable: the wire protocol is JSON envelope-based (see `protocol/schema.json`), not a JSON-RPC method surface. Revisit only if a full JSON-RPC server API is ever needed. |
 | WS relay (server) | hand-rolled | `ws`/`socket.io` | Hand-rolled keeps deps zero in `@vidcall/server` core; `ws` already present as dev dep for tests. OK. |
 | Encoding (bindings) | kotlinx.serialization / Codable / dart:convert | Moshi/Gson, SwiftyJSON | Native codecs are the right call — no codegen drift risk with the schema. |
 
