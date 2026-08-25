@@ -18,6 +18,20 @@ export * from './controls/index.ts';
 export * from './room-quality.ts';
 export * from './recording/index.ts';
 export * from './e2ee.ts';
+export type {
+  MediaTransport,
+  MediaTransportKind,
+  ExtendedPublishOptions,
+  MediaSubscribeOptions as MediaTransportSubscribeOptions,
+  TrackSubscription as MediaTransportSubscription,
+  MediaTrackEvent,
+  PeerConnectionStateEvent as MediaPeerConnectionStateEvent,
+} from './media/media-transport.ts';
+export { ProcessorChain, type MediaProcessor, type MediaProcessorKind } from './media/processor.ts';
+export { TopologyController, type Topology, type TopologyConfig } from './media/topology.ts';
+export { MeshMediaTransport, type MeshMediaTransportOptions } from './media/mesh-transport.ts';
+export { SfuMediaTransport, type SfuMediaTransportOptions, type SfuGatewayLike, type SfuSessionLike } from './media/sfu-transport.ts';
+export { ActiveSpeakerDetector, type ActiveSpeakerEventMap, type ActiveSpeakerOptions } from './media/active-speaker.ts';
 
 export type { Envelope } from '@mbsks/openrtc-protocol';
 export { PROTOCOL_VERSION, MESSAGE_TYPES, createEnvelope, isEnvelope } from '@mbsks/openrtc-protocol';

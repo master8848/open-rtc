@@ -28,13 +28,11 @@ import type {
   ReactionPayload,
   ScreenSharePayload,
 } from '@mbsks/openrtc-protocol';
-import { DataChannelBus } from './data-channel-bus.ts';
 import { TypedEmitter } from './events.ts';
 import { OrderedMessageBuffer } from './ordering.ts';
 import { LocalParticipant, RemoteParticipant } from './participants.ts';
 import type { TrackPublication } from './participants.ts';
-import { PeerConnectionManager } from './peer-connection-manager.ts';
-import type { PeerSignal } from './peer-connection-manager.ts';
+
 import { RoomQualityController, qualityEnvironmentSupported } from './room-quality.ts';
 import type {
   LocalQualityChangedEvent,
@@ -44,6 +42,13 @@ import type {
 } from './room-quality.ts';
 import type { ParticipantInfo, SignalingTransport } from './transport.ts';
 import { SFrameProcessor, detectE2eeSupport } from './e2ee.ts';
+import type { MediaTransport } from './media/media-transport.ts';
+import type { ExtendedPublishOptions } from './media/media-transport.ts';
+import { MeshMediaTransport } from './media/mesh-transport.ts';
+import { SfuMediaTransport, type SfuGatewayLike } from './media/sfu-transport.ts';
+import { ProcessorChain, type MediaProcessor } from './media/processor.ts';
+import { TopologyController, type Topology, type TopologyConfig } from './media/topology.ts';
+import { ActiveSpeakerDetector } from './media/active-speaker.ts';
 import type { MediaRecorderConstructor } from './recording/media-recorder-recording-hook.ts';
 import type {
   RecordingChunk,
@@ -121,6 +126,8 @@ export type RoomEventMap = {
   chat: [RoomChatEvent];
   'screen-share': [RoomScreenShareEvent];
   'quality-warning': [RoomQualityWarningEvent];
+  /** Active speaker list changed (polls inbound-rtp audioLevel). */
+  'active-speaker': [string[]];
   /**
    * Local adaptive-quality tier changed (tier, reason, direction, metrics).
    * Emitted by the RoomQualityController when the policy ladder moves; the
@@ -159,6 +166,9 @@ export type RoomEventMap = {
 export interface PublishOptions {
   source?: TrackPublication['source'];
   metadata?: Record<string, unknown>;
+  simulcast?: { layers?: number; encodings?: RTCRtpEncodingParameters[] } | boolean;
+  svc?: { scalabilityMode?: string };
+  codecPreferences?: string[];
 }
 
 export interface JoinOptions {
@@ -273,13 +283,10 @@ export interface RoomConfig {
   auth?: RoomAuthConfig;
   /** E2EE (SFrame). */
   e2ee?: RoomE2eeConfig | false;
+  topology?: TopologyConfig;
+  sfuGateway?: SfuGatewayLike;
+  mediaTransport?: MediaTransport;
   debug?: (message: string, data?: unknown) => void;
-}
-
-interface PeerEntry {
-  pc: RTCPeerConnection;
-  manager: PeerConnectionManager;
-  bus: DataChannelBus;
 }
 
 // ------------------------------------------------------------------- room
@@ -332,7 +339,6 @@ export class Room extends TypedEmitter<RoomEventMap> implements RoomQualityHost 
   readonly quality: RoomQualityController;
   private readonly config: RoomConfig;
   private readonly transport: SignalingTransport;
-  private readonly peers = new Map<string, PeerEntry>();
   private readonly remoteById = new Map<string, RemoteParticipant>();
   private readonly buffer = new OrderedMessageBuffer();
   private readonly unsubscribers: (() => void)[] = [];
@@ -351,6 +357,10 @@ export class Room extends TypedEmitter<RoomEventMap> implements RoomQualityHost 
    * mark dirty and rebuild lazily on the next `getSnapshot()`.
    */
   private snapshotDirty = false;
+  private media!: MediaTransport;
+  private readonly processorChain: ProcessorChain;
+  private readonly topologyController: TopologyController;
+  private readonly activeSpeaker: ActiveSpeakerDetector;
 
   constructor(config: RoomConfig) {
     super();
@@ -392,13 +402,91 @@ export class Room extends TypedEmitter<RoomEventMap> implements RoomQualityHost 
     });
     this.quality.on('quality:changed', (event) => this.emit('quality:changed', event));
     this.quality.on('quality:warning', (event) => this.emit('quality:warning', event));
+    this.processorChain = new ProcessorChain({ warn: (m, d) => this.debug(m, d) });
+    const initialSfuGw = (config as unknown as Record<string, unknown>).sfuGateway as SfuGatewayLike | undefined
+      ?? (config.topology?.sfu?.gateway as unknown as SfuGatewayLike | undefined);
+    const useCustomMedia = config.mediaTransport ?? null;
+    const buildMesh = (): MediaTransport =>
+      new MeshMediaTransport({
+        roomId: this.roomId,
+        transport: this.transport,
+        selfId: config.selfId,
+        sessionId: this.sessionId,
+        local: this.local,
+        remotes: this.remoteById,
+        orderBuffer: this.buffer,
+        peerFactory: config.peerFactory,
+        iceServers: config.iceServers,
+        polite: config.polite,
+        autoRestartIce: config.autoRestartIce,
+        dataChannelName: config.dataChannelName,
+        getNextSeq: () => this.nextSeq(),
+        quality: this.quality,
+        processorChain: this.processorChain,
+        resolveIceServers: () => this.resolveIceServers(),
+        e2eeSetupPeer: async (pc) => {
+          if (this.e2eeProcessor?.supported) {
+            try { await this.e2eeProcessor.setupPeerConnection(pc); } catch (e) { this.debug('e2ee:setup-failed', e); }
+          }
+        },
+        debug: this.debug,
+        emit: (event: string, ...args: unknown[]) => (this as unknown as { emit: (e: string, ...a: unknown[]) => void }).emit(event, ...args),
+      });
+    if (useCustomMedia) {
+      this.media = useCustomMedia;
+    } else if (
+      (config.topology?.topology === 'sfu' || (config.topology?.sfu && config.topology?.topology !== 'mesh'))
+      && initialSfuGw
+    ) {
+      const explicitSfu = config.topology?.topology === 'sfu';
+      if (explicitSfu) {
+        const sfuTransport = new SfuMediaTransport({
+          roomId: this.roomId,
+          selfId: config.selfId,
+          sessionId: this.sessionId,
+          gateway: initialSfuGw!,
+          transport: this.transport,
+          processorChain: this.processorChain,
+          peerFactory: config.peerFactory,
+          getNextSeq: () => this.nextSeq(),
+          debug: this.debug,
+          emit: (event: string, ...args: unknown[]) => (this as unknown as { emit: (e: string, ...a: unknown[]) => void }).emit(event, ...args),
+          localPublications: () => [...this.local.publications],
+          addRemoteTrack: (participantId, track, kind) => this.handleRemoteSfuTrack(participantId, track, kind),
+        });
+        void sfuTransport.init().catch((e) => this.debug('sfu:init-failed', e));
+        this.media = sfuTransport;
+      } else {
+        this.media = buildMesh();
+      }
+    } else {
+      this.media = buildMesh();
+    }
+    this.topologyController = new TopologyController({
+      config: config.topology,
+      getParticipantCount: () => this.remoteById.size,
+      getTransport: () => this.media,
+      switchTransport: async (kind) => this.switchMediaTransport(kind),
+      debug: this.debug,
+    });
+    this.activeSpeaker = new ActiveSpeakerDetector({
+      getPeerConnections: () => this.media.getPeerConnections(),
+      participantIds: () => [...this.remoteById.keys()],
+    });
+    this.activeSpeaker.on('active-speaker', (ids) => this.emit('active-speaker', ids));
+    this.media.onTrack((e) => {
+      if (this.media.kind === 'sfu') {
+        let p = this.remoteById.get(e.participantId);
+        if (!p) {
+          p = new RemoteParticipant({ id: e.participantId });
+          this.remoteById.set(e.participantId, p);
+          this.emit('participant-joined', p);
+        }
+      }
+    });
     this.devices = new RoomDevicesFacade({
       mediaDevices: config.devices?.mediaDevices,
-      getSenders: () => {
-        const senders: RTCRtpSender[] = [];
-        for (const entry of this.peers.values()) senders.push(...entry.pc.getSenders());
-        return senders;
-      },
+      getSenders: () => this.media.getSenders(),
       getLocalVideoTracks: () =>
         this.local.publications
           .filter((p) => p.kind === 'video' && p.track !== null)
@@ -487,13 +575,115 @@ export class Room extends TypedEmitter<RoomEventMap> implements RoomQualityHost 
       return;
     }
     await this.e2eeProcessor.setKey(key);
-    for (const entry of this.peers.values()) {
+    for (const pc of this.media.getPeerConnections()) {
       try {
-        await this.e2eeProcessor.setupPeerConnection(entry.pc);
+        await this.e2eeProcessor.setupPeerConnection(pc);
       } catch (err) {
         this.debug('e2ee:setup-failed', err);
       }
     }
+  }
+
+  // -------------------------------------------------------- processor / topology
+
+  useProcessor(processor: MediaProcessor): void {
+    this.processorChain.add(processor);
+  }
+
+  removeProcessor(processor: MediaProcessor): boolean {
+    return this.processorChain.remove(processor);
+  }
+
+  get topology(): Topology { return this.topologyController.topology; }
+  get autoThreshold(): number { return this.topologyController.autoThreshold; }
+
+  async setTopology(topology: Topology): Promise<void> {
+    await this.topologyController.setTopology(topology);
+  }
+
+  async setPreferredLayers(trackId: string, layer: string): Promise<void> {
+    if (this.media.setPreferredLayers) await this.media.setPreferredLayers(trackId, layer);
+    else this.debug('sfu:layer-not-supported', trackId);
+  }
+
+  async requestKeyframe(trackId: string): Promise<void> {
+    if (this.media.requestKeyframe) await this.media.requestKeyframe(trackId);
+  }
+
+  async setTile(_participantId: string, opts: { visible?: boolean; width?: number; height?: number; priority?: number; layer?: string }): Promise<void> {
+    if (opts.layer && this.media.setPreferredLayers) {
+      const p = this.remoteById.get(_participantId);
+      const trackId = p?.publications[0]?.id;
+      if (trackId) await this.media.setPreferredLayers(trackId, opts.layer);
+    } else if (opts.visible === false) {
+      const p = this.remoteById.get(_participantId);
+      if (p) for (const pub of p.publications) if (pub.track) pub.track.enabled = false;
+    } else if (opts.visible === true) {
+      const p = this.remoteById.get(_participantId);
+      if (p) for (const pub of p.publications) if (pub.track) pub.track.enabled = true;
+    }
+  }
+
+  private async switchMediaTransport(kind: 'mesh' | 'sfu'): Promise<void> {
+    const old = this.media;
+    await old.close();
+    if (kind === 'sfu') {
+      const gw = (this.config.sfuGateway ?? this.config.topology?.sfu?.gateway) as unknown as SfuGatewayLike | undefined;
+      if (!gw) {
+        this.debug('topology:sfu-no-gateway', 'no sfuGateway configured; staying mesh');
+        this.media = new MeshMediaTransport({
+          roomId: this.roomId, transport: this.transport, selfId: this.config.selfId, sessionId: this.sessionId,
+          local: this.local, remotes: this.remoteById, orderBuffer: this.buffer,
+          peerFactory: this.config.peerFactory, iceServers: this.config.iceServers, polite: this.config.polite,
+          autoRestartIce: this.config.autoRestartIce, dataChannelName: this.config.dataChannelName,
+          getNextSeq: () => this.nextSeq(), quality: this.quality, processorChain: this.processorChain,
+          resolveIceServers: () => this.resolveIceServers(),
+          e2eeSetupPeer: async (pc) => { if (this.e2eeProcessor?.supported) try { await this.e2eeProcessor.setupPeerConnection(pc); } catch (e) { this.debug('e2ee:setup-failed', e); } },
+          debug: this.debug, emit: (e: string, ...a: unknown[]) => (this as unknown as { emit: (ev: string, ...args: unknown[]) => void }).emit(e, ...a),
+        });
+        return;
+      }
+      const sfu = new SfuMediaTransport({
+        roomId: this.roomId, selfId: this.config.selfId, sessionId: this.sessionId,
+        gateway: gw, transport: this.transport, processorChain: this.processorChain,
+        peerFactory: this.config.peerFactory, getNextSeq: () => this.nextSeq(), debug: this.debug,
+        emit: (e: string, ...a: unknown[]) => (this as unknown as { emit: (ev: string, ...args: unknown[]) => void }).emit(e, ...a),
+        localPublications: () => [...this.local.publications],
+        addRemoteTrack: (pid, track, kind) => this.handleRemoteSfuTrack(pid, track, kind),
+      });
+      await sfu.init();
+      this.media = sfu;
+      this.media.onTrack(() => {});
+    } else {
+      this.media = new MeshMediaTransport({
+        roomId: this.roomId, transport: this.transport, selfId: this.config.selfId, sessionId: this.sessionId,
+        local: this.local, remotes: this.remoteById, orderBuffer: this.buffer,
+        peerFactory: this.config.peerFactory, iceServers: this.config.iceServers, polite: this.config.polite,
+        autoRestartIce: this.config.autoRestartIce, dataChannelName: this.config.dataChannelName,
+        getNextSeq: () => this.nextSeq(), quality: this.quality, processorChain: this.processorChain,
+        resolveIceServers: () => this.resolveIceServers(),
+        e2eeSetupPeer: async (pc) => { if (this.e2eeProcessor?.supported) try { await this.e2eeProcessor.setupPeerConnection(pc); } catch (e) { this.debug('e2ee:setup-failed', e); } },
+        debug: this.debug, emit: (e: string, ...a: unknown[]) => (this as unknown as { emit: (ev: string, ...args: unknown[]) => void }).emit(e, ...a),
+      });
+    }
+  }
+
+  private handleRemoteSfuTrack(participantId: string, track: MediaStreamTrack, kind: 'audio' | 'video'): void {
+    let participant = this.remoteById.get(participantId);
+    if (!participant) {
+      participant = new RemoteParticipant({ id: participantId });
+      this.remoteById.set(participantId, participant);
+      this.emit('participant-joined', participant);
+    }
+    const id = (track as unknown as { id?: string }).id || (track as unknown as MediaStreamTrack).id || randomId();
+    if (participant.getPublication(id)) return;
+    const pub: TrackPublication = { id, kind, source: kind === 'video' ? 'camera' : 'microphone', participantId, isLocal: false, track: track as unknown as MediaStreamTrack, muted: false };
+    participant.addPublication(pub);
+    this.emit('track', { participant, publication: pub, track });
+    (track as unknown as { addEventListener?: (t: string, f: () => void) => void }).addEventListener?.('ended', () => {
+      const removed = participant!.removePublication(id);
+      if (removed) this.emit('track-unpublished', { participant: participant!, publication: removed, track });
+    });
   }
 
   /** Current auth token (if configured). */
@@ -643,7 +833,8 @@ export class Room extends TypedEmitter<RoomEventMap> implements RoomQualityHost 
     }
     this.joined = true;
     this.joining = false;
-    this.quality.start(); // begin adaptive-quality sampling + device profile
+    this.quality.start();
+    this.activeSpeaker.start();
     this.invalidateSnapshot();
     return this;
   }
@@ -654,7 +845,9 @@ export class Room extends TypedEmitter<RoomEventMap> implements RoomQualityHost 
     this.closed = true;
     this.joining = false;
     this.invalidateSnapshot();
-    this.quality.stop(); // stop adaptive-quality sampling
+    this.quality.stop();
+    this.activeSpeaker.stop();
+    try { await this.media.close(); } catch { /* ignore */ }
     // Stop any in-progress recording (uploads the finalize report).
     try {
       await this.recording.stopRecording();
@@ -669,11 +862,7 @@ export class Room extends TypedEmitter<RoomEventMap> implements RoomQualityHost 
     } catch (err) {
       this.debug('leave:announce-failed', err);
     }
-    for (const entry of this.peers.values()) {
-      entry.bus.close();
-      entry.manager.close();
-    }
-    this.peers.clear();
+    this.processorChain.dispose();
     for (const unsub of this.unsubscribers.splice(0)) unsub();
     try {
       await this.transport.leave();
@@ -690,45 +879,34 @@ export class Room extends TypedEmitter<RoomEventMap> implements RoomQualityHost 
 
   // -------------------------------------------------------------- publishing
 
-  /** Publish a local track to every remote participant (mesh: renegotiation). */
+  /** Publish a local track (delegates to MediaTransport). */
   async publish(track: MediaStreamTrack, options: PublishOptions = {}): Promise<TrackPublication> {
     if (this.closed) throw new Error('Room is closed');
-    const publication: TrackPublication = {
-      id: track.id || randomId(),
-      kind: track.kind === 'audio' ? 'audio' : 'video',
-      source: options.source ?? (track.kind === 'audio' ? 'microphone' : 'camera'),
-      participantId: this.local.id,
-      isLocal: true,
-      track,
-      muted: false,
-      metadata: options.metadata,
-    };
-    this.local.addPublication(publication);
-    this.invalidateSnapshot();
-    for (const participantId of this.remoteById.keys()) {
-      const entry = await this.ensurePeer(participantId);
-      entry.pc.addTrack(track);
-      await entry.manager.negotiate('track-added');
+    const pub = await this.media.publish(track, options as unknown as ExtendedPublishOptions);
+    if (!this.local.getPublication(pub.id)) {
+      this.local.addPublication(pub);
+      this.invalidateSnapshot();
+    } else {
+      this.invalidateSnapshot();
     }
-    // Adaptive quality: register the track, set up simulcast encodings on its
-    // senders (when supported), and apply the current tier. Never throws.
-    await this.quality.attachTrack(track);
-    return publication;
+    await this.quality.attachTrack((pub.track ?? track) as unknown as MediaStreamTrack);
+    return this.local.getPublication(pub.id) ?? pub;
   }
 
   /** Stop publishing a local track and renegotiate. */
   async unpublish(publication: TrackPublication): Promise<void> {
-    const pub = this.local.removePublication(publication.id);
-    if (!pub || !pub.track) return;
-    const track = pub.track;
-    pub.track = null;
-    this.invalidateSnapshot();
-    this.quality.detachTrack(track);
-    for (const entry of this.peers.values()) {
-      const sender = entry.pc.getSenders().find((s) => s.track === track);
-      if (sender) entry.pc.removeTrack(sender);
-      await entry.manager.negotiate('track-removed');
+    const stored = this.local.getPublication(publication.id);
+    const track = (stored?.track ?? publication.track) as unknown as MediaStreamTrack | null;
+    const pubForMedia: TrackPublication = { ...publication, track } as TrackPublication;
+    if (stored) {
+      this.local.removePublication(publication.id);
+      this.invalidateSnapshot();
+    } else {
+      const r = this.local.removePublication(publication.id);
+      if (r) this.invalidateSnapshot();
     }
+    if (track) this.quality.detachTrack(track as unknown as MediaStreamTrack);
+    await this.media.unpublish(pubForMedia);
   }
 
   /**
@@ -811,12 +989,7 @@ export class Room extends TypedEmitter<RoomEventMap> implements RoomQualityHost 
 
   /** Restart ICE for one peer (default: all peers). */
   async restartIce(participantId?: string): Promise<void> {
-    const targets = participantId ? [participantId] : [...this.peers.keys()];
-    for (const id of targets) {
-      const entry = this.peers.get(id);
-      if (!entry) continue;
-      await entry.manager.restartIce();
-    }
+    if (this.media.restartIce) await this.media.restartIce(participantId);
   }
 
   // -------------------------------------------------------------- accessors
@@ -829,25 +1002,23 @@ export class Room extends TypedEmitter<RoomEventMap> implements RoomQualityHost 
     return this.remoteById.get(id);
   }
 
-  getPeerConnection(participantId: string): RTCPeerConnection | undefined {
-    return this.peers.get(participantId)?.pc;
+  getPeerConnection(_participantId: string): RTCPeerConnection | undefined {
+    return this.media.getPeerConnections()[0];
   }
 
   /** All live peer connections (the adaptive-quality sampler polls their stats). */
   getPeerConnections(): RTCPeerConnection[] {
-    return [...this.peers.values()].map((entry) => entry.pc);
+    return this.media.getPeerConnections();
   }
 
   /** All local senders across live peer connections (adaptive-quality reach). */
   getSenders(): RTCRtpSender[] {
-    const senders: RTCRtpSender[] = [];
-    for (const entry of this.peers.values()) senders.push(...entry.manager.getSenders());
-    return senders;
+    return this.media.getSenders();
   }
 
   /** The typed data channel for a peer (reactions/chat/control over SCTP). */
-  getDataChannelBus(participantId: string): DataChannelBus | undefined {
-    return this.peers.get(participantId)?.bus;
+  getDataChannelBus(participantId: string): unknown {
+    return (this.media.getDataChannelBus as unknown as ((id: string) => unknown) | undefined)?.(participantId);
   }
 
   get isJoined(): boolean {
@@ -942,7 +1113,7 @@ export class Room extends TypedEmitter<RoomEventMap> implements RoomQualityHost 
     await this.transport.emit(envelope);
   }
 
-  private async emitSignalTo(participantId: string, signal: PeerSignal): Promise<void> {
+  private async emitSignalTo(participantId: string, signal: { type: string; payload: unknown }): Promise<void> {
     const base = {
       roomId: this.roomId,
       senderId: this.local.id,
@@ -953,8 +1124,8 @@ export class Room extends TypedEmitter<RoomEventMap> implements RoomQualityHost 
     };
     const envelope: Envelope =
       signal.type === 'ice'
-        ? { v: 1, type: 'ice', ...base, payload: signal.payload as IcePayload }
-        : { v: 1, type: signal.type, ...base, payload: signal.payload as OfferPayload };
+        ? { v: 1, type: 'ice', ...base, payload: signal.payload as unknown as IcePayload }
+        : { v: 1, type: signal.type as 'offer' | 'answer', ...base, payload: signal.payload as unknown as OfferPayload };
     await this.transport.emit(envelope);
   }
 
@@ -988,29 +1159,21 @@ export class Room extends TypedEmitter<RoomEventMap> implements RoomQualityHost 
         }
         break;
       case 'offer':
-      case 'answer': {
-        if (!envelope.payload || typeof envelope.payload.sdp !== 'string') {
-          this.debug('signal:missing-sdp', envelope.type);
-          return;
-        }
-        const entry = await this.ensurePeer(envelope.senderId);
-        await entry.manager.handleSignal({
-          type: envelope.type,
-          payload: { sdp: envelope.payload.sdp, label: envelope.payload.label },
-        });
-        break;
-      }
+      case 'answer':
       case 'ice': {
-        if (!envelope.payload || typeof envelope.payload.candidate !== 'string') return;
-        const entry = await this.ensurePeer(envelope.senderId);
-        await entry.manager.handleSignal({
-          type: 'ice',
-          payload: {
-            candidate: envelope.payload.candidate,
-            sdpMid: envelope.payload.sdpMid ?? null,
-            sdpMLineIndex: envelope.payload.sdpMLineIndex ?? null,
-          },
-        });
+        const handled = await this.media.handleEnvelope?.(envelope);
+        if (handled) break;
+        if (envelope.type === 'offer' || envelope.type === 'answer') {
+          if (!envelope.payload || typeof (envelope.payload as { sdp?: string }).sdp !== 'string') {
+            this.debug('signal:missing-sdp', envelope.type);
+            return;
+          }
+        } else if (envelope.type === 'ice') {
+          if (!envelope.payload || typeof (envelope.payload as { candidate?: string }).candidate !== 'string') return;
+        }
+        if (this.media.kind === 'mesh') {
+          await (this.media as unknown as { handleEnvelope: (e: Envelope) => Promise<boolean> }).handleEnvelope(envelope);
+        }
         break;
       }
       case 'reaction':
@@ -1049,8 +1212,12 @@ export class Room extends TypedEmitter<RoomEventMap> implements RoomQualityHost 
         await this.emitEnvelope('pong', {});
         break;
       case 'pong':
-      case 'sfu':
         break;
+      case 'sfu': {
+        const handled = await this.media.handleSfuEnvelope?.(envelope);
+        if (!handled) this.debug('sfu:unhandled', envelope);
+        break;
+      }
       case 'error': {
         const code = (envelope.payload as { code?: string })?.code;
         const msg = (envelope.payload as { message?: string })?.message ?? 'remote error';
@@ -1089,6 +1256,7 @@ export class Room extends TypedEmitter<RoomEventMap> implements RoomQualityHost 
     });
     this.remoteById.set(senderId, participant);
     this.emit('participant-joined', participant);
+    void this.topologyController.maybeMigrate().catch((e) => this.debug('topology:migrate-failed', e));
     // Roster reply: announce ourselves back to the newcomer (targeted, so it
     // never echoes again) — the mesh equivalent of a join acknowledgment.
     await this.emitEnvelope(
@@ -1101,25 +1269,27 @@ export class Room extends TypedEmitter<RoomEventMap> implements RoomQualityHost 
       },
       senderId,
     );
-    // If we already have local tracks, open a peer connection and offer.
-    if (this.local.publications.length > 0) {
-      const entry = await this.ensurePeer(senderId);
-      await entry.manager.negotiate('remote-joined');
+    // If we already have local tracks, open a peer connection and offer (mesh only).
+    if (this.local.publications.length > 0 && this.media.kind === 'mesh') {
+      const mesh = this.media as unknown as { ensurePeer: (id: string) => Promise<{ manager: { negotiate: (r: string) => Promise<void> } }> };
+      if (typeof mesh.ensurePeer === 'function') {
+        const entry = await mesh.ensurePeer(senderId);
+        await entry.manager.negotiate('remote-joined');
+      }
     }
   }
 
   private handleRemoteLeave(senderId: string): void {
     const participant = this.remoteById.get(senderId);
-    const entry = this.peers.get(senderId);
-    if (entry) {
-      entry.bus.close();
-      entry.manager.close();
-      this.peers.delete(senderId);
+    if (this.media.kind === 'mesh') {
+      const mesh = this.media as unknown as { handleRemoteLeave: (id: string) => void };
+      mesh.handleRemoteLeave?.(senderId);
     }
     if (participant) {
       this.remoteById.delete(senderId);
       this.emit('participant-left', participant);
     }
+    void this.topologyController.maybeMigrate().catch((e) => this.debug('topology:migrate-failed', e));
   }
 
   private handlePresence(presence: {
@@ -1140,125 +1310,6 @@ export class Room extends TypedEmitter<RoomEventMap> implements RoomQualityHost 
     });
   }
 
-  /** Get (or create) the peer connection + manager for a remote participant. */
-  private async ensurePeer(participantId: string): Promise<PeerEntry> {
-    const existing = this.peers.get(participantId);
-    if (existing) return existing;
-    if (this.closed) throw new Error('Room is closed');
-
-    const participant = this.remoteById.get(participantId);
-    if (!participant) {
-      // We received SDP/ICE before their join envelope arrived (unordered
-      // backend): synthesize a participant shell so signaling still works.
-      const shell = new RemoteParticipant({ id: participantId });
-      this.remoteById.set(participantId, shell);
-      this.emit('participant-joined', shell);
-    }
-
-    let iceServersResolved: RTCIceServer[] = [];
-    if (!this.config.peerFactory) {
-      iceServersResolved = await this.resolveIceServers();
-    }
-    const pc = this.config.peerFactory
-      ? this.config.peerFactory(participantId)
-      : new RTCPeerConnection({ iceServers: iceServersResolved });
-    const polite =
-      typeof this.config.polite === 'function'
-        ? this.config.polite(this.local.id, participantId)
-        : typeof this.config.polite === 'boolean'
-          ? this.config.polite
-          : this.local.id < participantId;
-
-    const bus = new DataChannelBus(pc, {
-      name: this.config.dataChannelName ?? 'vidcall',
-      wireOnDataChannel: false,
-      debug: this.debug,
-    });
-
-    const manager = new PeerConnectionManager({
-      pc,
-      polite,
-      autoRestartIce: this.config.autoRestartIce ?? true,
-      debug: this.debug,
-      onSignal: (signal) => {
-        this.emitSignalTo(participantId, signal).catch((err) => this.reportError(err));
-      },
-      onConnectionState: (state) => {
-        const p = this.remoteById.get(participantId);
-        if (p) p.connectionState = state;
-        this.emit('connection-state', { participantId, state });
-      },
-      onIceConnectionState: (state) => {
-        this.emit('ice-connection-state', { participantId, state });
-      },
-      onDataChannel: (channel) => {
-        bus.adoptRemote(channel);
-      },
-      onTrack: (event) => {
-        this.handleRemoteTrack(participantId, event);
-      },
-      onError: (err) => this.reportError(err),
-    });
-
-    // Wire data-channel reactions/chat into room events.
-    bus.on('reaction', (payload) =>
-      this.emit('reaction', { ...payload, senderId: participantId, participantId }),
-    );
-    bus.on('chat', (payload) =>
-      this.emit('chat', { ...payload, senderId: participantId, participantId }),
-    );
-    bus.on('control', (message) => this.debug('datachannel:control', { participantId, message }));
-
-    // Re-publish existing local tracks onto the fresh connection.
-    for (const publication of this.local.publications) {
-      if (publication.track) {
-        pc.addTrack(publication.track);
-        // Adaptive quality: configure the new peer's sender too (never throws).
-        await this.quality.attachTrack(publication.track);
-      }
-    }
-
-    // E2EE: install per-sender/receiver transforms (best-effort)
-    if (this.e2eeProcessor?.supported) {
-      try {
-        await this.e2eeProcessor.setupPeerConnection(pc);
-      } catch (err) {
-        this.debug('e2ee:setup-failed', err);
-        this.emit('e2ee:error', err instanceof Error ? err : new Error(String(err)));
-      }
-      this.e2eeProcessor.on('icecandidateerror' as never, (e: unknown) => this.debug('ice:turn-failed', e));
-    }
-
-    const entry: PeerEntry = { pc, manager, bus };
-    this.peers.set(participantId, entry);
-    return entry;
-  }
-
-  private handleRemoteTrack(participantId: string, event: RTCTrackEvent): void {
-    const participant = this.remoteById.get(participantId);
-    if (!participant) return;
-    const track = event.track;
-    const kind = track.kind === 'audio' ? 'audio' : 'video';
-    const id = track.id || randomId();
-    let publication = participant.getPublication(id);
-    if (!publication) {
-      publication = {
-        id,
-        kind,
-        source: kind === 'video' ? 'camera' : 'microphone',
-        participantId,
-        isLocal: false,
-        track,
-        muted: false,
-      };
-      participant.addPublication(publication);
-      this.emit('track', { participant, publication, track });
-      track.addEventListener?.('ended', () => {
-        const removed = participant.removePublication(id);
-        if (removed) this.emit('track-unpublished', { participant, publication: removed, track });
-      });
-    }
-  }
 
   private reportError(err: Error): void {
     this.debug('room:error', err);

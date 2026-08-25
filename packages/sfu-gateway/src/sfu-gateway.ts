@@ -12,7 +12,7 @@
  * SDP offers/answers and ICE candidates (`handleOffer`/`handleAnswer`/
  * `addIceCandidate`), which the adapter translates onto its SFU.
  *
- * Lifecycle (Room wires this in — TODO):
+ * Lifecycle (Room wires this via SfuMediaTransport):
  * ```
  * const session = await gateway.join(roomId, participantId, { transportOpts });
  * // sfu envelope {action:'publish', trackId, kind}  -> session.publishTrack(...)

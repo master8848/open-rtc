@@ -77,9 +77,11 @@ export class FakeMediaStreamTrack implements MediaStreamTrack {
   stop(): void {
     this.readyState = 'ended';
     const event = new Event('ended');
+    // console.log('FakeTrack stop', this.id, 'onended', !!this.onended);
     this.onended?.(event);
   }
 
+  private readonly endedListeners: Array<() => void> = [];
   addEventListener(
     type: string,
     listener: EventListenerOrEventListenerObject | null,
@@ -87,8 +89,14 @@ export class FakeMediaStreamTrack implements MediaStreamTrack {
   ): void {
     const fn = typeof listener === 'function' ? listener : listener?.handleEvent;
     if (!fn) return;
-    if (type === 'ended') this.onended = fn as never;
-    else if (type === 'mute') this.onmute = fn as never;
+    if (type === 'ended') {
+      // Chain listeners instead of overwriting — Room and tests both need ended.
+      this.endedListeners.push(fn as never);
+      this.onended = (() => {
+        for (const l of [...this.endedListeners]) try { (l as (e: Event)=>void)(new Event('ended')); } catch {}
+      }) as never;
+      return;
+    } else if (type === 'mute') this.onmute = fn as never;
     else if (type === 'unmute') this.onunmute = fn as never;
   }
 
@@ -99,13 +107,21 @@ export class FakeMediaStreamTrack implements MediaStreamTrack {
   ): void {
     const fn = typeof listener === 'function' ? listener : listener?.handleEvent;
     if (!fn) return;
-    if (type === 'ended' && this.onended === fn) this.onended = null;
-    else if (type === 'mute' && this.onmute === fn) this.onmute = null;
+    if (type === 'ended') {
+      const idx = this.endedListeners.indexOf(fn as never);
+      if (idx >= 0) this.endedListeners.splice(idx, 1);
+      if (this.endedListeners.length === 0) this.onended = null;
+      return;
+    } else if (type === 'mute' && this.onmute === fn) this.onmute = null;
     else if (type === 'unmute' && this.onunmute === fn) this.onunmute = null;
   }
 
   dispatchEvent(event: Event): boolean {
-    if (event.type === 'ended') this.onended?.(event);
+    if (event.type === 'ended') {
+      this.onended?.(event);
+      // onended now chains via endedListeners
+      return true;
+    }
     else if (event.type === 'mute') this.onmute?.(event);
     else if (event.type === 'unmute') this.onunmute?.(event);
     return true;
