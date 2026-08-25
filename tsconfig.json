@@ -11,6 +11,9 @@
       "path": "./packages/quality"
     },
     {
+      "path": "./packages/react"
+    },
+    {
       "path": "./packages/test-utils"
     },
     {

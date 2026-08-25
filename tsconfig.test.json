@@ -12,6 +12,8 @@
     "packages/core/test/**/*.ts",
     "packages/quality/src/**/*.ts",
     "packages/quality/test/**/*.ts",
+    "packages/react/src/**/*.ts",
+    "packages/react/test/**/*.ts",
     "packages/test-utils/src/**/*.ts",
     "packages/test-utils/test/**/*.ts",
     "packages/transport/src/**/*.ts",
