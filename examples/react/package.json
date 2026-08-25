@@ -14,6 +14,7 @@
     "@vidcall/backend-supabase": "file:../../packages/backend-supabase",
     "@vidcall/core": "file:../../packages/core",
     "@vidcall/protocol": "file:../../protocol",
+    "@vidcall/react": "file:../../packages/react",
     "@vidcall/transport": "file:../../packages/transport",
     "react": "19.2.8",
     "react-dom": "19.2.8"
