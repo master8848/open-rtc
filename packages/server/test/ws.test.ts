@@ -32,8 +32,9 @@ interface TestServer {
 
 async function withRelayServer(fn: (srv: TestServer) => Promise<void>): Promise<void> {
   const store = new InMemoryStore();
-  const server = createNodeServer(createServices({ store }));
-  const relay = attachWebSocketRelay(server, createServices({ store }));
+  const services = createServices({ store });
+  const server = createNodeServer(services);
+  const relay = attachWebSocketRelay(server, services);
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
   const { port } = server.address() as AddressInfo;
   const base = `http://127.0.0.1:${port}`;
@@ -290,4 +291,38 @@ test('ws: roomId in query is required (400 on upgrade)', async () => {
     await relay.close();
     await new Promise<void>((resolve) => server.close(() => resolve()));
   }
+});
+
+test('ws: REST signal fans out to connected sockets (Services.relay wiring)', async () => {
+  await withRelayServer(async (srv) => {
+    await createRoom(srv, 'room1');
+    const a = await connectAndJoin(srv, 'room1', 'alice');
+    const b = await connectAndJoin(srv, 'room1', 'bob');
+
+    // bob posts a chat over REST; alice must receive it over WS.
+    const aliceGot = nextMessage(a);
+    const res = await fetch(`${srv.base}/rooms/room1/signal`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(
+        createEnvelope('chat', {
+          roomId: 'room1',
+          senderId: 'bob',
+          sessionId: 's-bob',
+          payload: { text: 'hello from rest' },
+        }),
+      ),
+    });
+    assert.equal(res.status, 200);
+
+    const chat = (await aliceGot) as Envelope;
+    assert.equal(chat.type, 'chat');
+    assert.equal(chat.senderId, 'bob');
+    assert.equal((chat.payload as { text: string }).text, 'hello from rest');
+
+    // ...and the sender's own socket stays silent.
+    assert.equal(srv.hub.clientCount('room1'), 2);
+    a.close();
+    b.close();
+  });
 });

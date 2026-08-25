@@ -127,6 +127,10 @@ export function attachWebSocketRelay(
     maxPayload: opts.maxPayloadBytes ?? 8 * 1024 * 1024,
   });
   const hub = new RoomHub();
+  // The hub doubles as Services.relay so REST mutations (HTTP join/leave/
+  // signal) fan out to the same connected sockets. Requires the caller to
+  // pass the SAME services object it gave the HTTP router.
+  services.relay = hub;
   const clients = new Set<WebSocket>();
   /** Raw `?token=` query value per socket (verified at join, auth mode). */
   const tokens = new WeakMap<WebSocket, string>();
