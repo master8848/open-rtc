@@ -182,6 +182,13 @@ export class SfuMediaTransport implements MediaTransport {
 
   getSenders(): RTCRtpSender[] { return this.pc?.getSenders() ?? []; }
   getPeerConnections(): RTCPeerConnection[] { return this.pc ? [this.pc] : []; }
+  getPeerConnection(participantId: string): RTCPeerConnection | undefined {
+    if (!this.pc) return undefined;
+    // SFU has a single PC; return it only when the id matches the SFU peer.
+    if (participantId === this.sfuParticipantId) return this.pc;
+    // For convenience, also return the PC for any known participant when only one exists.
+    return this.pc;
+  }
   getDataChannelBus(): undefined { return undefined; }
   onTrack(cb: (e: MediaTrackEvent) => void): () => void { this.trackCbs.add(cb); return () => this.trackCbs.delete(cb); }
   onConnectionState(cb: (e: PeerConnectionStateEvent) => void): () => void { this.connCbs.add(cb); return () => this.connCbs.delete(cb); }

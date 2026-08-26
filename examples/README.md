@@ -18,8 +18,8 @@ symlinks / `file:` deps — see the install section of the [root README](../READ
 ```sh
 git clone <repo-url> vidcall
 cd vidcall
-npm ci          # or: npm install
-npm run build   # builds @mbsks/openrtc-core, @mbsks/openrtc-transport, @mbsks/openrtc-server, ...
+bun install
+bun run build   # builds @mbsks/openrtc-core, @mbsks/openrtc-transport, @mbsks/openrtc-server, ...
 ```
 
 > The vanilla example bundles directly from the TypeScript sources, so it
@@ -43,8 +43,8 @@ different room.
 ```sh
 cd examples/react
 cp .env.example .env       # fill in VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY
-npm install                # installs react/vite + links the workspace @mbsks/* packages
-npm run dev                # http://localhost:5173
+bun install                # installs react/vite + links the workspace @mbsks/* packages
+bun run dev                # http://localhost:5173
 ```
 
 Open it in two tabs (or two devices) with the same Supabase project — the
@@ -52,10 +52,10 @@ Supabase adapter uses Realtime **broadcast** for envelopes and **presence**
 for the roster, over one WebSocket. Mute/camera state and `quality-warning`
 events live in React state.
 
-> Production build (`npm run build` in `examples/react`) resolves the
+> Production build (`bun run build` in `examples/react`) resolves the
 > `@mbsks/*` packages to their compiled `dist/`, so build the workspace
-> first: `npm run build` at the repo root **plus**
-> `(cd packages/backend-supabase && npm run build)`.
+> first: `bun run build` at the repo root **plus**
+> `(cd packages/backend-supabase && bun run build)`.
 
 ## server — mount @mbsks/openrtc-server in Express
 

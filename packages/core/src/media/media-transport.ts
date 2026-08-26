@@ -54,6 +54,7 @@ export interface MediaTransport {
   restartIce?(participantId?: string): Promise<void>;
   getSenders(): RTCRtpSender[];
   getPeerConnections(): RTCPeerConnection[];
+  getPeerConnection?(participantId: string): RTCPeerConnection | undefined;
   getDataChannelBus?(participantId: string): unknown;
   onTrack(cb: (e: MediaTrackEvent) => void): () => void;
   onConnectionState?(cb: (e: PeerConnectionStateEvent) => void): () => void;

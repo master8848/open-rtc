@@ -158,6 +158,12 @@
       "development": "./src/media/transcription.ts",
       "default": "./dist/media/transcription.js"
     },
+    "./client": {
+      "types": "./dist/client.d.ts",
+      "import": "./dist/client.js",
+      "development": "./src/client.ts",
+      "default": "./dist/client.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [
@@ -173,7 +179,8 @@
   },
   "dependencies": {
     "@mbsks/openrtc-protocol": "0.1.0",
-    "@mbsks/openrtc-quality": "0.1.0"
+    "@mbsks/openrtc-quality": "0.1.0",
+    "@mbsks/openrtc-transport": "0.1.0"
   },
   "devDependencies": {
     "@mbsks/openrtc-test-utils": "0.1.0"

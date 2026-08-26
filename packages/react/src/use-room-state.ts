@@ -17,7 +17,7 @@ import type { RoomParticipantSnapshot, RoomSnapshot } from '@mbsks/openrtc-core'
  */
 export function useRoomState(room: Room): RoomSnapshot {
   const subscribe = useCallback(
-    (onStoreChange: () => void) => room.subscribe(onStoreChange),
+    (onStoreChange: () => void) => room.store.subscribe(onStoreChange),
     [room],
   );
   const getSnapshot = useCallback(() => room.getSnapshot(), [room]);

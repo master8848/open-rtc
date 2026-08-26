@@ -103,6 +103,7 @@
       "dependencies": {
         "@mbsks/openrtc-protocol": "0.1.0",
         "@mbsks/openrtc-quality": "0.1.0",
+        "@mbsks/openrtc-transport": "0.1.0",
       },
       "devDependencies": {
         "@mbsks/openrtc-test-utils": "0.1.0",
@@ -162,15 +163,19 @@
         "better-sqlite3": "13.0.1",
         "express": "5.2.1",
         "fastify": "5.10.0",
+        "ioredis": "5.8.2",
         "mysql2": "3.23.2",
         "pg": "8.22.0",
+        "redis": "5.10.0",
       },
       "optionalPeers": [
         "better-sqlite3",
         "express",
         "fastify",
+        "ioredis",
         "mysql2",
         "pg",
+        "redis",
       ],
     },
     "packages/sfu-gateway": {

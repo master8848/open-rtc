@@ -174,6 +174,10 @@ export class MeshMediaTransport implements MediaTransport {
     return [...this.peers.values()].map((e) => e.pc);
   }
 
+  getPeerConnection(participantId: string): RTCPeerConnection | undefined {
+    return this.peers.get(participantId)?.pc;
+  }
+
   getDataChannelBus(participantId: string): DataChannelBus | undefined {
     return this.peers.get(participantId)?.bus;
   }

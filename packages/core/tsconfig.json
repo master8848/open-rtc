@@ -12,6 +12,9 @@
       "path": "../quality"
     },
     {
+      "path": "../transport"
+    },
+    {
       "path": "../test-utils"
     }
   ],

@@ -1,6 +1,6 @@
-# peercall Skill
+# vidcall Skill
 
-> peercall (currently `vidcall` in code) — audio + video calling for any frontend. Vanilla functions; framework wrappers are thin adapters. WebRTC mesh with a small signaling relay.
+> vidcall — audio + video calling for any frontend. Vanilla functions; framework wrappers are thin adapters. WebRTC mesh with a small signaling relay.
 
 Repo is the docs. All paths relative to repo root.
 
@@ -15,8 +15,8 @@ Repo is the docs. All paths relative to repo root.
 ### Vanilla JS
 
 ```js
-import { Room } from '@peercall/core';
-import { SupabaseBackend } from '@peercall/backend-supabase';
+import { Room } from '@mbsks/openrtc-core';
+import { SupabaseBackend } from '@mbsks/openrtc-backend-supabase';
 
 const room = new Room({ roomId: 'my-room', selfId: 'user-1', transport: new SupabaseBackend({ client }) });
 await room.join();
@@ -31,8 +31,8 @@ await room.publish(stream.getVideoTracks()[0], { source: 'camera' });
 ### React
 
 ```tsx
-import { Room } from '@peercall/core';
-import { useJoin, useParticipants, useRoomState } from '@peercall/react';
+import { Room } from '@mbsks/openrtc-core';
+import { useJoin, useParticipants, useRoomState } from '@mbsks/openrtc-react';
 
 const room = new Room({ roomId: 'my-room', selfId, transport });
 function Call({ room }: { room: Room }) {
@@ -48,19 +48,19 @@ function Call({ room }: { room: Room }) {
 ## Server integration
 
 - **Node (Express/Fastify):** mount in-process — `createExpressRouter(services)` / Fastify plugin + `attachWebSocketRelay(server, services)`.
-- **Other stacks (Python, PHP, Ruby, Go, Java, C#, Gleam, Elixir):** run `@peercall/server` as a sidecar; proxy `/peercall/*` (REST) and `/ws?roomId=...` (WS) via nginx.
+- **Other stacks (Python, PHP, Ruby, Go, Java, C#, Gleam, Elixir):** run `@mbsks/openrtc-server` as a sidecar; proxy `/vidcall/*` (REST) and `/ws?roomId=...` (WS) via nginx.
 
 ```ts
-import { createServices, InMemoryStore } from '@peercall/server';
-import { createExpressRouter } from '@peercall/server/express';
+import { createServices, InMemoryStore } from '@mbsks/openrtc-server';
+import { createExpressRouter } from '@mbsks/openrtc-server/express';
 const services = createServices({ store: new InMemoryStore() });
-app.use('/peercall', createExpressRouter(services));
+app.use('/vidcall', createExpressRouter(services));
 ```
 
 ## Protocol
 
 - Single JSON envelope for all signaling (join/offer/answer/ICE). Schema: `protocol/schema.json`; fixtures: `protocol/fixtures/`.
-- Custom transports implement `SignalingTransport` from `@peercall/transport` and validate with `runAdapterTestSuite`.
+- Custom transports implement `SignalingTransport` from `@mbsks/openrtc-transport` and validate with `runAdapterTestSuite`.
 
 ## Where to read more
 

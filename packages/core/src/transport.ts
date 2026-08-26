@@ -41,6 +41,8 @@ export interface SignalingTransport {
   setPresence(state: PresenceState, metadata?: Record<string, unknown>): Promise<void>;
   /** Release all subscriptions/resources. Idempotent. */
   dispose(): Promise<void>;
+  /** Optional payload cap in bytes (used by chunker/adapters). */
+  readonly maxPayloadBytes?: number;
 }
 
 export interface InMemoryTransportOptions {

@@ -1,6 +1,6 @@
-# peercall
+# vidcall
 
-> Placeholder name — replace `peercall` globally to rename. Same idea: peer-to-peer calling.
+> Peer-to-peer calling for any app — mesh WebRTC, pluggable signaling, adaptive quality.
 
 Add audio/video calling to any app without wiring WebRTC yourself.
 
@@ -24,26 +24,26 @@ Add audio/video calling to any app without wiring WebRTC yourself.
 - **Perfect negotiation** — deterministic offer/answer, no glare races.
 - **Trickle ICE** — candidates exchanged as they arrive, faster connect.
 - **Renegotiation + restarts** — ICE restarts and re-offers handled automatically.
-- **Adaptive quality policy engine** — pure functions in `@peercall/quality`, no WebRTC imports, easy to test and tune.
+- **Adaptive quality policy engine** — pure functions in `@mbsks/openrtc-quality`, no WebRTC imports, easy to test and tune.
 - **Deduplication / reordering** — signaling messages de-duped and ordered before they hit the peer logic.
-- **Small bundle** — `@peercall/core` has zero runtime deps, tree-shakeable.
-- **Driver-free server** — `@peercall/server` uses a ~10-method `Store` contract; bring SQLite, Postgres, MySQL, or your own.
+- **Small bundle** — `@mbsks/openrtc-core` has zero runtime deps, tree-shakeable.
+- **Driver-free server** — `@mbsks/openrtc-server` uses a ~10-method `Store` contract; bring SQLite, Postgres, MySQL, or your own.
 
 ## Quick start
 
 Not on npm yet — run from source:
 
 ```sh
-git clone <repo-url> peercall && cd peercall
+git clone <repo-url> vidcall && cd vidcall
 bun install && bun run build
 ```
 
 **React:**
 
 ```tsx
-import { Room } from '@peercall/core';
-import { SupabaseBackend } from '@peercall/backend-supabase';
-import { useJoin, useParticipants } from '@peercall/react';
+import { Room } from '@mbsks/openrtc-core';
+import { SupabaseBackend } from '@mbsks/openrtc-backend-supabase';
+import { useJoin, useParticipants } from '@mbsks/openrtc-react';
 
 const room = new Room({ roomId: 'demo', selfId: 'user-1', transport: new SupabaseBackend({ client }) });
 
@@ -57,7 +57,7 @@ function Call() {
 **Vanilla JS:**
 
 ```js
-import { Room } from '@peercall/core';
+import { Room } from '@mbsks/openrtc-core';
 
 const room = new Room({ roomId: 'demo', selfId: 'user-1', transport });
 room.on('track', ({ track }) => { videoEl.srcObject = new MediaStream([track]); });
@@ -75,12 +75,12 @@ node examples/vanilla/build.mjs && npx serve examples/vanilla
 
 | Package | Purpose |
 |---|---|
-| `@peercall/core` | Client engine: `Room`, peers, devices, recording |
-| `@peercall/react` | Hooks: `useJoin`, `useRoomState`, `useParticipants` |
-| `@peercall/quality` | Adaptive quality policy (pure functions) |
-| `@peercall/transport` | `SignalingTransport` contract + shared backend tests |
-| `@peercall/server` | Relay server (REST + WS), stores for sqlite/postgres/mysql, adapters for express/fastify |
-| `@peercall/sfu-gateway` | Optional SFU path (mediasoup reference, not yet in Room) |
+| `@mbsks/openrtc-core` | Client engine: `Room`, peers, devices, recording |
+| `@mbsks/openrtc-react` | Hooks: `useJoin`, `useRoomState`, `useParticipants` |
+| `@mbsks/openrtc-quality` | Adaptive quality policy (pure functions) |
+| `@mbsks/openrtc-transport` | `SignalingTransport` contract + shared backend tests |
+| `@mbsks/openrtc-server` | Relay server (REST + WS), stores for sqlite/postgres/mysql, adapters for express/fastify |
+| `@mbsks/openrtc-sfu-gateway` | Optional SFU path (mediasoup reference, not yet in Room) |
 | backends | `supabase` · `convex` · `firebase` · `appwrite` · `postgres` · `sqlite` |
 | mobile | `kotlin` · `swift` · `dart` — same wire protocol |
 | `protocol` | Versioned JSON envelope (`schema.json` + fixtures) |

@@ -20,6 +20,9 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { mkdtemp } from 'node:fs/promises';
 const dir = await mkdtemp(path.join(tmpdir(), 'vidcall-'));
+// WARNING: open mode — no auth, InMemoryStore is ephemeral, for local dev only.
+// For production, use a persistent Store (SqliteStore/PostgresStore) + token auth
+// (VIDCALL_SECRET) + TLS. See packages/server/README.md and docs/guides/deployment.md.
 const store = new InMemoryStore();
 const services = createServices({
   store,

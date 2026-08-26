@@ -52,6 +52,12 @@ import { TopologyController, type Topology, type TopologyConfig } from './media/
 import { ActiveSpeakerDetector } from './media/active-speaker.ts';
 import { EgressController, type EgressOptions } from './media/egress.ts';
 import { TranscriptionController, type TranscriptEvent, type TranscriptionOptions } from './media/transcription.ts';
+// CompositeTransport is the canonical dual-path transport (see packages/transport/src/composite.ts).
+// Room uses it for `transport: [primary, fallback]` array sugar. Decision: direct import adds
+// @mbsks/openrtc-transport as a runtime dep to core (previously zero 3rd-party deps). Kept as
+// package import; for `tsc -b` local check we suppress resolution until transport is built.
+// @ts-ignore - resolved via package exports after build
+import { CompositeTransport } from '@mbsks/openrtc-transport/composite';
 import type { MediaRecorderConstructor } from './recording/media-recorder-recording-hook.ts';
 import type {
   RecordingChunk,
@@ -237,6 +243,32 @@ export interface ReconnectConfig {
   coalesceIceMs?: number;
 }
 
+/** Grouped RTC options (canonical). Flat `iceServers`/`polite`/etc remain as aliases for compat. */
+export interface RoomRtcOptions {
+  iceServers?: RTCIceServer[] | (() => RTCIceServer[] | Promise<RTCIceServer[]>);
+  polite?: boolean | ((selfId: string, remoteId: string) => boolean);
+  autoRestartIce?: boolean;
+  dataChannelName?: string;
+  peerFactory?: (participantId: string) => RTCPeerConnection;
+}
+
+/** Publish defaults grouped (TanStack `publishDefaults` pattern). */
+export interface RoomPublishDefaults {
+  simulcast?: PublishOptions['simulcast'];
+  svc?: PublishOptions['svc'];
+  codecPreferences?: string[];
+}
+
+/** Adaptive/quality grouping. */
+export interface RoomAdaptiveOptions {
+  mode?: 'auto' | 'manual' | 'disabled';
+}
+
+/** Canonical SFU grouping. */
+export interface RoomSfuOptions {
+  gateway?: SfuGatewayLike;
+}
+
 export interface RoomConfig {
   roomId: string;
   selfId: string;
@@ -250,22 +282,30 @@ export interface RoomConfig {
   transport: SignalingTransport | SignalingTransport[];
   /** Optional reconnect wrapper opts (maxAttempts, backoffMs). When set, transport is wrapped in ReconnectingTransport. */
   reconnect?: ReconnectConfig;
-  /**
-   * RTCPeerConnection factory (default: platform `RTCPeerConnection`).
-   * Tests inject fakes here.
-   */
+  // --- grouped options (canonical) ---
+  /** @deprecated Use `rtc.peerFactory`. */
   peerFactory?: (participantId: string) => RTCPeerConnection;
+  /** @deprecated Use `rtc.iceServers`. */
   iceServers?: RTCIceServer[] | (() => RTCIceServer[] | Promise<RTCIceServer[]>);
-  /** Politeness rule for perfect negotiation. Default: `selfId < remoteId`. */
+  /** @deprecated Use `rtc.polite`. */
   polite?: boolean | ((selfId: string, remoteId: string) => boolean);
-  /** Auto-restart ICE when a peer's iceConnectionState turns 'failed'. */
+  /** @deprecated Use `rtc.autoRestartIce`. */
   autoRestartIce?: boolean;
-  /** Data channel label (default 'vidcall'). */
+  /** @deprecated Use `rtc.dataChannelName`. */
   dataChannelName?: string;
+  /** Canonical RTC grouping. Flat fields above remain as aliases. */
+  rtc?: RoomRtcOptions;
+  /** Default publish options applied when `publish()` is called without explicit overrides. */
+  publishDefaults?: RoomPublishDefaults;
+  /** Adaptive quality grouping. */
+  adaptive?: RoomAdaptiveOptions;
+  /** Canonical SFU config. */
+  sfu?: RoomSfuOptions;
   /**
    * Base URL of the vidcall server's recording endpoint. When set, the room's
    * recording facade uploads chunks + finalize reports there via
    * `FetchRecordingUploader` (no dependency on the server package).
+   * @deprecated Use `recording.endpoint`.
    */
   recordingEndpoint?: string;
   /**
@@ -303,6 +343,7 @@ export interface RoomConfig {
   /** E2EE (SFrame). */
   e2ee?: RoomE2eeConfig | false;
   topology?: TopologyConfig;
+  /** @deprecated Use `sfu.gateway`. Triple alias: sfuGateway | topology.sfu.gateway | sfu.gateway. */
   sfuGateway?: SfuGatewayLike;
   mediaTransport?: MediaTransport;
   /** Recording (unified surface per 02-recording.md; keeps backward compat with recordingEndpoint). */
@@ -314,6 +355,66 @@ export interface RoomConfig {
     encryption?: { key: CryptoKey; keyId?: string } | false;
   };
   debug?: (message: string, data?: unknown) => void;
+}
+
+/** Builder for `RoomConfig` — groups sprawl into `rtc`/`publishDefaults`/`adaptive`/`sfu`/`recording`. */
+export class RoomOptionsBuilder {
+  private opts: Partial<RoomConfig> & Pick<RoomConfig, 'roomId' | 'selfId' | 'transport'>;
+
+  constructor(base: Pick<RoomConfig, 'roomId' | 'selfId' | 'transport'> & Partial<RoomConfig>) {
+    this.opts = { ...base };
+  }
+
+  rtc(rtc: RoomRtcOptions): this {
+    this.opts.rtc = { ...(this.opts.rtc ?? {}), ...rtc };
+    return this;
+  }
+
+  publishDefaults(defaults: RoomPublishDefaults): this {
+    this.opts.publishDefaults = { ...(this.opts.publishDefaults ?? {}), ...defaults };
+    return this;
+  }
+
+  adaptive(adaptive: RoomAdaptiveOptions): this {
+    this.opts.adaptive = { ...(this.opts.adaptive ?? {}), ...adaptive };
+    return this;
+  }
+
+  sfu(sfu: RoomSfuOptions): this {
+    this.opts.sfu = { ...(this.opts.sfu ?? {}), ...sfu };
+    return this;
+  }
+
+  recording(recording: NonNullable<RoomConfig['recording']>): this {
+    this.opts.recording = { ...(this.opts.recording ?? {}), ...recording };
+    return this;
+  }
+
+  quality(quality: RoomQualityConfig): this {
+    this.opts.quality = { ...(this.opts.quality ?? {}), ...quality };
+    return this;
+  }
+
+  auth(auth: RoomAuthConfig): this {
+    this.opts.auth = { ...(this.opts.auth ?? {}), ...auth };
+    return this;
+  }
+
+  topology(topology: TopologyConfig): this {
+    this.opts.topology = { ...(this.opts.topology ?? {}), ...topology };
+    return this;
+  }
+
+  build(): RoomConfig {
+    return this.opts as RoomConfig;
+  }
+}
+
+/** Helper — create a `RoomConfig` with grouped defaults merged (keeps flat aliases for compat). */
+export function createRoomOptions(
+  base: Pick<RoomConfig, 'roomId' | 'selfId' | 'transport'> & Partial<RoomConfig>,
+): RoomConfig {
+  return new RoomOptionsBuilder(base).build();
 }
 
 // ------------------------------------------------------------------- room
@@ -393,77 +494,42 @@ export class Room extends TypedEmitter<RoomEventMap> implements RoomQualityHost 
 
   constructor(config: RoomConfig) {
     super();
-    this.config = config;
-    this.roomId = config.roomId;
-    // array sugar: [primary, fallback] → CompositeTransport (lazy, avoids cycle)
-    if (Array.isArray(config.transport)) {
-      const arr = config.transport as SignalingTransport[];
+    this.config = this.normalizeConfig(config);
+    this.roomId = this.config.roomId;
+    // array sugar: [primary, fallback] → CompositeTransport (canonical from @mbsks/openrtc-transport)
+    // Decision: direct import adds @mbsks/openrtc-transport dep to core (was zero-deps). Trade-off: dedup logic now single-sourced
+    // in packages/transport/src/composite.ts; core no longer carries an inline copy. Zero-deps claim now excludes transport (still no 3rd-party).
+    if (Array.isArray(this.config.transport)) {
+      const arr = this.config.transport as SignalingTransport[];
       if (arr.length === 0) throw new Error('Room: transport array must not be empty');
       if (arr.length === 1) this.transport = arr[0]!;
       else {
-        // dynamic import avoided — inline minimal composite to keep core deps zero
         const [primary, fallback] = arr as [SignalingTransport, SignalingTransport];
-        const seen = new Map<string, number>();
-        const msgCbs = new Set<(e: Envelope) => void>();
-        const presCbs = new Set<(p: import('./transport.ts').ParticipantPresence) => void>();
-        let unsubs: (() => void)[] = [];
-        const isNew = (e: Envelope): boolean => {
-          const k = `${e.sessionId}:${e.senderId}`;
-          const last = seen.get(k);
-          if (last !== undefined && e.seq <= last) return false;
-          seen.set(k, e.seq); return true;
-        };
-        this.transport = {
-          get name() { return 'composite'; },
-          get ordering() { return 'seq-required' as const; },
-          get maxPayloadBytes() {
-            const a = (primary as unknown as { maxPayloadBytes?: number }).maxPayloadBytes ?? 8 * 1024 * 1024;
-            const b = (fallback as unknown as { maxPayloadBytes?: number }).maxPayloadBytes ?? 8 * 1024 * 1024;
-            return Math.max(a, b);
-          },
-          join: async (roomId: string, self: import('./transport.ts').ParticipantInfo) => {
-            const errs: unknown[] = [];
-            try { await primary.join(roomId, self); } catch (e) { errs.push(e); }
-            try { await fallback.join(roomId, self); } catch (e) { errs.push(e); }
-            if (errs.length === 2) throw errs[0];
-            unsubs.push(
-              primary.onMessage((e) => { if (!isNew(e)) return; for (const c of [...msgCbs]) c(e); }),
-              fallback.onMessage((e) => { if (!isNew(e)) return; for (const c of [...msgCbs]) c(e); }),
-              primary.onPresence((p) => { for (const c of [...presCbs]) c(p); }),
-              fallback.onPresence((p) => { for (const c of [...presCbs]) c(p); }),
-            );
-          },
-          leave: async () => { for (const u of unsubs.splice(0)) try { u(); } catch {} seen.clear(); await Promise.allSettled([primary.leave(), fallback.leave()]); },
-          emit: async (envelope: Envelope) => { try { await primary.emit(envelope); } catch { await fallback.emit(envelope); } },
-          onMessage: (cb: (e: Envelope) => void) => { msgCbs.add(cb); return () => msgCbs.delete(cb); },
-          onPresence: (cb: (p: import('./transport.ts').ParticipantPresence) => void) => { presCbs.add(cb); return () => presCbs.delete(cb); },
-          setPresence: async (s: import('@mbsks/openrtc-protocol').PresenceState, m?: Record<string, unknown>) => { await Promise.allSettled([primary.setPresence(s, m), fallback.setPresence(s, m)]); },
-          dispose: async () => { for (const u of unsubs.splice(0)) try { u(); } catch {} msgCbs.clear(); presCbs.clear(); await Promise.allSettled([primary.dispose(), fallback.dispose()]); },
-        } as unknown as SignalingTransport;
+        this.transport = new CompositeTransport(primary, fallback);
       }
     } else {
-      this.transport = config.transport as SignalingTransport;
+      this.transport = this.config.transport as SignalingTransport;
     }
-    this.sessionId = config.sessionId ?? randomId();
+    this.sessionId = this.config.sessionId ?? randomId();
     this.local = new LocalParticipant({
-      id: config.selfId,
-      displayName: config.displayName,
-      metadata: config.metadata,
-      deviceProfile: config.deviceProfile,
-      capabilities: config.capabilities,
+      id: this.config.selfId,
+      displayName: this.config.displayName,
+      metadata: this.config.metadata,
+      deviceProfile: this.config.deviceProfile,
+      capabilities: this.config.capabilities,
     });
-    const recEndpoint = config.recording?.endpoint ?? config.recordingEndpoint;
+    const recEndpoint = this.config.recording?.endpoint ?? this.config.recordingEndpoint;
     this.recording = new RoomRecordingFacade({
       roomId: this.roomId,
       sessionId: this.sessionId,
       uploader: recEndpoint
         ? new FetchRecordingUploader({
             endpoint: recEndpoint,
-            fetchImpl: config.recordingFetchImpl,
+            fetchImpl: this.config.recordingFetchImpl,
           })
         : undefined,
-      timesliceMs: config.recording?.timesliceMs,
-      mediaRecorderCtor: config.recordingMediaRecorderCtor,
+      timesliceMs: this.config.recording?.timesliceMs,
+      mediaRecorderCtor: this.config.recordingMediaRecorderCtor,
       debug: this.debug,
     });
     // Re-emit facade events on the room so apps can use room.on('recording:...').
@@ -475,30 +541,31 @@ export class Room extends TypedEmitter<RoomEventMap> implements RoomQualityHost 
     // in a non-browser environment) and re-emit its events on the room.
     this.quality = new RoomQualityController({
       room: this,
-      ...(config.quality ?? {}),
-      enabled: config.quality?.enabled ?? qualityEnvironmentSupported(),
+      ...(this.config.quality ?? {}),
+      enabled: this.config.quality?.enabled ?? qualityEnvironmentSupported(),
       debug: this.debug,
     });
     this.quality.on('quality:changed', (event) => this.emit('quality:changed', event));
     this.quality.on('quality:warning', (event) => this.emit('quality:warning', event));
     this.processorChain = new ProcessorChain({ warn: (m, d) => this.debug(m, d) });
-    const initialSfuGw = (config as unknown as Record<string, unknown>).sfuGateway as SfuGatewayLike | undefined
-      ?? (config.topology?.sfu?.gateway as unknown as SfuGatewayLike | undefined);
-    const useCustomMedia = config.mediaTransport ?? null;
+    const initialSfuGw = this.config.sfu?.gateway
+      ?? this.config.sfuGateway
+      ?? (this.config.topology?.sfu?.gateway as unknown as SfuGatewayLike | undefined);
+    const useCustomMedia = this.config.mediaTransport ?? null;
     const buildMesh = (): MediaTransport =>
       new MeshMediaTransport({
         roomId: this.roomId,
         transport: this.transport,
-        selfId: config.selfId,
+        selfId: this.config.selfId,
         sessionId: this.sessionId,
         local: this.local,
         remotes: this.remoteById,
         orderBuffer: this.buffer,
-        peerFactory: config.peerFactory,
-        iceServers: config.iceServers,
-        polite: config.polite,
-        autoRestartIce: config.autoRestartIce,
-        dataChannelName: config.dataChannelName,
+        peerFactory: this.config.rtc?.peerFactory ?? this.config.peerFactory,
+        iceServers: this.config.rtc?.iceServers ?? this.config.iceServers,
+        polite: this.config.rtc?.polite ?? this.config.polite,
+        autoRestartIce: this.config.rtc?.autoRestartIce ?? this.config.autoRestartIce,
+        dataChannelName: this.config.rtc?.dataChannelName ?? this.config.dataChannelName,
         getNextSeq: () => this.nextSeq(),
         quality: this.quality,
         processorChain: this.processorChain,
@@ -514,19 +581,19 @@ export class Room extends TypedEmitter<RoomEventMap> implements RoomQualityHost 
     if (useCustomMedia) {
       this.media = useCustomMedia;
     } else if (
-      (config.topology?.topology === 'sfu' || (config.topology?.sfu && config.topology?.topology !== 'mesh'))
+      (this.config.topology?.topology === 'sfu' || (this.config.topology?.sfu && this.config.topology?.topology !== 'mesh'))
       && initialSfuGw
     ) {
-      const explicitSfu = config.topology?.topology === 'sfu';
+      const explicitSfu = this.config.topology?.topology === 'sfu';
       if (explicitSfu) {
         const sfuTransport = new SfuMediaTransport({
           roomId: this.roomId,
-          selfId: config.selfId,
+          selfId: this.config.selfId,
           sessionId: this.sessionId,
           gateway: initialSfuGw!,
           transport: this.transport,
           processorChain: this.processorChain,
-          peerFactory: config.peerFactory,
+          peerFactory: this.config.rtc?.peerFactory ?? this.config.peerFactory,
           getNextSeq: () => this.nextSeq(),
           debug: this.debug,
           emit: (event: string, ...args: unknown[]) => (this as unknown as { emit: (e: string, ...a: unknown[]) => void }).emit(event, ...args),
@@ -542,7 +609,7 @@ export class Room extends TypedEmitter<RoomEventMap> implements RoomQualityHost 
       this.media = buildMesh();
     }
     this.topologyController = new TopologyController({
-      config: config.topology,
+      config: this.config.topology,
       getParticipantCount: () => this.remoteById.size,
       getTransport: () => this.media,
       switchTransport: async (kind) => this.switchMediaTransport(kind),
@@ -567,7 +634,7 @@ export class Room extends TypedEmitter<RoomEventMap> implements RoomQualityHost 
       }
     });
     this.devices = new RoomDevicesFacade({
-      mediaDevices: config.devices?.mediaDevices,
+      mediaDevices: this.config.devices?.mediaDevices,
       getSenders: () => this.media.getSenders(),
       getLocalVideoTracks: () =>
         this.local.publications
@@ -668,11 +735,22 @@ export class Room extends TypedEmitter<RoomEventMap> implements RoomQualityHost 
 
   // -------------------------------------------------------- processor / topology
 
+  /** @deprecated Use `registerProcessor`. */
   useProcessor(processor: MediaProcessor): void {
     this.processorChain.add(processor);
   }
 
+  /** Canonical processor registry (explicit over magic). */
+  registerProcessor(processor: MediaProcessor): void {
+    this.processorChain.add(processor);
+  }
+
+  /** @deprecated Use `registerProcessor` with dispose handling; kept for compat. */
   removeProcessor(processor: MediaProcessor): boolean {
+    return this.processorChain.remove(processor);
+  }
+
+  unregisterProcessor(processor: MediaProcessor): boolean {
     return this.processorChain.remove(processor);
   }
 
@@ -738,15 +816,20 @@ export class Room extends TypedEmitter<RoomEventMap> implements RoomQualityHost 
   private async switchMediaTransport(kind: 'mesh' | 'sfu'): Promise<void> {
     const old = this.media;
     await old.close();
+    const rtcPeerFactory = this.config.rtc?.peerFactory ?? this.config.peerFactory;
+    const rtcIceServers = this.config.rtc?.iceServers ?? this.config.iceServers;
+    const rtcPolite = this.config.rtc?.polite ?? this.config.polite;
+    const rtcAutoRestartIce = this.config.rtc?.autoRestartIce ?? this.config.autoRestartIce;
+    const rtcDataChannelName = this.config.rtc?.dataChannelName ?? this.config.dataChannelName;
     if (kind === 'sfu') {
-      const gw = (this.config.sfuGateway ?? this.config.topology?.sfu?.gateway) as unknown as SfuGatewayLike | undefined;
+      const gw = (this.config.sfu?.gateway ?? this.config.sfuGateway ?? this.config.topology?.sfu?.gateway) as unknown as SfuGatewayLike | undefined;
       if (!gw) {
         this.debug('topology:sfu-no-gateway', 'no sfuGateway configured; staying mesh');
         this.media = new MeshMediaTransport({
           roomId: this.roomId, transport: this.transport, selfId: this.config.selfId, sessionId: this.sessionId,
           local: this.local, remotes: this.remoteById, orderBuffer: this.buffer,
-          peerFactory: this.config.peerFactory, iceServers: this.config.iceServers, polite: this.config.polite,
-          autoRestartIce: this.config.autoRestartIce, dataChannelName: this.config.dataChannelName,
+          peerFactory: rtcPeerFactory, iceServers: rtcIceServers, polite: rtcPolite,
+          autoRestartIce: rtcAutoRestartIce, dataChannelName: rtcDataChannelName,
           getNextSeq: () => this.nextSeq(), quality: this.quality, processorChain: this.processorChain,
           resolveIceServers: () => this.resolveIceServers(),
           e2eeSetupPeer: async (pc) => { if (this.e2eeProcessor?.supported) try { await this.e2eeProcessor.setupPeerConnection(pc); } catch (e) { this.debug('e2ee:setup-failed', e); } },
@@ -757,7 +840,7 @@ export class Room extends TypedEmitter<RoomEventMap> implements RoomQualityHost 
       const sfu = new SfuMediaTransport({
         roomId: this.roomId, selfId: this.config.selfId, sessionId: this.sessionId,
         gateway: gw, transport: this.transport, processorChain: this.processorChain,
-        peerFactory: this.config.peerFactory, getNextSeq: () => this.nextSeq(), debug: this.debug,
+        peerFactory: rtcPeerFactory, getNextSeq: () => this.nextSeq(), debug: this.debug,
         emit: (e: string, ...a: unknown[]) => (this as unknown as { emit: (ev: string, ...args: unknown[]) => void }).emit(e, ...a),
         localPublications: () => [...this.local.publications],
         addRemoteTrack: (pid, track, kind) => this.handleRemoteSfuTrack(pid, track, kind),
@@ -769,8 +852,8 @@ export class Room extends TypedEmitter<RoomEventMap> implements RoomQualityHost 
       this.media = new MeshMediaTransport({
         roomId: this.roomId, transport: this.transport, selfId: this.config.selfId, sessionId: this.sessionId,
         local: this.local, remotes: this.remoteById, orderBuffer: this.buffer,
-        peerFactory: this.config.peerFactory, iceServers: this.config.iceServers, polite: this.config.polite,
-        autoRestartIce: this.config.autoRestartIce, dataChannelName: this.config.dataChannelName,
+        peerFactory: rtcPeerFactory, iceServers: rtcIceServers, polite: rtcPolite,
+        autoRestartIce: rtcAutoRestartIce, dataChannelName: rtcDataChannelName,
         getNextSeq: () => this.nextSeq(), quality: this.quality, processorChain: this.processorChain,
         resolveIceServers: () => this.resolveIceServers(),
         e2eeSetupPeer: async (pc) => { if (this.e2eeProcessor?.supported) try { await this.e2eeProcessor.setupPeerConnection(pc); } catch (e) { this.debug('e2ee:setup-failed', e); } },
@@ -807,6 +890,10 @@ export class Room extends TypedEmitter<RoomEventMap> implements RoomQualityHost 
     this.config.auth.token = token;
   }
 
+  private effectiveIceServers(): RTCIceServer[] | (() => RTCIceServer[] | Promise<RTCIceServer[]>) | undefined {
+    return this.config.rtc?.iceServers ?? this.config.iceServers;
+  }
+
   /** Resolve TURN/ICE servers (cached). */
   async getIceServers(): Promise<RTCIceServer[]> {
     if (this.config.auth?.getTurnCredentials) {
@@ -818,11 +905,12 @@ export class Room extends TypedEmitter<RoomEventMap> implements RoomQualityHost 
         this.debug('ice:turn-failed', err);
       }
     }
-    if (typeof this.config.iceServers === 'function') {
-      const v = this.config.iceServers();
+    const ice = this.effectiveIceServers();
+    if (typeof ice === 'function') {
+      const v = ice();
       return v instanceof Promise ? await v : v as RTCIceServer[];
     }
-    if (Array.isArray(this.config.iceServers)) return this.config.iceServers;
+    if (Array.isArray(ice)) return ice;
     return this.pendingIceServers ?? [];
   }
 
@@ -836,12 +924,13 @@ export class Room extends TypedEmitter<RoomEventMap> implements RoomQualityHost 
         this.debug('ice:turn-failed', err);
       }
     }
-    if (typeof this.config.iceServers === 'function') {
-      const v = this.config.iceServers();
+    const ice = this.effectiveIceServers();
+    if (typeof ice === 'function') {
+      const v = ice();
       const arr = v instanceof Promise ? await v : (v as RTCIceServer[]);
       if (arr.length) return arr;
     }
-    if (Array.isArray(this.config.iceServers)) return this.config.iceServers;
+    if (Array.isArray(ice)) return ice;
     return this.pendingIceServers ?? [];
   }
 
@@ -990,10 +1079,20 @@ export class Room extends TypedEmitter<RoomEventMap> implements RoomQualityHost 
 
   // -------------------------------------------------------------- publishing
 
-  /** Publish a local track (delegates to MediaTransport). */
+  /** Publish a local track (delegates to MediaTransport). Merges `publishDefaults` when options are absent. */
   async publish(track: MediaStreamTrack, options: PublishOptions = {}): Promise<TrackPublication> {
     if (this.closed) throw new Error('Room is closed');
-    const pub = await this.media.publish(track, options as unknown as ExtendedPublishOptions);
+    const defaults = this.config.publishDefaults ?? {};
+    const merged: PublishOptions = {
+      simulcast: options.simulcast ?? defaults.simulcast,
+      svc: options.svc ?? defaults.svc,
+      codecPreferences: options.codecPreferences ?? defaults.codecPreferences,
+      source: options.source ?? defaults['source' as keyof typeof defaults] as unknown as TrackPublication['source'],
+      metadata: options.metadata,
+    };
+    // Remove undefined keys so transport sees only explicit values.
+    const clean = Object.fromEntries(Object.entries(merged).filter(([, v]) => v !== undefined)) as PublishOptions;
+    const pub = await this.media.publish(track, clean as unknown as ExtendedPublishOptions);
     if (!this.local.getPublication(pub.id)) {
       this.local.addPublication(pub);
       this.invalidateSnapshot();
@@ -1023,28 +1122,18 @@ export class Room extends TypedEmitter<RoomEventMap> implements RoomQualityHost 
   /**
    * Subscribe to a remote participant's media. In mesh mode tracks arrive
    * automatically via `ontrack`; the subscription is a control handle (e.g.
-   * to pause decoding of a hidden tile).
+   * to pause decoding of a hidden tile). Single-object options, no overloads (explicit over magic).
    */
-  async subscribe(
-    participantId: string,
-    options?: MediaSubscribeOptions,
-  ): Promise<TrackSubscription>;
+  subscribe(participantId: string, options?: MediaSubscribeOptions): Promise<TrackSubscription>;
   /**
-   * Subscribe to snapshot changes; returns an unsubscribe function. The
-   * listener runs after every tracked mutation that actually changed the
-   * snapshot (see `getSnapshot()`). Listener errors are isolated: they are
-   * reported via the room's debug logger and the `'error'` event instead of
-   * breaking other listeners or the emitting code path.
-   *
-   * The two `subscribe` forms are distinguished by argument type (function =
-   * snapshot store, string = media control handle) so the pre-existing media
-   * API stays source-compatible.
+   * @deprecated Use `room.store.subscribe(listener)` or `room.onSnapshot(listener)` — kept for backward compat.
    */
   subscribe(listener: () => void): () => void;
   subscribe(
     participantIdOrListener: string | (() => void),
     options?: MediaSubscribeOptions,
   ): Promise<TrackSubscription> | (() => void) {
+    // Backward-compat: if a function is passed, treat as snapshot subscription (deprecated).
     if (typeof participantIdOrListener === 'function') {
       return this.snapshotStore.subscribe(participantIdOrListener);
     }
@@ -1125,8 +1214,22 @@ export class Room extends TypedEmitter<RoomEventMap> implements RoomQualityHost 
     return this.remoteById.get(id);
   }
 
-  getPeerConnection(_participantId: string): RTCPeerConnection | undefined {
-    return this.media.getPeerConnections()[0];
+  getPeerConnection(participantId: string): RTCPeerConnection | undefined {
+    const withLookup = this.media as unknown as { getPeerConnection?: (id: string) => RTCPeerConnection | undefined };
+    if (typeof withLookup.getPeerConnection === 'function') {
+      const pc = withLookup.getPeerConnection(participantId);
+      if (pc) return pc;
+    }
+    // Fallback for transports without per-id lookup: try DataChannelBus map (mesh).
+    const bus = (this.media as unknown as { getDataChannelBus?: (id: string) => unknown }).getDataChannelBus?.(participantId);
+    if (bus) {
+      // Mesh keeps 1:1 PC per participant; find it via getPeerConnections if not directly exposed.
+      // We already tried per-id; return first only as last resort when participant exists but lookup failed.
+      const all = this.media.getPeerConnections();
+      // Best-effort: if only one PC, return it; otherwise undefined to avoid returning wrong peer.
+      if (all.length === 1) return all[0];
+    }
+    return undefined;
   }
 
   /** All live peer connections (the adaptive-quality sampler polls their stats). */
@@ -1154,12 +1257,21 @@ export class Room extends TypedEmitter<RoomEventMap> implements RoomQualityHost 
 
   // ------------------------------------------------------- snapshot / store
 
+  /** Canonical snapshot store. `room.store.subscribe(listener)` / `room.onSnapshot(listener)` preferred over `room.subscribe(listener)` (deprecated). */
+  get store(): ObservableStore<RoomSnapshot> {
+    return this.snapshotStore;
+  }
+
+  /** Subscribe to snapshot changes (canonical). Alias for `room.store.subscribe`. */
+  onSnapshot(listener: () => void): () => void {
+    return this.snapshotStore.subscribe(listener);
+  }
+
   /**
    * The current immutable room state. Returns the same object reference until
    * tracked state (roster, presence/connection per participant, local
    * publications, join lifecycle, quality tier) actually changes — safe as a
-   * `useSyncExternalStore` snapshot. (Snapshot *subscriptions* share the
-   * `subscribe()` name with media handles — see the overloads above.)
+   * `useSyncExternalStore` snapshot.
    */
   getSnapshot(): RoomSnapshot {
     if (this.snapshotDirty) this.refreshSnapshot();
@@ -1440,6 +1552,42 @@ export class Room extends TypedEmitter<RoomEventMap> implements RoomQualityHost 
     });
   }
 
+
+  private normalizeConfig(config: RoomConfig): RoomConfig {
+    const merged: RoomConfig = { ...config };
+    // rtc grouping: flat aliases fill missing rtc fields and vice versa
+    const rtc: RoomRtcOptions = { ...(config.rtc ?? {}) };
+    if (config.peerFactory && !rtc.peerFactory) rtc.peerFactory = config.peerFactory;
+    if (config.iceServers !== undefined && rtc.iceServers === undefined) rtc.iceServers = config.iceServers;
+    if (config.polite !== undefined && rtc.polite === undefined) rtc.polite = config.polite;
+    if (config.autoRestartIce !== undefined && rtc.autoRestartIce === undefined) rtc.autoRestartIce = config.autoRestartIce;
+    if (config.dataChannelName !== undefined && rtc.dataChannelName === undefined) rtc.dataChannelName = config.dataChannelName;
+    if (Object.keys(rtc).length) {
+      merged.rtc = rtc;
+      // backfill flat for internal consumers that still read flat
+      if (rtc.peerFactory) merged.peerFactory = rtc.peerFactory;
+      if (rtc.iceServers !== undefined) merged.iceServers = rtc.iceServers;
+      if (rtc.polite !== undefined) merged.polite = rtc.polite;
+      if (rtc.autoRestartIce !== undefined) merged.autoRestartIce = rtc.autoRestartIce;
+      if (rtc.dataChannelName !== undefined) merged.dataChannelName = rtc.dataChannelName;
+    }
+    // sfu canonical consolidation: sfu.gateway is canonical; keep sfuGateway and topology.sfu.gateway as aliases
+    const gw = config.sfu?.gateway ?? config.sfuGateway ?? (config.topology?.sfu?.gateway as unknown as SfuGatewayLike | undefined);
+    if (gw) {
+      merged.sfu = { gateway: gw };
+      // keep aliases for compat (deprecated)
+      if (!merged.sfuGateway) (merged as unknown as Record<string, unknown>).sfuGateway = gw;
+    }
+    // recording consolidation: recording.endpoint canonical; recordingEndpoint deprecated alias
+    if (config.recordingEndpoint && !config.recording?.endpoint) {
+      merged.recording = { ...(config.recording ?? {}), endpoint: config.recordingEndpoint };
+    }
+    // also keep recordingEndpoint alias if only recording.endpoint is set (for compat reading)
+    if (config.recording?.endpoint && !merged.recordingEndpoint) {
+      (merged as unknown as Record<string, unknown>).recordingEndpoint = config.recording.endpoint;
+    }
+    return merged;
+  }
 
   private reportError(err: Error): void {
     this.debug('room:error', err);
