@@ -212,6 +212,26 @@ async function createRoomHandler(services: Services, ctx: RouteContext): Promise
   return { status: 201, body: { room } };
 }
 
+async function handleJoinInternal(
+  services: Services,
+  roomId: string,
+  input: { participantId: string; sessionId: string; displayName?: string; metadata?: Record<string, unknown> },
+  opts: { actorRole?: string; isModerator?: boolean } = {},
+): Promise<RouteResult> {
+  try {
+    const result = await joinRoom(services.store, roomId, input, opts);
+    services.relay?.broadcast(roomId, buildJoinEnvelope(roomId, input));
+    if (services.push) void services.push.notify(roomId, { event: 'join', participantId: input.participantId }).catch(() => {});
+    return { status: 200, body: { room: result.room, participant: result.participant, participants: result.participants } };
+  } catch (e) {
+    if ((e as { code?: string })?.code === 'forbidden' && String((e as Error).message).includes('lobby') && services.webhooks?.length) {
+      const { dispatchWebhooks } = await import('./webhooks.ts');
+      void dispatchWebhooks(services.webhooks, { event: 'lobby.waiting', roomId, payload: { participantId: input.participantId }, ts: Date.now() });
+    }
+    throw e;
+  }
+}
+
 async function joinHandler(services: Services, ctx: RouteContext): Promise<RouteResult> {
   const roomId = ctx.params['id']!;
   const body = asRecord(ctx.body) ?? {};
@@ -223,67 +243,17 @@ async function joinHandler(services: Services, ctx: RouteContext): Promise<Route
     | Record<string, unknown>
     | undefined;
 
-  // Token must be scoped to this room and bound to the joining participant.
   const claims = requireAuth(services, ctx, roomId, { asParticipantId: participantId });
-  // Enforce room policy: e2eeRequired requires claims.e2ee
   if (claims) {
     const roomForChecks = await services.store.getRoom(roomId);
     const policy = roomForChecks ? getRoomPolicy(roomForChecks) : {};
     if (policy.e2eeRequired && claims.e2ee !== true && claims.role !== 'admin') {
       throw errors.forbidden('Room requires E2EE-capable token (e2ee:true)');
     }
-    // Locked room: moderators/admins may join; handled in joinRoom via role/moderator check
     const isModerator = policy.moderatorIds?.includes(claims.participantId) ?? false;
-    try {
-      const result = await joinRoom(
-        services.store,
-        roomId,
-        { participantId, sessionId, displayName, metadata },
-        { actorRole: claims.role, isModerator },
-      );
-      services.relay?.broadcast(
-        roomId,
-        buildJoinEnvelope(roomId, { participantId, sessionId, displayName, metadata }),
-      );
-      if (services.push) void services.push.notify(roomId, { event: 'join', participantId }).catch(()=>{});
-      return {
-        status: 200,
-        body: { room: result.room, participant: result.participant, participants: result.participants },
-      };
-    } catch (e) {
-      if ((e as { code?: string })?.code === 'forbidden' && String((e as Error).message).includes('lobby') && services.webhooks?.length) {
-        const { dispatchWebhooks } = await import('./webhooks.ts');
-        void dispatchWebhooks(services.webhooks, { event: 'lobby.waiting', roomId, payload: { participantId }, ts: Date.now() });
-      }
-      throw e;
-    }
+    return handleJoinInternal(services, roomId, { participantId, sessionId, displayName, metadata }, { actorRole: claims.role, isModerator });
   }
-
-  // Open mode: still enforce locked/maxParticipants via joinRoom
-  try {
-    const result = await joinRoom(services.store, roomId, {
-      participantId,
-      sessionId,
-      displayName,
-      metadata,
-    });
-    // Broadcast the join so WS peers learn about the newcomer.
-    services.relay?.broadcast(
-      roomId,
-      buildJoinEnvelope(roomId, { participantId, sessionId, displayName, metadata }),
-    );
-    if (services.push) void services.push.notify(roomId, { event: 'join', participantId }).catch(()=>{});
-    return {
-      status: 200,
-      body: { room: result.room, participant: result.participant, participants: result.participants },
-    };
-  } catch (e) {
-    if ((e as { code?: string })?.code === 'forbidden' && String((e as Error).message).includes('lobby') && services.webhooks?.length) {
-      const { dispatchWebhooks } = await import('./webhooks.ts');
-      void dispatchWebhooks(services.webhooks, { event: 'lobby.waiting', roomId, payload: { participantId }, ts: Date.now() });
-    }
-    throw e;
-  }
+  return handleJoinInternal(services, roomId, { participantId, sessionId, displayName, metadata });
 }
 
 async function leaveHandler(services: Services, ctx: RouteContext): Promise<RouteResult> {
