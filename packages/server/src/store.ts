@@ -26,7 +26,7 @@
  */
 
 import type { Envelope } from '@mbsks/openrtc-protocol';
-import type { Participant, RecordingSession, Room, StoredSignal } from './types.ts';
+import type { BanEntry, LobbyEntry, Participant, Poll, RecordingSession, Room, StoredSignal } from './types.ts';
 
 /** A signal waiting to be persisted (seq is assigned by the Store). */
 export interface SignalInput {
@@ -41,8 +41,8 @@ export interface Store {
   // ---- rooms -------------------------------------------------------------
   getRoom(roomId: string): Promise<Room | null>;
   putRoom(room: Room): Promise<void>;
-  /** Optional: remove a room and its participants (used by closeRoom + tests). */
-  deleteRoom?(roomId: string): Promise<void>;
+  /** Remove a room and its participants (used by closeRoom + tests). */
+  deleteRoom(roomId: string): Promise<void>;
 
   // ---- participants ------------------------------------------------------
   getParticipant(roomId: string, participantId: string): Promise<Participant | null>;
@@ -59,6 +59,30 @@ export interface Store {
   putRecording(recording: RecordingSession): Promise<void>;
   listRecordings(roomId: string): Promise<RecordingSession[]>;
   getRecording(sessionId: string): Promise<RecordingSession | null>;
+  deleteRecording?(sessionId: string): Promise<void>;
+  listAllRecordings?(): Promise<RecordingSession[]>;
+
+  // ---- bans (per-room) ---------------------------------------------------
+  listBans?(roomId: string): Promise<BanEntry[]>;
+  getBan?(roomId: string, participantId: string): Promise<BanEntry | null>;
+  putBan?(roomId: string, entry: BanEntry): Promise<void>;
+  deleteBan?(roomId: string, participantId: string): Promise<void>;
+
+  // ---- lobby (waiting queue) ---------------------------------------------
+  listLobby?(roomId: string): Promise<LobbyEntry[]>;
+  putLobby?(roomId: string, participantId: string, enqueuedAt: number): Promise<void>;
+  deleteLobby?(roomId: string, participantId: string): Promise<boolean>;
+
+  // ---- hand queue (ordered) ----------------------------------------------
+  listHandQueue?(roomId: string): Promise<string[]>;
+  addHand?(roomId: string, participantId: string): Promise<void>;
+  removeHand?(roomId: string, participantId: string): Promise<void>;
+
+  // ---- polls -------------------------------------------------------------
+  listPolls?(roomId: string): Promise<Poll[]>;
+  getPoll?(roomId: string, pollId: string): Promise<Poll | null>;
+  putPoll?(roomId: string, poll: Poll): Promise<void>;
+  votePoll?(roomId: string, pollId: string, participantId: string, option: string): Promise<boolean>;
 }
 
 /** Shape a store implementation must satisfy — re-exported for convenience. */

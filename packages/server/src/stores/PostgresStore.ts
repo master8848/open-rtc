@@ -28,7 +28,7 @@
 import type { Pool, PoolClient } from 'pg';
 import type { Envelope } from '@mbsks/openrtc-protocol';
 import type { Store } from '../store.ts';
-import type { Participant, RecordingSession, Room, StoredSignal } from '../types.ts';
+import type { BanEntry, LobbyEntry, Participant, Poll, RecordingSession, Room, StoredSignal } from '../types.ts';
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS vidcall_rooms (
@@ -55,6 +55,33 @@ CREATE TABLE IF NOT EXISTS vidcall_recordings (
   recording_json JSONB NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_vidcall_recordings_room ON vidcall_recordings (room_id);
+CREATE TABLE IF NOT EXISTS vidcall_bans (
+  room_id        TEXT NOT NULL,
+  participant_id TEXT NOT NULL,
+  ban_json       JSONB NOT NULL,
+  expires_at     BIGINT,
+  PRIMARY KEY (room_id, participant_id)
+);
+CREATE INDEX IF NOT EXISTS idx_vidcall_bans_room ON vidcall_bans (room_id);
+CREATE TABLE IF NOT EXISTS vidcall_lobby (
+  room_id        TEXT NOT NULL,
+  participant_id TEXT NOT NULL,
+  enqueued_at    BIGINT NOT NULL,
+  PRIMARY KEY (room_id, participant_id)
+);
+CREATE TABLE IF NOT EXISTS vidcall_hand_queue (
+  room_id        TEXT NOT NULL,
+  participant_id TEXT NOT NULL,
+  enqueued_at    BIGINT NOT NULL,
+  PRIMARY KEY (room_id, participant_id)
+);
+CREATE TABLE IF NOT EXISTS vidcall_polls (
+  room_id   TEXT NOT NULL,
+  poll_id   TEXT NOT NULL,
+  poll_json JSONB NOT NULL,
+  PRIMARY KEY (room_id, poll_id)
+);
+CREATE INDEX IF NOT EXISTS idx_vidcall_polls_room ON vidcall_polls (room_id);
 `;
 
 type Queryable = Pick<Pool | PoolClient, 'query'>;
@@ -131,6 +158,10 @@ export class PostgresStore implements Store {
     await pool.query('DELETE FROM vidcall_participants WHERE room_id = $1', [roomId]);
     await pool.query('DELETE FROM vidcall_signals WHERE room_id = $1', [roomId]);
     await pool.query('DELETE FROM vidcall_recordings WHERE room_id = $1', [roomId]);
+    await pool.query('DELETE FROM vidcall_bans WHERE room_id = $1', [roomId]);
+    await pool.query('DELETE FROM vidcall_lobby WHERE room_id = $1', [roomId]);
+    await pool.query('DELETE FROM vidcall_hand_queue WHERE room_id = $1', [roomId]);
+    await pool.query('DELETE FROM vidcall_polls WHERE room_id = $1', [roomId]);
   }
 
   // ---- participants ------------------------------------------------------
@@ -227,6 +258,128 @@ export class PostgresStore implements Store {
       [sessionId],
     );
     return rows[0] ? (rows[0].recording_json as RecordingSession) : null;
+  }
+
+  async deleteRecording(sessionId: string): Promise<void> {
+    const pool = await this.connect();
+    await pool.query('DELETE FROM vidcall_recordings WHERE session_id = $1', [sessionId]);
+  }
+
+  async listAllRecordings(): Promise<RecordingSession[]> {
+    const pool = await this.connect();
+    const { rows } = await pool.query('SELECT recording_json FROM vidcall_recordings');
+    return rows.map((r) => r.recording_json as RecordingSession);
+  }
+
+  // ---- bans --------------------------------------------------------------
+  async listBans(roomId: string): Promise<BanEntry[]> {
+    const pool = await this.connect();
+    const now = Date.now();
+    await pool.query('DELETE FROM vidcall_bans WHERE room_id = $1 AND expires_at IS NOT NULL AND expires_at <= $2', [roomId, now]);
+    const { rows } = await pool.query('SELECT ban_json FROM vidcall_bans WHERE room_id = $1', [roomId]);
+    return rows.map((r) => r.ban_json as BanEntry);
+  }
+
+  async getBan(roomId: string, participantId: string): Promise<BanEntry | null> {
+    const pool = await this.connect();
+    const { rows } = await pool.query('SELECT ban_json, expires_at FROM vidcall_bans WHERE room_id = $1 AND participant_id = $2', [roomId, participantId]);
+    if (!rows[0]) return null;
+    const entry = rows[0].ban_json as BanEntry;
+    if (entry.expiresAt !== undefined && entry.expiresAt <= Date.now()) {
+      await pool.query('DELETE FROM vidcall_bans WHERE room_id = $1 AND participant_id = $2', [roomId, participantId]);
+      return null;
+    }
+    return entry;
+  }
+
+  async putBan(roomId: string, entry: BanEntry): Promise<void> {
+    const pool = await this.connect();
+    await pool.query(
+      `INSERT INTO vidcall_bans (room_id, participant_id, ban_json, expires_at) VALUES ($1, $2, $3, $4)
+       ON CONFLICT (room_id, participant_id) DO UPDATE SET ban_json = EXCLUDED.ban_json, expires_at = EXCLUDED.expires_at`,
+      [roomId, entry.participantId, JSON.stringify(entry), entry.expiresAt ?? null],
+    );
+  }
+
+  async deleteBan(roomId: string, participantId: string): Promise<void> {
+    const pool = await this.connect();
+    await pool.query('DELETE FROM vidcall_bans WHERE room_id = $1 AND participant_id = $2', [roomId, participantId]);
+  }
+
+  // ---- lobby -------------------------------------------------------------
+  async listLobby(roomId: string): Promise<LobbyEntry[]> {
+    const pool = await this.connect();
+    const { rows } = await pool.query('SELECT participant_id, enqueued_at FROM vidcall_lobby WHERE room_id = $1 ORDER BY enqueued_at', [roomId]);
+    return rows.map((r) => ({ participantId: r.participant_id as string, enqueuedAt: Number(r.enqueued_at) }));
+  }
+
+  async putLobby(roomId: string, participantId: string, enqueuedAt: number): Promise<void> {
+    const pool = await this.connect();
+    await pool.query(
+      `INSERT INTO vidcall_lobby (room_id, participant_id, enqueued_at) VALUES ($1, $2, $3)
+       ON CONFLICT (room_id, participant_id) DO UPDATE SET enqueued_at = EXCLUDED.enqueued_at`,
+      [roomId, participantId, enqueuedAt],
+    );
+  }
+
+  async deleteLobby(roomId: string, participantId: string): Promise<boolean> {
+    const pool = await this.connect();
+    const { rowCount } = await pool.query('DELETE FROM vidcall_lobby WHERE room_id = $1 AND participant_id = $2', [roomId, participantId]);
+    return (rowCount ?? 0) > 0;
+  }
+
+  // ---- hand queue --------------------------------------------------------
+  async listHandQueue(roomId: string): Promise<string[]> {
+    const pool = await this.connect();
+    const { rows } = await pool.query('SELECT participant_id FROM vidcall_hand_queue WHERE room_id = $1 ORDER BY enqueued_at', [roomId]);
+    return rows.map((r) => r.participant_id as string);
+  }
+
+  async addHand(roomId: string, participantId: string): Promise<void> {
+    const pool = await this.connect();
+    await pool.query(
+      `INSERT INTO vidcall_hand_queue (room_id, participant_id, enqueued_at) VALUES ($1, $2, $3)
+       ON CONFLICT (room_id, participant_id) DO NOTHING`,
+      [roomId, participantId, Date.now()],
+    );
+  }
+
+  async removeHand(roomId: string, participantId: string): Promise<void> {
+    const pool = await this.connect();
+    await pool.query('DELETE FROM vidcall_hand_queue WHERE room_id = $1 AND participant_id = $2', [roomId, participantId]);
+  }
+
+  // ---- polls -------------------------------------------------------------
+  async listPolls(roomId: string): Promise<Poll[]> {
+    const pool = await this.connect();
+    const { rows } = await pool.query('SELECT poll_json FROM vidcall_polls WHERE room_id = $1', [roomId]);
+    return rows.map((r) => r.poll_json as Poll);
+  }
+
+  async getPoll(roomId: string, pollId: string): Promise<Poll | null> {
+    const pool = await this.connect();
+    const { rows } = await pool.query('SELECT poll_json FROM vidcall_polls WHERE room_id = $1 AND poll_id = $2', [roomId, pollId]);
+    return rows[0] ? (rows[0].poll_json as Poll) : null;
+  }
+
+  async putPoll(roomId: string, poll: Poll): Promise<void> {
+    const pool = await this.connect();
+    await pool.query(
+      `INSERT INTO vidcall_polls (room_id, poll_id, poll_json) VALUES ($1, $2, $3)
+       ON CONFLICT (room_id, poll_id) DO UPDATE SET poll_json = EXCLUDED.poll_json`,
+      [roomId, poll.id, JSON.stringify(poll)],
+    );
+  }
+
+  async votePoll(roomId: string, pollId: string, participantId: string, option: string): Promise<boolean> {
+    const pool = await this.connect();
+    const { rows } = await pool.query('SELECT poll_json FROM vidcall_polls WHERE room_id = $1 AND poll_id = $2', [roomId, pollId]);
+    if (!rows[0]) return false;
+    const poll = rows[0].poll_json as Poll;
+    if (!poll.options.includes(option)) return false;
+    poll.votes[participantId] = option;
+    await pool.query('UPDATE vidcall_polls SET poll_json = $1 WHERE room_id = $2 AND poll_id = $3', [JSON.stringify(poll), roomId, pollId]);
+    return true;
   }
 
   /** Close the underlying pool (call when shutting down). */
