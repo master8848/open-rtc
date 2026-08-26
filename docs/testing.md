@@ -63,11 +63,18 @@ cd packages/kotlin && ./gradlew test
 
 ## CI
 
-No CI is configured right now — the repo is validated locally with
-`bun run build && bun run typecheck && bun run test && bun run lint` (plus the
-per-toolchain suites below). A workflow can be reintroduced when the repo goes
-public; the matrix it should cover: `node` (build/test/typecheck/lint + every
-backend vitest), `swift` (macos-14), `dart` (stable), `kotlin` (temurin 21).
+Local gate (always): `bun run build && bun run typecheck && bun run test && bun run lint` (plus per-toolchain suites below).
+
+CI matrix (`.github/workflows/ci.yml`, re-introduced Phase 4 — TanStack gates):
+
+| Job | Runner | Steps |
+|---|---|---|
+| `node` | `ubuntu-latest` Node 22 (pinned `mise.toml:10` `node = "22.22.2"`; `package.json:35` `engines >=18.18` allows ≥18.18 locally) | `bun install` → `bun run build` → `bun run typecheck` → `bun run test` → `bun run test:types` (`.test-d.tsx` multi-TS 5.5-5.9 placeholder) → `bun run test:build` (`publint --pack` + `attw --pack` stub) → `bun run size:core` (`size-limit` <15kB gz per `packages/core`) → backend loop `for p in packages/backend-*; do (cd "$p" && bun run test); done` → `changeset status --verbose` gate (`plans/07-roadmap.md:77` `version --dry-run` intent) |
+| `swift` | `macos-14` | `swift build && swift test` |
+| `dart` | `ubuntu-latest` dart `stable` | `dart pub get && dart analyze && dart test` |
+| `kotlin` | `ubuntu-latest` `actions/setup-java@v4` `temurin 21` | `./gradlew test` |
+
+Additional workflow stubs: `pr-preview.yml` (`pkg-pr-new` per-PR preview), `autofix.yml` (`oxfmt`/`oxlint --fix` autofix), `check:quality` (`sherif`/`knip`/`zizmor` stubs), `affected` (`nx affected`/`turbo` stub for `bun` workspaces). Engines drift fixed: `package.json:35` `>=18.18` is the floor; CI pins Node 22 via `mise.toml:10`; `CONTRIBUTING.md` local dev notes the pin.
 
 ## Adding a backend
 

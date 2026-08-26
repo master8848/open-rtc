@@ -26,7 +26,21 @@
     "release": "bun run build && changeset publish",
     "test:server": "node --conditions=development --test \"packages/server/test/*.test.ts\"",
     "test:server:pg": "VIDCALL_TEST_POSTGRES_URL=postgres://vidcall:vidcall@127.0.0.1:5433/vidcall_test node --conditions=development --test packages/server/test/PostgresStore.test.ts",
-    "test:server:mysql": "VIDCALL_TEST_MYSQL_URL=mysql://vidcall:vidcall@127.0.0.1:3307/vidcall_test node --conditions=development --test packages/server/test/MysqlStore.test.ts"
+    "test:server:mysql": "VIDCALL_TEST_MYSQL_URL=mysql://vidcall:vidcall@127.0.0.1:3307/vidcall_test node --conditions=development --test packages/server/test/MysqlStore.test.ts",
+    "verify:links": "bun run scripts/verify-links.ts",
+    "verify:budgets": "node scripts/verify-budgets.mjs",
+    "verify:docs": "bun run verify:links && node scripts/verify-budgets.mjs",
+    "llms:generate": "node scripts/llms-generate.mjs",
+    "test:types": "echo 'test:types placeholder — add .test-d.tsx with expectTypeOf; CI matrix expands to TS 5.5-5.9 (see docs/testing.md CI)'",
+    "test:build": "echo 'test:build placeholder — publint + attw (are-the-types-wrong --pack) stub; run publint --pack && attw --pack when deps added' && bun run build",
+    "size": "echo 'size placeholder — size-limit per packages/core (<15kB gz, see plans/05:111); add @size-limit/preset-small-lib when ready' && ls -lh packages/core/dist 2>/dev/null || echo 'no dist yet'",
+    "size:core": "bun run size",
+    "check:sherif": "echo 'sherif placeholder — npx sherif@latest when adopted (workspace dep hygiene)'",
+    "check:knip": "echo 'knip placeholder — npx knip --dependencies when adopted (unused exports/deps)'",
+    "check:zizmor": "echo 'zizmor placeholder — zizmor .github/workflows when adopted (workflow audit)'",
+    "check:quality": "bun run check:sherif && bun run check:knip && bun run check:zizmor",
+    "affected": "echo 'affected placeholder — nx affected / turbo run build --filter=... stub for bun workspaces; currently bun run build builds all'",
+    "changeset:dry-run": "changeset status --verbose 2>&1 | head -n 80; echo 'dry-run gate: changeset status (plans/07-roadmap.md:77 version --dry-run intent)'"
   },
   "engines": {
     "node": ">=18.18"

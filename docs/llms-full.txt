@@ -1,0 +1,1811 @@
+# vidcall — llms-full.txt
+> Generated: 2026-08-26T10:36:57.377Z | Concatenated docs with .md URL parity
+
+---
+## Getting started with vidcall
+Source: docs/getting-started.md | URL: https://vidcall.dev/docs/getting-started | Last-Modified: 2026-08-26T10:35:52.896Z
+
+# Getting started with vidcall
+
+This guide takes you from zero to a real video call: a tiny signaling server,
+a React client, and the first-run gotchas. (For the 30-second tour, see the
+[root README](../README.md).)
+
+## The mental model
+
+Three moving parts, and you only write code for one of them:
+
+```
+your app  (~20 lines of vidcall code)
+   │
+   └── Room ──────────────── one per person joining: create it, join it,
+         │                    throw it away when they leave
+         │
+         ├── transport adapter ──► signaling relay ──► everyone else's Room
+         │    small JSON messages only: "I'm here", "here's my offer",
+         │    "try this network address" (ICE)
+         │
+         └── direct peer-to-peer connections (WebRTC mesh)
+              the actual camera/mic streams flow browser → browser
+```
+
+Signaling is just the introductions. vidcall sends join/offer/ICE messages
+through whatever channel you picked; after that, video and audio go directly
+between browsers — the relay never carries the media itself. The engine also
+handles everything fiddly about WebRTC: negotiation races when two people
+call each other at once ("glare"), out-of-order messages, renegotiation when
+someone turns a camera on mid-call, and reconnects.
+
+## Before you start
+
+```sh
+git clone <repo-url> vidcall && cd vidcall
+bun install && bun run build
+```
+
+Nothing is published to npm yet, so apps consume the packages straight from
+this repo (workspace / `file:` dependencies). You'll also need a Supabase
+project for the snippets below (free tier is fine) — or skip Step 1 entirely
+with the zero-server trick at the end of it.
+
+## Step 1 — a signaling server in ~10 lines
+
+`@mbsks/openrtc-server` ships rooms, a REST API, and a WebSocket relay. The default
+store keeps everything in memory — perfect for a first run:
+
+```ts
+import express from 'express';
+import { InMemoryStore, attachWebSocketRelay, createServices } from '@mbsks/openrtc-server';
+import { createExpressRouter } from '@mbsks/openrtc-server/express';
+
+const services = createServices({ store: new InMemoryStore() });
+const app = express();
+app.use('/vidcall', createExpressRouter(services));
+const server = app.listen(3000, () => console.log('vidcall on :3000'));
+attachWebSocketRelay(server, services); // WS relay at /ws?roomId=...
+```
+
+That's a whole signaling backend: clients talk HTTP to `/vidcall/*` and
+WebSockets to `ws://localhost:3000/ws?roomId=...`.
+
+> This runs in "legacy open mode": anyone can join any room. Fine for local
+> dev, not for production — the server supports HMAC room tokens; see
+> [Authentication & tokens](../packages/server/README.md#authentication--tokens).
+
+No server at all? The SQLite adapter uses BroadcastChannel, so two tabs of one
+browser can call each other with zero infrastructure — that's exactly what
+[`examples/vanilla`](../examples/vanilla) does:
+
+```sh
+node examples/vanilla/build.mjs && npx serve examples/vanilla
+```
+
+## Step 2 — a React client
+
+The full pattern lives in [`examples/react/src/App.tsx`](../examples/react/src/App.tsx).
+Here is the shape of it, piece by piece.
+
+### Create the Room once
+
+A `Room` is disposable: after `leave()` it cannot rejoin, so key instances by
+`(roomId, selfId)` and make a new one when needed. Give each page load a
+stable id so React StrictMode remounts don't look like a second person:
+
+```tsx
+import { useState, useEffect } from 'react';
+import { createClient } from '@supabase/supabase-js';
+import { Room } from '@mbsks/openrtc-core';
+import { SupabaseBackend } from '@mbsks/openrtc-backend-supabase';
+
+// One identity per page load — survives StrictMode remounts.
+const selfId = `user-${Math.random().toString(36).slice(2, 8)}`;
+
+function useMyRoom(): Room | null {
+  const [room, setRoom] = useState<Room | null>(null);
+  useEffect(() => {
+    const next = new Room({
+      roomId: 'first-call',
+      selfId,
+      displayName: 'Guest',
+      transport: new SupabaseBackend({
+        client: createClient(
+          import.meta.env.VITE_SUPABASE_URL,
+          import.meta.env.VITE_SUPABASE_ANON_KEY,
+        ),
+      }),
+    });
+    setRoom(next);
+    return () => void next.leave();
+  }, []);
+  return room;
+}
+```
+
+### Join safely with `useJoin`
+
+Don't call `room.join()` inside your own effect — React StrictMode mounts,
+unmounts, and remounts every component once in development, which starts two
+joins and can leave a half-joined session behind. The `useJoin` hook owns the
+lifecycle: join on mount, abort an in-flight join on unmount, leave only on a
+real unmount. It comes from `@mbsks/openrtc-react` alongside two snapshot hooks:
+
+```tsx
+import { useJoin, useParticipants, useRoomState } from '@mbsks/openrtc-react';
+
+function Call({ room }: { room: Room }) {
+  useJoin(room); // StrictMode-safe auto-join
+  const state = useRoomState(room); // status: 'new' | 'joining' | 'joined' | 'closed'
+  const participants = useParticipants(room);
+
+  return (
+    <ul>
+      {participants.map((p) => (
+        <li key={p.id}>{p.displayName ?? p.id}</li>
+      ))}
+    </ul>
+  );
+}
+```
+
+### Show remote video
+
+Remote tracks arrive automatically (mesh = everyone subscribes to everyone).
+Attachment to `<video>` elements is imperative, so it goes in an effect with
+plain event listeners — snapshot hooks handle state, events handle media:
+
+```tsx
+function RemoteVideos({ room }: { room: Room }) {
+  const videosRef = useRef(new Map<string, HTMLVideoElement>());
+
+  useEffect(() => {
+    const onTrack = ({ participant, track }: { participant: { id: string }; track: MediaStreamTrack }) => {
+      let video = videosRef.current.get(participant.id);
+      if (!video) {
+        video = document.createElement('video');
+        video.autoplay = true;
+        video.playsInline = true;
+        document.body.append(video);
+        videosRef.current.set(participant.id, video);
+      }
+      const stream = (video.srcObject as MediaStream | null) ?? new MediaStream();
+      stream.addTrack(track);
+      video.srcObject = stream;
+    };
+    room.on('track', onTrack);
+    return () => room.off('track', onTrack);
+  }, [room]);
+
+  return null;
+}
+```
+
+### Publish your camera
+
+Getting your camera out is plain browser API — vidcall adds no wrapper. Grab
+a track, then hand it to the room:
+
+```tsx
+async function shareCamera(room: Room): Promise<void> {
+  const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+  // Show yourself too:
+  document.querySelector<HTMLVideoElement>('#self')!.srcObject = stream;
+  // Send camera + mic to everyone:
+  await room.publish(stream.getVideoTracks()[0]!, { source: 'camera' });
+  for (const audio of stream.getAudioTracks()) await room.publish(audio, { source: 'microphone' });
+}
+```
+
+Run the server from Step 1 plus this client in two tabs: both join
+`first-call`, cameras come on, and there is your call.
+
+## No React? Vanilla notes
+
+Everything above works without any framework — the hooks are a thin layer over
+core primitives you can use directly:
+
+- `new Room({ roomId, selfId, transport })`, then `await room.join()`.
+- `room.on('track', ...)`, `room.on('participant-joined', ...)`, etc. — typed
+  event emitters.
+- `room.publish(track)` / `room.unpublish(publication)` / `room.leave()`.
+- `room.subscribe(listener)` + `room.getSnapshot()` if you want React-style
+  state updates elsewhere.
+
+A complete single-file example — including mute toggles, quality monitoring,
+and recording — is [`examples/vanilla/main.ts`](../examples/vanilla/main.ts).
+
+## Common first-run gotchas
+
+1. **The camera needs localhost or HTTPS.** Browsers only grant
+   `getUserMedia` on secure origins: `http://localhost` counts, `http://192.168.x.x`
+   does not. If the camera button silently fails, check how you're serving the page.
+2. **Start the relay before joining.** Clients discover each other through
+   signaling; if the server isn't up (or Supabase credentials are missing),
+   joining stalls or errors. Watch `state.status` and `room.on('error', ...)`.
+3. **StrictMode double-mounts are expected.** If you see duplicate joins or
+   ghost participants in dev, you're probably calling `room.join()` by hand —
+   switch to `useJoin`. And remember rooms are single-use: create a fresh
+   `Room` instead of reusing a left one.
+4. **Two different networks need STUN.** Two tabs on one machine connect with
+   no servers at all. Across Wi-Fi ↔ cellular or office networks, pass
+   `iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]` to the `Room`
+   config so peers can find a path to each other.
+5. **Nothing is on npm yet.** Install commands like `npm i @mbsks/openrtc-core`
+   won't resolve until the first release; consume from this repo meanwhile
+   (see the root README's quick start).
+
+## Where to go next
+
+- **Adaptive quality** — pass `quality: { intervalMs }` to the `Room` config
+  and listen for `quality:changed` / `quality:warning`: the engine samples
+  stats and moves down/up a tier ladder. The pure policy engine lives in
+  [`packages/quality`](../packages/quality/README.md).
+- **Controls & extras** — mute, camera, screen share, raise-hand, reactions,
+  chat: the `ControlsManager` class wires these onto a room (see
+  [`docs/features/controls.md`](features/controls.md)).
+- **Recording** — `room.recording` composites local + remote streams into a
+  MediaRecorder session and can upload chunks to `@mbsks/openrtc-server`, where
+  disk or S3-compatible storage keeps them.
+- **Bigger calls** — the mesh is comfortable around 2–4 participants. Beyond that enable auto SFU: `new Room({ roomId, selfId, transport, topology: { topology: 'auto', autoThreshold: 4, sfu: { gateway } } })` (`packages/core/src/media/topology.ts:50`) — `TopologyController` migrates `mesh→SFU` when participant count exceeds the threshold via `SfuMediaTransport` (`docs/media.md:8`, `plans/03-media-topology.md:50`); manual `room.setTopology('mesh'|'sfu'|'auto')`. See [`packages/sfu-gateway`](../packages/sfu-gateway/README.md) (mediasoup reference adapter).
+- **Your own backend/transport** — implement the `SignalingTransport`
+  interface from [`@mbsks/openrtc-transport`](../packages/transport/README.md),
+  validate with the shared test suite (`runAdapterTestSuite`), and check wire
+  format against [`protocol/fixtures`](../protocol/fixtures).
+- **Mobile** — Kotlin, Swift, and Dart bindings speak the same protocol; see
+  their READMEs under [`packages/`](../packages).
+
+---
+## vidcall — Architecture Blueprint (synthesized from research)
+Source: docs/architecture.md | URL: https://vidcall.dev/docs/architecture | Last-Modified: 2026-08-25T17:54:22.650Z
+
+# vidcall — Architecture Blueprint (synthesized from research)
+
+The big picture, in plain words: each person's app creates a `Room`, which
+finds the other callers through a messaging channel you choose — Supabase,
+Postgres, your own server, anything that can pass small JSON messages along.
+Once introductions are made, browsers connect directly to each other and the
+actual video flows peer-to-peer. All the fiddly parts of WebRTC — negotiation
+races, message reordering, reconnects, quality drops — are handled inside the
+engine, not in your app code. The rest of this document is the technical
+blueprint of how that works.
+
+> Status: draft v1, synthesized 2026-08-11 from `docs/research/webrtc-js.md`, `docs/research/backend-adapters.md`, `docs/research/mobile-bindings.md`. All policy from `CONTRIBUTING.md` applies (14-day dep age, exact pins, in-workspace sub-libs, ≥2 impls per interface, open-source docs).
+
+## 1. Positioning
+
+`vidcall` = a JS/TS library that lets vibe coders add video calling + reactions + a simple Zoom clone to any app in minutes, with the signaling/presence/state layer **pluggable** across backends (Supabase, Convex, Postgres, SQLite/libSQL, Appwrite, Firebase, + custom), and **native bindings** in Kotlin, Swift, Dart(Flutter) speaking the same wire protocol.
+
+## 2. High-level architecture
+
+```
+App (vibe coder) ── vidcall public API (Room / LocalParticipant / RemoteParticipant / events)
+        │
+vidcall engine (in-workspace, dependency-light)
+ ├─ SignalingTransport (adapter interface) ← backends: supabase | convex | firebase | appwrite | postgres | sqlite | custom
+ ├─ PeerConnectionManager (mesh core: perfect negotiation, trickle ICE, renegotiation, ICE restart)
+ ├─ AdaptiveQualityController (stats monitor → policy ladder → setParameters/applyConstraints/layer switch)
+ ├─ DeviceCapability (hardwareConcurrency / deviceMemory / screen → initial caps)
+ ├─ DataChannelBus (reactions / chat / control) + PresenceBus (backend-native)
+ └─ hooks: RecordingHook, ScreenShare, KeyframeRequester
+        │
+optional: SfuGateway adapter (generic SFU protocol; reference impl; mediasoup/LiveKit integration guides)
+          ^ landed: MediaTransport seam (mesh vs SFU via single PC), TopologyController auto mesh→SFU at threshold 4, MediaProcessor chain + active-speaker; Room wires SfuGateway via SfuMediaTransport (sfu `SfuPayload` envelopes → SfuSession, offer/answer/ice → handleOffer/handleAnswer/addIceCandidate)
+```
+
+## 3. Core decisions (from research)
+
+| #   | Decision                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | Rationale                                                                                                                                                                                                                                                                                                                           |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| D1  | **Zero runtime deps in core** — build on platform `RTCPeerConnection`                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | simple-peer stale (2023), peerjs cloud server not for prod; platform API is enough with perfect negotiation                                                                                                                                                                                                                         |
+| D2  | **Mesh = core; SFU = optional `SfuGateway` interface** (not bundled). **Status:** landed — `MediaTransport` seam + `MeshMediaTransport`/`SfuMediaTransport`, `TopologyController` auto mesh→SFU (threshold 4, manual downgrade via `room.setTopology('mesh')`), `MediaProcessor` chain (e2ee last, Safari fallback), active-speaker; `packages/sfu-gateway` interface + `SfuRouter` + mediasoup adapter + tests green (see §4.1); `Room` wiring done (media `sfu` envelope → `SfuMediaTransport.handleSfuEnvelope` → `SfuSession`, `publish({simulcast,svc,codecPreferences})` + `setPreferredLayers`/`requestKeyframe`/`setTile`) |                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | mesh works over any dumb pub/sub, fine for 2-4 participants ("simple Zoom clone" tier); SFU add-on via reference impl + mediasoup/LiveKit guides                                                                                                                                                                                    |
+| D3  | **JSON envelope over backend pub/sub**: `{v,type,roomId,senderId,sessionId,ts,seq}`; types `join/leave/offer/answer/ice/presence/reaction/chat/screen-share/quality-warning` + `sfu` (actions `publish/subscribe/layer-change/keyframe-request/leave`, §4.1)                                                                                                                                                                                                                                                                                                                                                       | one channel per room; engine owns ordering/idempotency/glare so backends stay dumb                                                                                                                                                                                                                                                  |
+| D4  | **Backend adapters**: unified `SignalingBackend` TS interface (join/leave/emit/onMessage/onPresence/setPresence/dispose)                                                                                                                                                                                                                                                                                                                                                                                                                       | ≥2 impls per interface policy; matrix: Supabase (native broadcast+presence, default), Firebase RTDB (best ceiling, onDisconnect), Convex (realtime), Appwrite (one-way → doc-write signaling + heartbeat presence), Postgres (LISTEN/NOTIFY + 7KB chunker + ws bridge), SQLite/libSQL (same-device BroadcastChannel; dev/test only) |
+| D5  | **Adaptive quality, 3 layers**: (a) device profile at join → initial caps; (b) native GCC/transport-CC (RFC 8888) → `availableOutgoingBitrate`; (c) policy engine on tier ladder with hysteresis (instant downgrade, 10s-stable upgrade), reacting to RTT/loss/bitrate + `qualityLimitationReason:'cpu'` + `totalEncodeTime` slope; applies `maxBitrate`/`scaleResolutionDownBy`/`degradationPreference`/simulcast layer drops; Safari falls back to single-stream H.264. Emits `quality:changed`/`quality:warning` `{from,to,reason:'network' | 'cpu'                                                                                                                                                                                                                                                                                                                               | 'device' | 'manual' | 'recovery',direction}` | network speed × device capability, with user-visible warnings |
+| D6  | **Reactions/presence/chat/screen-share/recording**: backend pub/sub + one typed DataChannel (SCTP RFC 8831/8832); presence backend-native; recording = hook interface (MediaRecorder default, SFU-egress later)                                                                                                                                                                                                                                                                                                                                | zero extra infra                                                                                                                                                                                                                                                                                                                    |
+| D7  | **Node test peers**: `@roamhq/wrtc@0.10.0` (native, real encode) + `werift@0.24.4` (pure TS, CI-friendly); policy engine pure (consumes `RTCStatsSnapshot`) → unit-testable without WebRTC                                                                                                                                                                                                                                                                                                                                                     | CI without browsers/native addons                                                                                                                                                                                                                                                                                                   |
+| D8  | **Shared wire protocol**: one versioned JSON envelope defined as **JSON Schema + quicktype codegen → TS/Kotlin/Swift/Dart** (zero runtime deps); protobuf rejected (overkill for signaling)                                                                                                                                                                                                                                                                                                                                                    | single contract across 4 languages                                                                                                                                                                                                                                                                                                  |
+| D9  | **Bindings**: Kotlin `io.getstream:stream-webrtc-android:1.3.10`, iOS community WebRTC pod `150.0.0`, Flutter `flutter_webrtc:1.5.2` (NOT webrtc_flutter — 404). Official backend SDKs: Supabase/Firebase/Appwrite on all 3 platforms; Convex has Kotlin+Swift but NO Dart (raw-WebSocket fallback); Postgres/SQLite need a TS-side signaling relay                                                                                                                                                                                            | verified publish dates ≥14d (2026-08-11)                                                                                                                                                                                                                                                                                            |
+| D10 | **Testing**: L0 protocol conformance with shared fixtures (merge gate) → L1 unit → L2 cross-language integration; one `macos` runner covers iOS simulator + Android emulator (CI deferred — run locally for now)                                                                                                                                                                                                                                                                                                                                                 | shared matrix mandated by CONTRIBUTING.md                                                                                                                                                                                                                                                                                           |
+| D11 | **Publishing**: Maven Central (Central Portal), SwiftPM-first (CocoaPods trunk going read-only ~2026), pub.dev verified publisher                                                                                                                                                                                                                                                                                                                                                                                                              | open-source distribution                                                                                                                                                                                                                                                                                                            |
+
+## 4. Monorepo layout (npm workspaces)
+
+```
+vidcall/
+├── packages/
+│   ├── core/                  # engine: Room, PeerConnectionManager, protocol types (TS, no runtime deps)
+│   ├── quality/               # AdaptiveQualityController + DeviceCapability (pure, RTCStatsSnapshot in/out)
+│   ├── transport/             # SignalingTransport interface + helpers (chunker, reorder, heartbeat, ICE coalescer)
+│   ├── backend-supabase/      # adapter (default)
+│   ├── backend-convex/        # adapter
+│   ├── backend-firebase/      # adapter
+│   ├── backend-appwrite/      # adapter (doc-write signaling + heartbeat presence)
+│   ├── backend-postgres/      # adapter (LISTEN/NOTIFY + chunker + optional ws bridge)
+│   ├── backend-sqlite/        # adapter (libSQL; same-device BroadcastChannel; dev/test mode)
+│   ├── sfu-gateway/           # SfuGateway interface + SfuRouter + mediasoup reference adapter (Room wiring via MediaTransport — see docs/media.md)
+│   ├── kotlin/                # Kotlin binding (mirrors core, same protocol)
+│   ├── swift/                 # Swift binding
+│   └── dart/                  # Dart/Flutter binding
+├── protocol/                  # JSON Schema + quicktype codegen (single source of truth)
+├── examples/                  # vanilla (sqlite BroadcastChannel), react+supabase, express server (+ README)
+├── e2e/                       # L2 integration + benchmarks (per-backend)
+└── docs/                      # research/ (done), api/, guides/
+```
+
+### 4.1 SFU path (`packages/sfu-gateway`)
+
+Landed (scaffolding milestone; `npm run build` + tests green):
+
+```
+packages/sfu-gateway/
+├── src/
+│   ├── sfu-gateway.ts        # SfuGateway/SfuSession contract (media-agnostic)
+│   ├── sfu-router.ts         # protocol sfu-envelope handling, pure logic
+│   ├── mediasoup-adapter.ts  # reference SfuGateway on a mediasoup Router
+│   ├── sdp.ts                # minimal SDP<->mediasoup translation
+│   └── events.ts             # typed emitter (in-workspace, leaf package)
+└── test/                     # unit (fake gateway/router/transport) +
+                              # env-gated real-worker integration
+```
+
+- **Contract**: `SfuGateway.join(roomId, participantId)` → `SfuSession` with
+  `publishTrack` / `subscribe` / `setPreferredLayers` / `requestKeyframe` /
+  `handleOffer` / `handleAnswer` / `addIceCandidate` / `leave`, plus
+  `onTrack` events and `close(roomId?)`. SDP offers/answers and ICE
+  candidates pass through untouched — adapters own the translation.
+- **Envelope flow** (`SfuRouter.handle`, one per room): `sfu` envelopes
+  (`publish` / `subscribe` / `layer-change` / `keyframe-request` / `leave`,
+  protocol/schema.json `SfuPayload`) are validated against room membership,
+  then forwarded to the sender's session; `offer`/`answer`/`ice` envelopes
+  are consumed only when `targetSenderId` is the SFU participant id
+  (default `'sfu'`). Everything else (mesh chat/reactions/presence) keeps
+  flowing through the same backend untouched.
+- **Mediasoup adapter** (reference): verified against the pinned mediasoup
+  `3.23.1` API (`.d.ts`) and a real worker — `transport.connect({dtlsParameters})`
+  only (no remote-ICE input), receiver-driven `consumer.requestKeyFrame()`,
+  `ProducerOptions.keyFrameRequestDelay` via
+  `PublishOptions.keyFrameRequestDelayMs`, `setPreferredLayers` maps
+  `l/m/h` → spatial layers. `mediasoup` is a pinned devDependency
+  (type-only import; runtime `dist` never loads the native module; worker
+  needs Node >= 22). The integration test
+  (`VIDCALL_MEDIASOUP_INTEGRATION=1`) passes against a real worker; unit
+  tests run without one.
+- **Room wiring landed (03-media-topology)**: `Room` selects a `MediaTransport` — `MeshMediaTransport` (N `PeerConnectionManager`s, extracted from Room) or `SfuMediaTransport` (single PC to SFU via `SfuSession` — `publishTrack`/`subscribe`/`setPreferredLayers`/`requestKeyframe` + `handleOffer`/`handleAnswer`/`addIceCandidate`). `Room` delegates `publish`/`unpublish`/`subscribe`/`restartIce`/`getPeerConnections`/`getSenders` to the transport. `sfu` envelopes are routed via `SfuMediaTransport.handleSfuEnvelope` (wire `SfuPayload` → `SfuSession`); `offer`/`answer`/`ice` to/from SFU via `handleEnvelope`. `TopologyController` auto mesh→SFU when participant count exceeds threshold (default 4); manual `room.setTopology('mesh'|'sfu'|'auto')`. `MediaProcessor` chain (`denoise`→`background`→`e2ee`) with `room.useProcessor()` (E2EE last, Safari fallback warning). Simulcast/SVC/codecPreferences via `Room.publish({simulcast,svc,codecPreferences})` + `setPreferredLayers`/`requestKeyframe`/`setTile`. Active-speaker foundation polls `inbound-rtp.audioLevel`.
+
+## 5. Build order (tomorrow, mapped to Reminders plan)
+
+1. `protocol/` JSON Schema + codegen → core types (V2 scaffold, V3 core API)
+2. `core/` engine: perfect negotiation + trickle ICE + renegotiation (V3)
+3. `transport/` interface + helpers; `backend-supabase` first (V4), then postgres → convex → firebase → appwrite → sqlite
+4. `quality/` policy engine + device profile + events (V5), Zoom-clone features on top (V6)
+5. Bindings Kotlin → Swift → Dart mirroring core (V7-V9), L0 fixtures + CI matrix (V10)
+
+## 6. Open items (from research, verify at implementation)
+
+- Re-verify pin publish dates (packages ship weekly); Supabase per-publisher broadcast FIFO; Ably/Firebase/Turso pricing numbers.
+- SFU: `packages/sfu-gateway` wired via `SfuMediaTransport` (see docs/media.md); LiveKit adapter as second impl remains open.
+- Postgres NOTIFY: confirm relay design (browser clients need ws bridge; keep LISTEN on dedicated `pg` client, NOT pool).
+- iOS Safari: no getDisplayMedia / no send-side simulcast / no VP9-AV1 / AEC quirks → capability-aware warnings in docs + engine.
+
+## 7. Risks & mitigations
+
+| Risk                                          | Mitigation                                                            |
+| --------------------------------------------- | --------------------------------------------------------------------- |
+| Backend rate limits kill signaling under load | chunker + coalesce ICE; rate-limit emits per adapter; document limits |
+| TURN cost/complexity                          | mesh default; document coTURN setup; SFU path for scale               |
+| Native binding drift from JS core             | L0 conformance fixtures as merge gate; codegen from protocol/         |
+| Supply-chain                                  | 14-day age gate re-run at publish; lockfiles committed                |
+
+---
+## Transport — signaling and horizontal scale
+Source: docs/transport.md | URL: https://vidcall.dev/docs/transport | Last-Modified: 2026-08-25T17:47:23.897Z
+
+# Transport — signaling and horizontal scale
+
+Current behavior for `packages/transport/src/*`, `packages/server/src/relays/*`, `packages/server/src/stores/*`, `packages/server/src/ws.ts`.
+
+`SignalingTransport` contract is `join(roomId,self)/leave/emit(envelope)/onMessage/onPresence/setPresence/dispose` with `TransportMetadata name/ordering/maxPayloadBytes` (`packages/transport/src/types.ts:44`, `packages/server/src/services.ts`). `Room` accepts `transport: SignalingTransport | SignalingTransport[]` where array sugar builds `CompositeTransport` (`packages/transport/src/composite.ts`).
+
+Client resilience: `CompositeTransport` (`packages/transport/src/composite.ts:25`) emits via `primary` then `fallback` on error and dedupes `onMessage` by `sessionId:seq` via `OrderedMessageBuffer` (`packages/transport/src/internal/reorder.ts:30`); `ReconnectingTransport` (`packages/transport/src/reconnecting.ts`) retries with exponential backoff, re-joins and replays via `listSignalsSince(lastSeq)` and emits `connection-state: reconnecting|reconnected|failed`; `IceCoalescer` (`packages/transport/src/internal/iceCoalescer.ts`) batches trickle candidates `coalesceIceMs 50-100ms` before `emit`; `WebTransportSignalingTransport` (`packages/transport/src/web-transport.ts`) is unordered datagrams with WS fallback. `RoomConfig.reconnect` delegates to `ReconnectingTransport` without `Room` changes.
+
+Relay: `Relay` (`packages/server/src/services.ts:22`) is `attach(roomId,socket,senderId,sessionId)/detach/broadcast(roomId,envelope,{exceptSenderId})/clientCount`. Default `RoomHub` (`packages/server/src/ws.ts:59`) is `Map<room,Set<Socket>>` with `WeakMap` meta; pluggable `RedisRelay` (`packages/server/src/relays/redis-relay.ts:45`) publishes to `vidcall:room:{roomId}` via `pub/sub` `ioredis`/`redis` peer dep and fans out to local `RoomHub`, subscribing per-room on first `attach` and unsubscribing when `clientCount===0`; `PostgresNotifyRelay` (`packages/server/src/relays/postgres-notify-relay.ts`) uses one dedicated `pg.Client` `LISTEN`+`NOTIFY` with 7 KB `Chunker` (`packages/transport/src/internal/chunker.ts:53`) reassembly. Wire `attachWebSocketRelay(server, services, { relay })` (`packages/server/src/ws.ts:122`) and set `services.relay = relay` so HTTP `handleSignal` (`packages/server/src/core.ts:269`) calls `relay.broadcast` on every instance.
+
+Store: `Store` contract (`packages/server/src/store.ts:22`) is ~10 methods `getRoom/putRoom/deleteRoom, getParticipant/.../listParticipants, putSignal/listSignals, putRecording/...`. `InMemoryStore` (`packages/server/src/stores/InMemoryStore.ts:14`) is in-process; `PostgresStore`/`MySQLStore`/`SqliteStore` exist and `PostgresStore` holds `pool`+`listenerClient` for `LISTEN`; `RedisStore` (`packages/server/src/stores/RedisStore.ts`) uses `ZSET/XRANGE`+TTL. JS/Bun relay handles 10k msg/s/core; Rust sidecar is deferred until benchmarked need.
+
+Limits: per-backend ceilings (`TransportMetadata.maxPayloadBytes`, `docs/limits.md` table) are WS `8MB` `seq-required` with `IceCoalescer`, Supabase `~256KB` `guaranteed`, Firebase `~256KB`, Convex `~1MB`, Postgres `NOTIFY` `7KB` chunked, SQLite local, Redis `~512MB`, WebTransport `~1-64KB` unordered.
+
+Related: `docs/limits.md` (full matrix, chunker, coalescer), `packages/server/README.md` (Store, relay wiring), `docs/plans/archive/04-transport-signaling-scale.md`.
+
+---
+## Media — transport seam, topology, processors
+Source: docs/media.md | URL: https://vidcall.dev/docs/media | Last-Modified: 2026-08-25T17:47:05.897Z
+
+# Media — transport seam, topology, processors
+
+Current behavior for `packages/core/src/media/*`, `packages/sfu-gateway/*`, `packages/core/src/e2ee.ts`.
+
+`Room` is topology-agnostic and delegates `publish`/`unpublish`/`subscribe`/`restartIce`/`getPeerConnections`/`getSenders` to a `MediaTransport` (`packages/core/src/media/media-transport.ts:47`). `MediaTransportKind` is `mesh|sfu|whip|whep|custom`.
+
+`MeshMediaTransport` (`packages/core/src/media/mesh-transport.ts`) holds `Map<string,PeerEntry{pc,manager,bus}>`, `peerFactory` injection, `PeerConnectionManager` perfect negotiation / trickle ICE / renegotiation / `restartIce`. This is the extracted prior `Room.ensurePeer` path.
+
+`SfuMediaTransport` (`packages/core/src/media/sfu-transport.ts`) holds one `RTCPeerConnection` to an `SfuSession` (`packages/sfu-gateway/src/sfu-gateway.ts:146`) obtained via `SfuGateway.join` (`packages/sfu-gateway/src/sfu-gateway.ts:109`); `publishTrack`/`subscribe`/`setPreferredLayers`/`requestKeyframe`/`handleOffer`/`handleAnswer`/`addIceCandidate` map to `SfuSession` methods; `sfu` envelopes are routed via `handleSfuEnvelope` → `SfuSession` then `SfuRouter.handle` (`packages/sfu-gateway/src/sfu-router.ts:179`) validates `isParticipant` (`packages/sfu-gateway/src/sfu-router.ts:126`) and `sfuParticipantId='sfu'`.
+
+`WhipMediaTransport` (`packages/core/src/media/whip-transport.ts:35`) `POST` SDP offer to `whipUrl` (default `POST /whip/:roomId`) and consumes answer; `WhepMediaTransport` (`packages/core/src/media/whep-transport.ts`) is the egress counterpart `POST /whep/:roomId`. SFU maintains `PlainTransport`/`DirectTransport` for WHIP/WHEP (`packages/server/src/egress.ts`, `packages/sfu-gateway/src/mediasoup-adapter.ts`).
+
+`TopologyController` (`packages/core/src/media/topology.ts:11`) type `Topology mesh|sfu|auto` default `auto` with `autoThreshold` default `4`. `shouldBeSfu`/`maybeMigrate` (`packages/core/src/media/topology.ts:39`) flips `mesh→sfu` when participant count exceeds threshold via `switchTransport('sfu')` re-publishing local tracks; manual `room.setTopology('mesh'|'sfu'|'auto')` (`packages/core/src/room.ts`) overrides. Downgrade `sfu→mesh` is manual in v1.
+
+`ProcessorChain` (`packages/core/src/media/processor.ts:20`) orders `MediaProcessor` by `denoise(0)→background(1)→custom(2)→e2ee(3)`; `Room` exposes `useProcessor(p)` (`packages/core/src/room.ts:742`); heavy processors are lazy imports. `e2ee` last is enforced; missing `RTCRtpScriptTransform`/insertable streams warns `e2ee:unsupported` (`packages/core/src/media/processor.ts:32`, `packages/core/src/e2ee.ts:48`). See `docs/security.md` for SFrame details.
+
+Simulcast/SVC/codecs: `room.publish(track,{source, simulcast:{layers,encodings}, svc:{scalabilityMode}, codecPreferences, metadata})` (`packages/core/src/media/media-transport.ts:15`) maps `simulcast` to `RTCRtpEncodingParameters` and `codecPreferences` to `RTCRtpTransceiver.setCodecPreferences` (Safari H.264 fallback). Receiver `setPreferredLayers(trackId,'l'|'m'|'h')` and `requestKeyframe(trackId)` (`packages/core/src/media/media-transport.ts:52`) map to `consumer.setPreferredLayers`/`producer.requestKeyFrame` (`packages/sfu-gateway/src/mediasoup-adapter.ts`); `room.setTile({visible,width,height,priority})` drives layer choice; `AdaptiveQualityController` (`packages/quality/src/adaptive-quality-controller.ts:115`, `packages/core/src/room-quality.ts:216`) still polls `media.getPeerConnections()`/`getSenders()`.
+
+Active-speaker: `ActiveSpeakerDetector` (`packages/core/src/media/active-speaker.ts`) polls `inbound-rtp.audioLevel`+`AnalyserNode` hysteresis and emits `room.on('active-speaker', string[])`; `speaker {speaking,audioLevel}` envelope is in `protocol/schema.json`. Transcription: `TranscriptionController` (`packages/core/src/media/transcription.ts:31`) emits `room.on('transcript',{participantId,text,isFinal,lang})` from client `SpeechRecognition` then SFU `Consumer→STT→transcript` envelope.
+
+Related: `docs/features/call-models.md` (topology choice), `docs/features/scaling.md` (SFU comparison), `docs/security.md` (E2EE), `docs/recording.md` (egress), `docs/plans/archive/03-media-topology.md`, `docs/plans/archive/06-advanced-media.md`.
+
+---
+## Recording — client, SFU egress, storage
+Source: docs/recording.md | URL: https://vidcall.dev/docs/recording | Last-Modified: 2026-08-25T17:46:58.796Z
+
+# Recording — client, SFU egress, storage
+
+Current behavior for `packages/core/src/recording/*`, `packages/server/src/recording.ts`, `packages/server/src/egress.ts`, `packages/core/src/media/egress.ts`.
+
+Surface: `room.recording` is `RoomRecordingFacade` (`packages/core/src/recording/room-recording-facade.ts:74`) wrapping `CompositeRecordingHook` + optional `RecordingUploader`. Events `recording:started|stopped|error|blob-chunk`, methods `startRecording`/`stopRecording`/`pause`/`resume`/`getStatus` (`packages/core/src/recording/room-recording-facade.ts:118`).
+
+Modes behind one surface: `client` composites `localStream`+`remoteStreams[]` via `MediaRecorder` into `.webm` chunks; `sfu-selective` writes one file per SFU `Consumer`; `sfu-composite` mixes via `ffmpeg`/`gstreamer` to `mp4`/`webm`/`m3u8`. `RecordingMode` and `RecordingLayout` (`grid|spotlight|custom`) are in `packages/core/src/recording/recording-hook.ts`. `room.recording.startRecording({ mode, localStream, remoteStreams, layout, egress:{hls,rtmpUrl}, encryption, timesliceMs })` selects mode; default `client` on mesh, `sfu-composite` when `media.kind==='sfu'`.
+
+Client flow: `CompositeRecordingHook` composes streams, emits `blob-chunk` with `index`; `FetchRecordingUploader` (`packages/core/src/recording/recording-uploader.ts`) `POST /recordings/:id/chunk?index=n` + `POST .../finalize`. SFU flow: `SfuGateway.egress` → `EgressWorker` (`packages/core/src/recording/sfu-egress.ts:21` `createEgressWorker`, `packages/core/src/media/egress.ts`) consuming SFU `Consumer`s via `PlainTransport` and writing to same `RecordingStorage`.
+
+Storage: `RecordingStorage` interface `saveChunk/finalize/getStream/delete` (`packages/server/src/recording.ts:24`) with `FinalizeManifest` (`packages/server/src/recording.ts:35`) fields `sessionId`, `chunks`, `bytes`, `finalizedAt`, optional `encrypted`, `keyId`, `mimeType`, `mode`. `DiskRecordingStorage` (`packages/server/src/recording.ts:64`) layout `dir/<sessionId>/chunk-000000`+`manifest.json`; `S3RecordingStorage` (`packages/server/src/recording.ts:166`) via `fetch`+SigV4 `aws-sigv4.ts`, prefix `prefix/sessionId/chunk-...`+`manifest.json`.
+
+Server API: `POST /rooms/:roomId/recordings/start` → `{sessionId}`, `POST /rooms/:roomId/recordings/:id/chunk {index,blob}` → `204`, `POST /rooms/:roomId/recordings/:id/finalize` → `{chunks,bytes,manifestUrl}`, `GET /rooms/:roomId/recordings/:id/manifest`, `GET /rooms/:roomId/recordings/:id/stream` with `Range`, `DELETE /rooms/:roomId/recordings/:id` (`packages/server/src/http.ts`, `packages/server/src/recording.ts:269`).
+
+Encryption: when `encryption:{key,keyId}` is set, `RoomRecordingFacade.uploadChunk` (`packages/core/src/recording/room-recording-facade.ts:208`) encrypts each `Blob` with AES-GCM 12-byte nonce prepended (`packages/core/src/recording/encryption.ts:29` `encryptBlob`/`decryptBlob`) and `manifest.encrypted=true`+`keyId`; key never persisted. With `policy.e2eeRequired` (`packages/server/src/core.ts:129`), egress that needs plaintext fails `code:'e2ee-blocks-egress'` (`packages/core/src/recording/room-recording-facade.ts:131`) or records ciphertext with `keyId`.
+
+Lifecycle: `Store.RecordingSession` `expiresAt` is reaped by server cron `DELETE /recordings/:id`; `DiskRecordingStorage.delete` (`packages/server/src/recording.ts:128`) and S3 lifecycle rule are second layer; `GET /stream` supports `Range` (`packages/server/src/recording.ts:105/281`).
+
+Related: `packages/server/README.md` (Disk vs S3 prefix, TTL, SigV4), `docs/security.md` (ACL `caps.record`, policy `allowRecording`), `docs/media.md` (SFU egress worker), `docs/plans/archive/02-recording.md` (archived rationale).
+
+---
+## Security — auth, policy, E2EE, TURN
+Source: docs/security.md | URL: https://vidcall.dev/docs/security | Last-Modified: 2026-08-25T17:46:51.543Z
+
+# Security — auth, policy, E2EE, TURN
+
+Current behavior for `packages/server/src/auth.ts`, `packages/server/src/ws.ts`, `packages/server/src/turn.ts`, `packages/server/src/core.ts`, `packages/core/src/e2ee.ts`.
+
+Open mode: `createServices({ store })` with no `auth` — any client joins any room. Dev only. `packages/server/src/ws.ts:218` returns early when `services.auth` is undefined.
+
+Token mode: `createServices({ store, auth: { secret, requireToken?, previousSecrets? } })`. Tokens are compact JWT `header.payload.signature` HS256 via `node:crypto` `createHmac` (`packages/server/src/auth.ts:101`). Claims `TokenClaims` (`packages/server/src/auth.ts:37`) are `roomId`, `participantId`, `role: 'participant'|'admin'`, `exp`/`iat` epoch seconds, optional `jti`, `caps`, `e2ee`. `issueToken` (`packages/server/src/auth.ts:127`) mints; `verifyToken` (`packages/server/src/auth.ts:164`) validates signature with `timingSafeEqual` (`packages/server/src/auth.ts:106`) and expiry; `verifyTokenWithRotation` (`packages/server/src/auth.ts:278`) tries `secrets: [current, previous]`; `revokeToken`/`isRevoked` (`packages/server/src/auth.ts:306`) is in-memory `jti` set.
+
+Guards: WS `GET /ws?roomId=&token=` captures `?token=` (`packages/server/src/ws.ts:155`) and `authenticateSocket` (`packages/server/src/ws.ts:210`) verifies before `join` and on policy checks; failure sends error envelope and `close(4401)`. HTTP `POST /rooms/:id/join`, `/signal`, `/recordings/*`, `/turn/credentials` check `Authorization: Bearer <token>` when `services.auth` is set (`packages/server/src/http.ts`). `POST /auth/token` mints participant tokens openly and admin tokens only with `adminToken` header.
+
+Policy: `RoomPolicy` (`packages/server/src/core.ts:129`) is `locked`, `allowRecording`, `allowedCodecs`, `moderatorIds`, `e2eeRequired`, `maxParticipants`. Enforced in `joinRoom`/`handleSignal` (`packages/server/src/core.ts`) and `SfuRouter` `isParticipant` (`packages/sfu-gateway/src/sfu-router.ts:126`) and WS `handleJoin` (`packages/server/src/ws.ts:342`).
+
+E2EE: `packages/core/src/e2ee.ts` `SFrameProcessor` encrypts raw bytes with AES-GCM 12-byte IV prepended (`packages/core/src/e2ee.ts:114`) and decrypts (`packages/core/src/e2ee.ts:124`). Feature-detect prefers `RTCRtpScriptTransform` then `RTCRtpSender.createEncodedStreams`/`MediaStreamTrackProcessor` (`packages/core/src/e2ee.ts:48`); otherwise `detectE2eeSupport() === 'none'` and `ProcessorChain` warns `e2ee:unsupported` (`packages/core/src/media/processor.ts:32`). Key is app-provided `CryptoKey|Uint8Array`, `deriveE2eeKey` via PBKDF2 (`packages/core/src/e2ee.ts:72`), rotation via `room.setE2eeKey`/`SFrameProcessor.setKey` (`packages/core/src/e2ee.ts:160`). SFU forwards ciphertext opaque; recording with `e2eeRequired` either fails egress `code:'e2ee-blocks-egress'` or stores ciphertext with `keyId` (see `docs/recording.md`).
+
+TURN: `packages/server/src/turn.ts` `issueTurnCredentials` (`packages/server/src/turn.ts:38`) mints coturn REST `username=expiry:participantId`, `credential=HMAC-SHA1(username, secret)` base64; `toIceServers` (`packages/server/src/turn.ts:63`) maps to `RTCIceServer`. Server endpoint `GET /turn/credentials` is bearer-guarded; client fetches lazily before first `RTCPeerConnection` and caches until `expiry-60s`. See `packages/server/README.md` for `turn.secret`/`turn.urls`/`ttlSec` and coturn `static-auth-secret`.
+
+Client: `new Room({ auth: { token, onTokenExpired } })` refreshes at `exp-120s`; WS 4401 surfaces as `room.emit('auth:error')` with one retry. `caps` gate `publish`/`subscribe`/`record`/`moderate` without overloading `role`.
+
+Operator vars: `VIDCALL_SECRET`, `VIDCALL_ADMIN_TOKEN`, `VIDCALL_TURN_SECRET`, `VIDCALL_TURN_URLS` consumed by `packages/server/src/services.ts` helpers and `examples/server`. Rotation: set `previousSecrets` for grace window, then promote.
+
+Related: `packages/server/README.md#authentication--tokens` (HTTP surface), `docs/media.md` (processor chain order), `docs/limits.md` (backend matrix), `docs/plans/archive/01-security.md` (archived rationale).
+
+---
+## vidcall — Backend Adapter Limits
+Source: docs/limits.md | URL: https://vidcall.dev/docs/limits | Last-Modified: 2026-08-25T16:24:01.139Z
+
+# vidcall — Backend Adapter Limits
+
+> Per-backend ceiling for signaling. Mirrors `plans/04-transport-signaling-scale.md` §5 and `docs/architecture.md` D4.
+
+| Backend | Ordering | Max payload | Rate note | Use WS relay? |
+|---------|----------|-------------|-----------|---------------|
+| `@mbsks/openrtc-server` WS (`packages/server/src/ws.ts`) | `seq-required` | 8 MB (`maxPayloadBytes: 8*1024*1024`) | coalesce ICE (`IceCoalescer`, `coalesceIceMs`) | **required for bursts** (candidates hit WS, not DB) |
+| Supabase broadcast | `guaranteed` | ~256 KB | channel / emit throttle (per-project rate limit) | optional — use WS relay when room >20 or ICE burst expected |
+| Firebase RTDB | `guaranteed` | ~256 KB | `onDisconnect` best; write-rate throttled | optional |
+| Convex | `seq-required` | ~1 MB | mutation rate (`listSignals` polling) | optional |
+| Postgres `NOTIFY` | `seq-required` | 7 KB (chunker) | `LISTEN` must be a **dedicated `pg.Client`**, not the pool (`docs/architecture.md:127`) | yes — use `PostgresNotifyRelay` or the WS bridge |
+| SQLite / BroadcastChannel | local | N/A (same-process) | same-device only | no (dev) |
+| Redis (pub/sub + `RedisStore`) | `seq-required` | ~512 MB (server limit) | handle `ioredis` backpressure; set `signalTtlMs` | optional — use `RedisRelay` for multi-instance fan-out |
+| WebTransport datagrams | unordered | ~1 KB–64 KB (MTU) | unreliable; app must not assume delivery | fallback to WS via `WebTransportSignalingTransport(fallback)` |
+
+## Chunker
+
+Postgres `NOTIFY` caps payloads at ~8 KB (default `--max-payload`). The transport
+`Chunker` (`packages/transport/src/internal/chunker.ts:53`) splits envelopes into
+`ChunkFrame`s of ≤7 KB with reassembly via `ChunkAssembler` (mirrored in
+`PostgresNotifyRelay`). `BaseSignalingTransport` chunks automatically when
+`JSON.stringify(envelope).length > maxPayloadBytes - 1024`; set `maxPayloadBytes`
+per adapter so Supabase/Firebase skip chunking.
+
+## ICE coalescing
+
+`IceCoalescer` (`packages/transport/src/internal/iceCoalescer.ts`) batches
+trickle-ICE candidates within a ~50–100 ms window (`BaseOptions.coalesceIceMs`)
+before `doSendFrame`. Server WS relay (`ws.ts:119` coalescing idea) avoids
+per-candidate DB writes — candidate bursts should prefer the WS relay path in
+prod when `room > 20` or burst expected.
+
+## Horizontal scale
+
+- **WS relay:** `Relay` (`packages/server/src/services.ts`) is pluggable. Default
+  is `RoomHub` (local). For N instances behind a LB, inject `RedisRelay` (ioredis
+  `pub/sub` channel `vidcall:room:{roomId}`) or `PostgresNotifyRelay` (dedicated
+  `pg.Client` `LISTEN vidcall_room` + 7 KB chunker). Wire via
+  `attachWebSocketRelay(server, services, { relay })` — HTTP `handleSignal` already
+  calls `relay.broadcast`.
+- **Store:** `PostgresStore` uses a dedicated `listenerClient` for `LISTEN`; `RedisStore`
+  (`packages/server/src/stores/RedisStore.ts`, optional, peer `ioredis`/`redis`) uses
+  `ZSET` + TTL for `listSignals`. Existing stores keep working; large deploys pick Redis.
+
+## Transport resilience
+
+- `CompositeTransport` (`@mbsks/openrtc-transport/composite`) — primary + fallback
+  (emit → primary, on error → fallback + `onFallback`; dedupes by `sessionId:seq`).
+  Array sugar supported: `new Room({ transport: [primary, fallback] })`.
+- `ReconnectingTransport` (`@mbsks/openrtc-transport/reconnecting`) — exponential
+  backoff + optional seq replay via `fetchSignals(roomId, sinceSeq)`.
+- `WebTransportSignalingTransport` (`@mbsks/openrtc-transport/web-transport`) — optional,
+  unordered datagrams with WS fallback.
+
+Each adapter exposes `TransportMetadata` (`packages/transport/src/types.ts:62`
+`name, ordering, maxPayloadBytes`) — `Room` / `CompositeTransport` can pick
+fallback by ceiling.
+
+---
+## Deployment guide — from localhost to production
+Source: docs/guides/deployment.md | URL: https://vidcall.dev/docs/guides/deployment | Last-Modified: 2026-08-26T10:35:22.573Z
+
+# Deployment guide — from localhost to production
+
+Ship the example server with TLS, TURN, auth, and storage that survives restarts.
+
+## 1. Fix open mode before you deploy
+
+`examples/server/server.mjs:23` runs `createServices({ store: new InMemoryStore() })` with no `auth`. That is local-dev only. In production pass `auth.secret` and a persistent store:
+
+```ts
+import { createServices, InMemoryStore } from '@mbsks/openrtc-server';
+import { SqliteStore } from '@mbsks/openrtc-server/stores/sqlite';
+const services = createServices({
+  store: new SqliteStore({ path: './vidcall.db' }),
+  auth: { secret: process.env.VIDCALL_SECRET! },
+});
+```
+
+Mint tokens server-side via `POST /vidcall/auth/token` or `issueToken(secret, { roomId, participantId, role })` (`packages/server/src/auth.ts:127`). Clients send `Authorization: Bearer <token>` on REST and `?token=` on `ws://.../ws?roomId=`. Missing or expired tokens get close code `4401` (`packages/server/src/ws.ts:210`).
+
+## 2. TLS for getUserMedia
+
+Browsers gate `getUserMedia` to secure contexts: `http://localhost` works, `http://192.168.x.x` does not. Terminate TLS at your reverse proxy (Caddy, nginx, Fly, Vercel) and forward `wss://`. Health-check the relay with `GET /vidcall/rooms/:id/state` (200 when up). No extra config in vidcall itself.
+
+## 3. TURN — STUN is not enough
+
+Pass `iceServers` from the server's TURN issuer (`packages/server/src/turn.ts:38`) so ~10–20% of calls behind symmetric NATs still connect:
+
+```ts
+// server: createServices({ store, turn: { secret: process.env.VIDCALL_TURN_SECRET!, urls: ['turn:turn.example.com:3478'] } })
+ // client: fetch('/vidcall/turn/credentials', { headers: { Authorization: `Bearer ${token}` } })
+```
+
+On the host, run coturn with `static-auth-secret=$VIDCALL_TURN_SECRET` and expose `turn.secret` / `turn.urls` / `turn.ttlSec` (`packages/server/README.md` Turn section). See `docs/security.md:15` and `docs/research/webrtc-js.md:414`.
+
+## 4. Choose a relay for horizontal scale
+
+HTTP `handleSignal` already calls `relay.broadcast` (`packages/server/src/services.ts`); wire the WS relay with a pluggable `Relay`:
+
+- **Single instance**: default `RoomHub` (`packages/server/src/ws.ts:59`) is enough.
+- **Multi-instance behind a LB**: `RedisRelay` (`packages/server/src/relays/redis-relay.ts:45`) on `vidcall:room:{roomId}` (needs `ioredis`/`redis` peer dep) — pick this for burst ICE and >20 participants.
+- **Postgres only**: `PostgresNotifyRelay` (`packages/server/src/relays/postgres-notify-relay.ts`) uses one dedicated `pg.Client` `LISTEN vidcall_room` with 7 KB `Chunker` (`docs/limits.md:11`). Keep `LISTEN` off the pool.
+
+Wire: `attachWebSocketRelay(server, services, { relay })` and set `services.relay = relay` so REST and WS fan out together (`docs/transport.md:9`, `docs/limits.md:35`).
+
+## 5. Recording storage and lifecycle
+
+Default is `DiskRecordingStorage` (`packages/server/src/recording.ts:64`) at `dir/<sessionId>/chunk-000000` + `manifest.json`. For prod use `S3RecordingStorage` (`packages/server/src/recording.ts:166`) via SigV4 `fetch` (no AWS SDK) and set an S3 lifecycle rule plus the server cron `expireRecordings` to reap `Store.RecordingSession.expiresAt` (`docs/recording.md:17`).
+
+Related: `packages/server/README.md` (REST/Store/relay surface), `docs/limits.md` (ceilings), `docs/security.md` (auth/TURN), `docs/transport.md` (relays).
+
+---
+## Error handling — taxonomy and what to do
+Source: docs/guides/error-handling.md | URL: https://vidcall.dev/docs/guides/error-handling | Last-Modified: 2026-08-26T10:35:31.153Z
+
+# Error handling — taxonomy and what to do
+
+vidcall errors are machine-readable `code` strings. Check `code` before `message`.
+
+## 1. Where codes come from
+
+Server REST/WS always returns `{ error: { code, message, details? } }` (`packages/server/README.md:107`). Client `room.on('error', ...)` currently emits bare `Error` objects with an ad-hoc `code` field (`packages/core/src/room.ts:156`); the plan is to align both on `code` (`plans/08-coherence-dx-docs-plan.md`).
+
+## 2. Taxonomy
+
+| Code | Source | Meaning | Action |
+|---|---|---|---|
+| `room_not_found` (404) | `POST /rooms/:id/join` | room id unknown | create via `POST /rooms` or check id |
+| `room_full` (409) | `joinRoom` (`packages/server/src/core.ts:129` `maxParticipants` / `packages/server/src/errors.ts:83`) | participant limit hit | surface "room is full", offer waitlist |
+| `room_closed` / `room_already_exists` | REST | lifecycle guards | retry with new id or wait for reopen |
+| `unauthorized` / `token_expired` (401) / `forbidden` (403) | `packages/server/src/auth.ts:75` / `packages/server/src/ws.ts:210` | missing/invalid/expired/scoped token | refresh token, then `room.join()` again; WS close `4401` maps to these |
+| `e2ee-unsupported` | `packages/core/src/media/processor.ts:32` / `packages/core/src/e2ee.ts:48` | no `RTCRtpScriptTransform` nor insertable streams | disable E2EE or warn; app gates with `detectE2eeSupport()` |
+| `e2ee-blocks-egress` | `packages/core/src/recording/room-recording-facade.ts:131` | `policy.e2eeRequired` blocks plaintext recording egress | record ciphertext with `keyId` or turn off `e2eeRequired` (`docs/security.md:13`) |
+| `ice:turn-failed` | `packages/core/src/room.ts:829` (`icecandidateerror`) | TURN unreachable or bad `turn.secret` | check coturn logs, verify `turn.urls`/`turn.secret` (`docs/guides/deployment.md:3`) |
+| `device:unavailable` / `NotAllowedError` | `getUserMedia` via `room.devices` / `room.controls` | permission denied or device unplugged | prompt for permission, offer device picker (`docs/features/controls.md:6`) |
+
+## 3. Handling pattern
+
+```ts
+room.on('error', (err: Error & { code?: string }) => {
+  switch (err.code) {
+    case 'token_expired': void refreshToken().then(() => room.join()); break;
+    case 'room_full': showToast('Room is full'); break;
+    case 'e2ee-unsupported': setE2ee(false); break;
+    default: console.error(err.code, err.message);
+  }
+});
+ws.addEventListener('close', (e) => {
+  if (e.code === 4401) handleAuthClose(e.reason); // unauthorized/token_expired/forbidden
+});
+```
+
+## 4. Limits that surface as errors
+
+Backend ceilings live in `docs/limits.md` (e.g. Postgres `7KB` chunked, Supabase `~256KB`). Exceeding `maxPayloadBytes` chunks automatically (`packages/transport/src/internal/chunker.ts:53`); rate throttles surface as transport `error` — prefer the WS relay for ICE bursts (`docs/transport.md:6`).
+
+Related: `packages/server/README.md#rest-api` (full code table), `docs/security.md` (auth), `docs/media.md` (processor order).
+
+---
+## Testing your app — fakes and harnesses
+Source: docs/guides/testing.md | URL: https://vidcall.dev/docs/guides/testing | Last-Modified: 2026-08-26T10:35:39.027Z
+
+# Testing your app — fakes and harnesses
+
+Use vidcall's test utilities so your app tests never need a real browser or camera.
+
+## 1. What to install
+
+```sh
+bun add -D @mbsks/openrtc-test-utils
+```
+
+No extra deps: the package is zero-runtime and tree-shakeable (`packages/test-utils/package.json`). This is distinct from contributor `docs/testing.md:14` which describes L0/L1/L2 for the library itself.
+
+## 2. FakeRTCPeerConnection — test engine logic without WebRTC
+
+`packages/test-utils/src/fake-rtc.ts` is a faithful-enough `RTCPeerConnection` seam: real `signalingState` transitions, trickle ICE, data channels, `ontrack` via fake SDP `o=` lines, and `wirePeers(a,b)` to link two peers.
+
+```ts
+import { FakeRTCPeerConnection, wirePeers, FakeMediaStreamTrack } from '@mbsks/openrtc-test-utils';
+import { Room } from '@mbsks/openrtc-core';
+import { InMemoryTransport } from '@mbsks/openrtc-test-utils/fixtures'; // or your adapter
+
+const a = new Room({ roomId: 'test', selfId: 'alice', transport, peerFactory: () => new FakeRTCPeerConnection() as unknown as RTCPeerConnection });
+const b = new Room({ roomId: 'test', selfId: 'bob',   transport: () => new FakeRTCPeerConnection() });
+// join + publish: engine's perfect negotiation, glare, ICE restart paths run over fakes
+await a.join(); await b.join();
+await a.publish(new FakeMediaStreamTrack('video'));
+await new Promise(r => b.on('track', r));
+```
+
+Helpers: `createPeerPair()`, `installFakeRTC()`, `resetFakeRTC()`, `asFake(pc)`, `FakeDataChannel`, `FakeRTCRtpSender` with `setParameters`/`replaceTrack` tracking (`packages/test-utils/src/fake-rtc.ts:232`).
+
+## 3. Fake devices and recording
+
+`FakeMediaDevices` (`packages/test-utils/src/fake-media-devices.ts`) lets `room.controls` acquire tracks without `getUserMedia` permissions; `FakeMediaRecorder` (`packages/test-utils/src/fake-media-recorder.ts`) drives `room.recording` `blob-chunk` without encoding. Inject via `room.devices` / `ControlsManager` constructor (see `docs/features/controls.md:8`).
+
+## 4. Mock AdaptiveQualityController
+
+The policy engine is pure (`packages/quality/src/adaptive-quality-controller.ts:115`). In app tests, inject a stub `RoomQualityController` harness that returns deterministic tiers, or drive `FakeRTCRtpSender.setParameters` assertions (`FakeRTCRtpSender` records `applyConstraintsCalls`). The real controller polls `media.getPeerConnections()`/`getSenders()` (`docs/media.md:17`), so feeding it fake senders is enough.
+
+## 5. What not to do
+
+Don't test against real `RTCPeerConnection` in unit tests — that is L2 integration (`docs/testing.md:36`). Keep L0/L1 (protocol + unit + `runAdapterTestSuite`) for contributors; apps use fakes for speed and determinism.
+
+Related: `packages/test-utils/src/index.ts`, `packages/transport/src/shared-tests.ts` (`runAdapterTestSuite`), `docs/features/controls.md`.
+
+---
+## Migration guide — what breaks and how to update
+Source: docs/guides/migration.md | URL: https://vidcall.dev/docs/guides/migration | Last-Modified: 2026-08-26T10:35:46.015Z
+
+# Migration guide — what breaks and how to update
+
+## 1. Protocol versioning
+
+`protocol/schema.json:5` is `v: 1`. The `v` field bumps **only on breaking wire changes**; additive fields are non-breaking and unknown `type` values are ignored (`protocol/schema.json` Wire rules). If you vendor the schema, regenerate types via `quicktype` from the new `schema.json` rather than hand-editing.
+
+## 2. RoomConfig renames (planned, changeset fixed groups)
+
+The next minor will normalize `RoomConfig` to single-object options (no overloads, explicit groups):
+
+| Before | After | Codemod |
+|---|---|---|
+| `recordingEndpoint: string` | `recording: { endpoint: string }` (`packages/core/src/room.ts:455`) | `recordingEndpoint:` → `recording: { endpoint:` |
+| `sfuGateway` / `sfu.gateway` / `topology.sfu.gateway` (triple alias `packages/core/src/room.ts:485`) | `sfu: { gateway }` | `sfuGateway` → `sfu: { gateway` |
+| `iceServers` top-level | `rtc: { iceServers }` | wrap in `rtc:` |
+| `publish({ simulcast, svc })` loose | `publishDefaults: { simulcast, svc, codecPreferences }` | group under `publishDefaults` |
+
+Track the `changeset` `fixed` groups in `.changeset/config.json:7` — packages in the same fixed group bump together. `changeset version --dry-run` previews the bump.
+
+## 3. Events and hooks (planned)
+
+Mixed `kebab:colon:bare` events (`packages/core/src/room.ts:118`) will normalize to one style (colon). Prefer `room.on('room:participant-joined')` going forward and add a `RoomEvent` const enum. `room.subscribe(listener)` (snapshot) will move to `room.store.subscribe` to avoid the `subscribe` overload collision (`packages/core/src/room.ts:1028`). React: `createRoomHook({ transport, publishDefaults })` will replace ad-hoc `new Room` per component.
+
+## 4. Topology defaults
+
+`topology` defaults to `'auto'` with `autoThreshold: 4` (`packages/core/src/media/topology.ts:11`). Existing code that relied on mesh-only keeps working; to pin mesh, pass `topology: { topology: 'mesh' }`. `room.setTopology('mesh'|'sfu'|'auto')` switches at runtime (`docs/media.md:13`).
+
+## 5. How to migrate today
+
+1. Pin exact versions (`package.json` exact pins, `bun.lock` committed) and run the 14-day age gate before bumping (`packages/server/README.md:27`).
+2. Run `bun run build && bun run typecheck` — renames surface as type errors.
+3. Apply the codemod for `RoomConfig` renames (one `jscodeshift` pass per table row).
+4. Regenerate protocol types from `protocol/schema.json` if you codegen.
+
+Related: `protocol/schema.json`, `.changeset/config.json`, `docs/media.md`, `packages/server/README.md` (supply chain).
+
+---
+## vidcall testing — L0 / L1 / L2 matrix
+Source: docs/testing.md | URL: https://vidcall.dev/docs/testing | Last-Modified: 2026-08-25T13:59:08.000Z
+
+# vidcall testing — L0 / L1 / L2 matrix
+
+One library speaks one protocol from several languages, so tests come in
+three rings. **L0** checks that TypeScript, Kotlin, Swift, and Dart all read
+and write the exact same wire messages. **L1** is the everyday TypeScript
+suite: unit tests plus one shared suite that every signaling backend must
+pass. **L2** builds and runs each mobile binding on its own native toolchain.
+The wire protocol (`protocol/schema.json`) is the single source of truth;
+every layer is tested against it.
+
+## Layer model
+
+| Layer | What it validates | Where | Gate |
+|---|---|---|---|
+| **L0** | Protocol conformance — sample envelopes (join/offer/answer/ICE/presence) serialize/deserialize identically in TS, Kotlin, Swift, Dart | `protocol/*`, `packages/core/test`, `packages/{kotlin,swift,dart}` fixtures | CI `node`, `kotlin`, `swift`, `dart` jobs |
+| **L1** | Unit + shared adapter suite — every client signaling backend implements `SignalingTransport` and passes `packages/transport/src/shared-tests.ts` | `packages/backend-*` vitest suites | CI `node` backend loop |
+| **L2** | Cross-language integration — each binding compiles and its tests pass on its native toolchain | `packages/swift`, `packages/dart`, `packages/kotlin` | CI `swift`/`dart`/`kotlin` jobs |
+
+## Current status (verified 2026-08-11/12)
+
+| Package | Layer | Tests | Status |
+|---|---|---|---|
+| `packages/core` (mesh engine) | L0/L1 | 84 (core+quality+test-utils) | ✅ green |
+| `packages/quality` (adaptive policy) | L1 | (in 84) | ✅ green |
+| `packages/transport` shared suite | L1 | — | ✅ green |
+| `backend-supabase` | L1 | 11 | ✅ green |
+| `backend-postgres` | L1 | 16 | ✅ green |
+| `backend-convex` | L1 | 10 | ✅ green |
+| `backend-firebase` | L1 | 11 | ✅ green |
+| `backend-appwrite` | L1 | 11 | ✅ green |
+| `backend-sqlite` | L1 | 19 | ✅ green |
+| `packages/swift` | L0/L2 | 41 (42 with the WebRTC binary target enabled) | ✅ green (local `swift test`; real-WebRTC smoke test env-gated) |
+| `packages/dart` | L0/L2 | 29 | ✅ green (verified in-session) |
+| `packages/kotlin` | L0/L2 | 30 | ✅ agent-verified (JDK 21 + Gradle 8.14.5); local re-run needs JDK — see below |
+
+## How to run each layer locally
+
+```sh
+# L1 TS (core + quality + test-utils)
+npm run build && npm test && npm run typecheck && npm run lint
+
+# L1 backends (each runs the shared adapter suite through vitest)
+for p in packages/backend-*; do (cd "$p" && npm run test); done
+
+# L2 swift
+cd packages/swift && swift build && swift test
+
+# L2 dart
+cd packages/dart && dart pub get && dart analyze && dart test
+
+# L2 kotlin (requires JDK 21)
+cd packages/kotlin && ./gradlew test
+```
+
+## Environment-gated items
+
+- **Kotlin local re-verification** — this machine has no JDK (`JAVA_HOME` points
+  at an invalid Android Studio path). The kotlin agent verified 30 tests with its
+  own toolchain (JDK 21, Gradle 8.14.5, Android SDK 36). To re-run locally:
+  `brew install openjdk` then `cd packages/kotlin && ./gradlew test`.
+- **iOS/Android device tests** — L2 runtime (actual `RTCPeerConnection` on device)
+  requires simulators/emulators; planned for the 2026-08-12 session.
+
+## CI
+
+No CI is configured right now — the repo is validated locally with
+`bun run build && bun run typecheck && bun run test && bun run lint` (plus the
+per-toolchain suites below). A workflow can be reintroduced when the repo goes
+public; the matrix it should cover: `node` (build/test/typecheck/lint + every
+backend vitest), `swift` (macos-14), `dart` (stable), `kotlin` (temurin 21).
+
+## Adding a backend
+
+1. Implement `SignalingTransport` (`packages/transport/src/base.ts`).
+2. Import `runAdapterTestSuite` from `@mbsks/openrtc-transport/shared-tests` and wire
+   your fake + real-store harness into your vitest suite.
+3. Keep your package in `packages/backend-*` so the root scripts and any future
+   CI pick it up automatically.
+
+---
+## Call models — 1:1, mesh, and SFU
+Source: docs/features/call-models.md | URL: https://vidcall.dev/docs/features/call-models | Last-Modified: 2026-08-25T13:59:07.836Z
+
+# Call models — 1:1, mesh, and SFU
+
+> Status: implementation doc (matches `packages/core`, `packages/sfu-gateway`, `protocol/schema.json`).
+> Background: `docs/research/webrtc-js.md` §3 (mesh vs SFU), `docs/architecture.md` D2/D3.
+
+vidcall is **mesh-first**: the shipped core connects every participant to every
+other participant with a direct `RTCPeerConnection`, over any dumb pub/sub
+signaling backend. An optional `SfuGateway` interface (plus a reference
+mediasoup adapter in `@mbsks/openrtc-sfu-gateway`) is the migration path when a call
+outgrows a mesh. This document explains the three call models, the bandwidth
+math that decides between them, and how vidcall's signaling + wire protocol
+support each one.
+
+---
+
+## 1. Model overview
+
+| Model                               | Media path                                                       | vidcall surface                                      | Best for                                                                     |
+| ----------------------------------- | ---------------------------------------------------------------- | ---------------------------------------------------- | ---------------------------------------------------------------------------- |
+| **1:1 (duo)**                       | One `RTCPeerConnection` per peer                                 | `Room` (mesh engine, two participants)               | Sales/support calls, tutoring, interviews, any two-person conversation       |
+| **N-way mesh**                      | `N−1` `RTCPeerConnection`s per peer (one per remote)             | `Room` (default, no extra infra)                     | 2–4 video participants, larger audio-only rooms, events over "dumb" backends |
+| **SFU (selective forwarding unit)** | One uplink to a media server; the server forwards to subscribers | `SfuGateway` + `SfuSession` (`@mbsks/openrtc-sfu-gateway`) | 5+ video participants, webinars, large classes, recording/egress needs       |
+
+The wire protocol is identical in all three modes: the same JSON envelope
+(`protocol/schema.json`) carries `join`/`offer`/`answer`/`ice` for mesh, and
+`sfu` envelopes (`publish`/`subscribe`/`layer-change`/`keyframe-request`/
+`leave`) plus `offer`/`answer`/`ice` addressed to the SFU for gateway mode.
+Switching models does not change the signaling layer — it changes _who_ the
+peer connections point at.
+
+---
+
+## 2. 1:1 calls
+
+A 1:1 call is the degenerate mesh: exactly two `RTCPeerConnection`s (one on
+each side), one m-line per published track.
+
+```
+Alice ── RTCPeerConnection (audio + video + data channel) ── Bob
+   │                                                          │
+   └────────── signaling: backend pub/sub (any adapter) ──────┘
+```
+
+### 2.1 Connection setup (wire flow)
+
+```
+A: join(room)                 ──►  room channel (presence: A online)
+B: join(room)                 ──►  presence: [A, B]
+A: publish(mic+cam)           ──►  negotiationneeded
+A: offer{sdp}                 ──►  B: setRemoteDescription → ontrack
+B: answer{sdp}                ──►  A: setRemoteDescription → ICE connects
+A/B: ice{candidate}           ──►  trickle both ways (RFC 8838)
+…DTLS/SRTP handshake happens in the browser…
+connectionState → 'connected'
+A: reaction 👍 / chat / screen-share  ──►  room broadcast + data channel
+```
+
+Everything is handled by `PeerConnectionManager` (perfect negotiation,
+trickle-ICE buffering, SDP idempotency, ICE restart). The app only calls
+`room.join()` and `room.publish(track)`:
+
+```ts
+const room = new Room({ roomId, selfId, transport: supabaseTransport });
+room.on('track', ({ participant, track }) => attachToVideo(participant, track));
+await room.join();
+await room.publish(
+  await getUserMedia({ audio: true, video: true }).then((s) => s.getVideoTracks()[0]),
+  { source: 'camera' },
+);
+```
+
+### 2.2 Why 1:1 always works
+
+- One uplink, one downlink: **~1.5 Mbps up and ~1.5 Mbps down** for a 720p30
+  call — comfortably inside home/mobile connections.
+- One encode, one decode: no CPU wall on any device.
+- No media server, no TURN relay traffic (TURN is still needed for NAT
+  traversal, but only relays when direct ICE fails).
+- Signaling is one room channel on any of the pluggable backends (Supabase,
+  Convex, Firebase, Appwrite, Postgres, SQLite, custom).
+
+---
+
+## 3. N-way mesh
+
+### 3.1 Topology and costs
+
+Each participant holds an `RTCPeerConnection` to every other participant:
+
+```
+        ┌─────┐
+        │  A  │──pc──┐
+        └──┬──┘      │
+   pc       │        ▼
+   │    ┌───┴───┐  ┌─┴──┐
+   ▼    │   B   │  │ C  │
+  ┌─┴──┐ └───┬──┘  └────┘
+  │ D  │─────┘
+  └────┘
+```
+
+Per peer (N participants):
+
+| Resource             | Cost per peer                   | N=4 example                 |
+| -------------------- | ------------------------------- | --------------------------- |
+| Uplinks              | **N−1** (one per remote peer)   | 3                           |
+| Downlinks            | N−1                             | 3                           |
+| Video encodes        | N−1 (one per remote connection) | 3                           |
+| Video decodes        | N−1                             | 3                           |
+| Uplink bandwidth     | (N−1) × local video bitrate     | 3 × 1.5 Mbps ≈ **4.5 Mbps** |
+| Downlink bandwidth   | Σ remote video bitrates         | 3 × 1.5 Mbps ≈ 4.5 Mbps     |
+| `RTCPeerConnection`s | N−1                             | 3                           |
+
+(Simulcast doesn't help mesh — the sender adapts for the worst receiver, and
+each remote gets its own encoding. SVC layer drops also require an SFU to be
+useful. See `docs/features/scaling.md` §3.)
+
+### 3.2 When the mesh breaks down
+
+The mesh fails at roughly **4–6 video participants**, and the reasons stack:
+
+1. **Uplink bandwidth.** At 1.5 Mbps per remote, a 6-person call needs
+   ~7.5 Mbps upload. Typical home upload is 5–20 Mbps; mobile upload is often
+   below 5 Mbps. `AdaptiveQualityController` (packages/quality) will keep
+   downgrading tiers, and below ~150 kbps the policy falls to audio-only.
+2. **Downlink + decode.** Each peer decodes N−1 streams. Decoding 5×720p30 in
+   software is beyond many laptops and most phones; iOS Safari in particular
+   cannot reliably render more than ~2–4 simultaneous video elements
+   (WebKit bug 179363, see research doc §7.2).
+3. **Encode load.** N−1 encoders per peer (one per connection) burn CPU/GPU;
+   the encoder reports `qualityLimitationReason: 'cpu'`, which the policy
+   engine reacts to by dropping tiers.
+4. **Renegotiation storms.** Every track add/remove (screen share, camera
+   toggle) renegotiates with every peer. With N peers that is N−1 SDP
+   exchanges per change (mitigated by `replaceTrack` in `ControlsManager` —
+   see `docs/features/controls.md` §4).
+
+**Rule of thumb:** mesh for **2–4 video** participants; more for
+**audio-only** rooms (Opus is ~50 kbps per participant); SFU beyond that.
+
+### 3.3 Mesh is the zero-ops default
+
+The mesh needs no media server, no per-minute infra cost, and works over _any_
+pub/sub backend — which is exactly why it is vidcall's core (architecture D2).
+Presence, reactions, chat, and screen-share announcements ride the same
+signaling; media rides the peer connections.
+
+---
+
+## 4. Backpressure and bandwidth math
+
+### 4.1 Per-track budgets (defaults used by the quality tiers)
+
+| Track                         | Bitrate budget                   | Notes                                   |
+| ----------------------------- | -------------------------------- | --------------------------------------- |
+| Opus audio                    | ~32–50 kbps                      | constant; never the bottleneck          |
+| 720p30 video                  | ~1.0–1.5 Mbps                    | default camera tier                     |
+| 480p30 video                  | ~600–900 kbps                    | early network downgrade                 |
+| 360p15 video                  | ~250–400 kbps                    | low-end / weak uplink                   |
+| Screen share 1080p30          | ~2–4 Mbps                        | high-motion content can spike higher    |
+| Data channel (reactions/chat) | ≪ 64 KB/message, throttle bursts | SCTP cap; `bufferedAmount` backpressure |
+
+### 4.2 The N-person uplink formula
+
+```
+uplink_required(N) ≈ (N − 1) × camera_bitrate + screen_bitrate (if sharing)
+downlink_required(N) ≈ Σ over remotes of their camera_bitrate
+```
+
+Examples (720p30 ≈ 1.5 Mbps):
+
+| N   | Uplink per peer | Verdict                                  |
+| --- | --------------- | ---------------------------------------- |
+| 2   | 1.5 Mbps        | any connection                           |
+| 4   | 4.5 Mbps        | most home/mobile uploads OK              |
+| 6   | 7.5 Mbps        | marginal on mobile; expect quality drops |
+| 8   | 10.5 Mbps       | requires fiber/cable upload; use an SFU  |
+
+`AdaptiveQualityController` reads `availableOutgoingBitrate` (GCC / RFC 8888)
+and downgrades tiers with hysteresis, so mesh calls degrade _gracefully_
+instead of failing — but the math above is why a 10-person mesh is
+audio-only in practice.
+
+### 4.3 Signaling backpressure
+
+Signaling is JSON envelopes over backend pub/sub (see
+`docs/features/scaling.md` §4 for rate math). Rules that keep the mesh stable:
+
+- **ICE coalescing**: candidates are emitted per event; adapters coalesce
+  bursts (transport package).
+- **`bufferedAmount`**: the data channel (`DataChannelBus`) is used for
+  reactions/chat; apps should throttle reaction spam (≥ ~250 ms between
+  sends) and watch `bufferedAmount` for chat bursts.
+- **Per-sender `seq`**: `OrderedMessageBuffer` dedupes/reorders per
+  `sessionId`, so unordered backends can't double-deliver SDP/ICE.
+- **`targetSenderId`**: offers/answers/ICE are addressed to one peer, so a
+  broadcast-only backend doesn't make every peer process everyone's SDP.
+
+---
+
+## 5. The SFU path (`SfuGateway`)
+
+When a call outgrows the mesh, media moves to a selective-forwarding unit.
+vidcall ships the **contract**, not the server:
+
+- `SfuGateway` (`packages/sfu-gateway/src/sfu-gateway.ts`): `join(roomId,
+participantId, opts)`, `onTrack(cb)`, `close(roomId?)`.
+- `SfuSession` (returned by `join`): `publishTrack(trackId, kind, opts)`,
+  `subscribe(participantId, opts)`, `setPreferredLayers(trackId, layer)`,
+  `requestKeyframe(trackId)`, `handleOffer/handleAnswer/addIceCandidate`,
+  `leave()`.
+- `SfuRouter` (`packages/sfu-gateway/src/sfu-router.ts`): pure logic that
+  validates room membership and maps wire `sfu` envelopes onto the session —
+  unit-testable without media.
+- `MediasoupAdapter`: reference `SfuGateway` implementation on mediasoup
+  (maps `join` → `createWebRtcTransport`, `publishTrack` → `produce`,
+  `subscribe` → `consume`, `setPreferredLayers` → `consumer.setPreferredLayers`,
+  `requestKeyframe` → `producer.requestKeyFrame`).
+
+### 5.1 Why a contract, not a bundle
+
+The research (webrtc-js.md §3.3) compared mediasoup, LiveKit, Janus, and
+others and concluded: bundling `mediasoup-client`/`livekit-client` would
+couple vidcall to one vendor's protocol and signaling, contradicting the
+"pluggable everywhere" mandate. The `SfuGateway` interface is vidcall's own
+small contract so **any** SFU (mediasoup, LiveKit, Janus, Jitsi Videobridge,
+custom) can be adapted — see `docs/features/scaling.md` §2 for the options
+and how each maps.
+
+### 5.2 SFU topology
+
+```
+        ┌─────────── signaling: backend pub/sub (unchanged) ───────────┐
+        │                                                              │
+     Alice                                                        Bob
+        │  ▲                                                      │  ▲
+   publish│  │ subscribe                                       pub│  │sub
+        ▼  │                                                      ▼  │
+   ┌──────────────────────────  SFU  ──────────────────────────────┐
+   │  Alice's track ──► forward ──► Bob's subscription (per-layer) │
+   │  Bob's track   ──► forward ──► Alice's subscription           │
+   └────────────────────────────────────────────────────────────────┘
+```
+
+Per peer: **1 uplink** (encode once, simulcast/SVC layers if supported),
+**N−1 downlinks** (the server forwards one layer per subscriber). The
+bandwidth formula becomes:
+
+```
+uplink_required(N) ≈ 1 × camera_bitrate          (same for every N!)
+downlink_required(N) ≈ Σ remote bitrates at their subscribed layers
+```
+
+### 5.3 Wire flow (SFU mode)
+
+Same envelope, same backend — new `sfu` action type and SDP/ICE addressed to
+the gateway participant:
+
+```
+A: sfu{publish, trackId, kind}  ──►  router → session.publishTrack(trackId, kind)
+A: offer{sdp} (target 'sfu')    ──►  session.handleOffer(offer) → adapter produces
+A: sfu{subscribe, senderId:B}   ──►  session.subscribe('B', {layers:['h','m','l']})
+A: offer{sdp} (target 'sfu')    ──►  session.handleOffer → consumer created → answer
+A: sfu{layer-change, layer:'m'} ──►  session.setPreferredLayers(trackId, 'm')
+A: sfu{keyframe-request}        ──►  session.requestKeyframe(trackId)
+A: sfu{leave}                   ──►  session.leave()
+```
+
+`SfuRouter.handle(envelope)` validates that the sender is a room member
+(`isParticipant`) and has a joined session (`registerSession`), then forwards;
+invalid sends emit typed errors (`not-a-participant`, `not-joined`,
+`unknown-action`, `invalid-payload`, `gateway-error`).
+
+---
+
+## 6. Recommended topologies per use case
+
+| Use case                              | Participants | Topology                            | Why                                                                              |
+| ------------------------------------- | ------------ | ----------------------------------- | -------------------------------------------------------------------------------- |
+| 1:1 sales/support/tutoring            | 2            | **mesh**                            | one pc each way; no infra                                                        |
+| Team standup / small meeting          | 3–4          | **mesh**                            | 3 uplinks per peer ≈ 4.5 Mbps; fine on office/home                               |
+| Family call (mixed devices)           | 4–6          | **mesh with quality caps** or SFU   | iOS Safari decode limits; cap tiers via `AdaptiveQualityController`              |
+| Classroom / lecture                   | 10–50        | **SFU** (mediasoup/LiveKit)         | mesh bandwidth math breaks at ~6                                                 |
+| Webinar (few speakers, many viewers)  | 100–10k      | **SFU + viewer-only subscriptions** | viewers subscribe audio-only or lowest layer                                     |
+| Large audio-only meeting              | 20–100       | mesh (audio) or SFU                 | Opus is cheap; mesh OK to ~20–30 on good networks                                |
+| Screen-share-heavy demo               | 3–8          | **SFU**                             | screen bitrate 2–4 Mbps × N−1 downlinks is brutal in mesh; SFU forwards one copy |
+| Recording-first (compliance, classes) | any          | **SFU + server egress**             | see `docs/features/scaling.md` §5                                                |
+
+**Migration path:** start with mesh (`Room`), keep the signaling layer
+identical, and when metrics (packet loss, bitrate tiers, CPU) say the call is
+outgrowing the mesh, swap the media plane to an `SfuGateway` — the app's
+`Room` API surface (`publish`, `track` events, controls) stays the same.
+
+---
+
+## 7. How signaling + wire protocol support each model
+
+| Wire primitive                                                | 1:1                           | Mesh                              | SFU                                                            |
+| ------------------------------------------------------------- | ----------------------------- | --------------------------------- | -------------------------------------------------------------- |
+| `join` / `leave` (presence)                                   | ✓                             | ✓                                 | ✓                                                              |
+| `offer` / `answer` / `ice`                                    | peer-addressed                | peer-addressed (`targetSenderId`) | addressed to the gateway participant (`targetSenderId: 'sfu'`) |
+| `presence` (backend-native)                                   | ✓                             | ✓                                 | ✓                                                              |
+| `reaction` / `chat`                                           | room broadcast + data channel | room broadcast + data channel     | room broadcast + data channel                                  |
+| `screen-share`                                                | ✓                             | ✓                                 | ✓                                                              |
+| `quality-warning`                                             | ✓                             | ✓                                 | ✓                                                              |
+| `sfu` (publish/subscribe/layer-change/keyframe-request/leave) | —                             | —                                 | ✓                                                              |
+| `ping` / `pong` (heartbeat)                                   | ✓                             | ✓                                 | ✓                                                              |
+
+The engine owns ordering/idempotency/glare (`OrderedMessageBuffer`,
+`PeerConnectionManager` perfect negotiation) so backends stay dumb pipes —
+the same backend adapter set (Supabase/Convex/Firebase/Appwrite/Postgres/
+SQLite/custom) works for all three models unchanged.
+
+**Related:** `docs/features/scaling.md` (mesh → SFU migration, media server
+options, simulcast/SVC, signaling at scale, recording) · `docs/features/controls.md`
+(local mute/camera/screen-share/reactions/device controls).
+
+---
+## Controls — mute, camera, screen share, reactions, devices
+Source: docs/features/controls.md | URL: https://vidcall.dev/docs/features/controls | Last-Modified: 2026-08-25T13:59:07.837Z
+
+# Controls — mute, camera, screen share, reactions, devices
+
+> Status: implementation doc for `packages/core/src/controls/ControlsManager.ts`.
+> `room.controls` is wired by `@mbsks/openrtc-core`'s index; the manager takes the
+> `Room` as a structurally-compatible `ControlsHost`.
+
+`ControlsManager` is the "Zoom-clone" control surface for the **local**
+participant: mic mute/unmute, camera on/off, screen share, raise hand,
+reactions, and device selection. It is attached to a `Room` as `room.controls`
+and is fully injectable (media provider functions) so it is unit-testable in
+Node (`packages/core/test/controls.test.ts`).
+
+```ts
+const controls = room.controls;
+await controls.toggleCamera(); // publish the camera
+await controls.setMicrophoneMuted(true); // mute (peers hear silence)
+await controls.toggleScreenShare(); // share the screen
+await controls.raiseHand(); // sends a '✋' reaction
+controls.on('mic-muted', (muted) => setMicButton(muted));
+```
+
+---
+
+## 1. State and events
+
+The manager exposes a single state snapshot plus typed events:
+
+```ts
+interface ControlsState {
+  micMuted: boolean; // track still published, enabled=false
+  cameraMuted: boolean; // track still published, enabled=false
+  cameraPublishing: boolean; // a camera video track is published
+  screenSharing: boolean; // a screen track is published
+  handRaised: boolean; // local raise-hand flag
+  devices: {
+    audioinput: MediaDeviceInfo[];
+    videoinput: MediaDeviceInfo[];
+    audiooutput: MediaDeviceInfo[];
+  };
+}
+```
+
+Events (`controls.on(...)` — returns an unsubscribe function):
+
+| Event                  | Args                                                     | Meaning                                            |
+| ---------------------- | -------------------------------------------------------- | -------------------------------------------------- |
+| `mic-muted`            | `boolean`                                                | mic mute state changed (`true` = muted)            |
+| `camera-muted`         | `boolean`                                                | camera mute state changed                          |
+| `camera-published`     | `boolean`                                                | camera publish state changed (`true` = publishing) |
+| `screen-share-started` | `{ track, label? }`                                      | screen share began                                 |
+| `screen-share-stopped` | `{ reason: 'user' \| 'track-ended' \| 'error', error? }` | screen share ended                                 |
+| `device-selected`      | `{ kind, deviceId }`                                     | a capture device was selected                      |
+| `devices-changed`      | `MediaDeviceInfo[]`                                      | platform `devicechange` fired and the list changed |
+| `hand-raised`          | `boolean`                                                | local raise-hand flag changed                      |
+| `error`                | `Error`                                                  | async failure (devicechange refresh, etc.)         |
+
+---
+
+## 2. Microphone mute/unmute
+
+### 2.1 API
+
+```ts
+await controls.setMicrophoneMuted(true); // mute
+await controls.toggleMicrophone(); // flip; returns the new state
+const muted = controls.state.micMuted; // read
+controls.on('mic-muted', (m) => updateMicButton(m));
+```
+
+### 2.2 What mute actually does
+
+Mute is `MediaStreamTrack.enabled = false`, **not** an unpublish:
+
+- The track stays published on every peer connection (no renegotiation).
+- The encoder emits silence/comfort noise instead of audio — the remote keeps
+  a healthy RTP stream (no "call dropped" heuristics, no PLC artifacts).
+- The local `TrackPublication.muted` flag is kept in sync, and `mic-muted`
+  fires so the app can update its UI.
+- Remote participants can still see the participant; they just hear silence.
+
+```
+local:  setMicrophoneMuted(true)
+        │  micTrack.enabled = false      (encoder → silence)
+        │  publication.muted = true
+        ▼
+        emit 'mic-muted' true  ──►  app button state
+remote: no signaling at all — the RTP stream continues with silence frames
+```
+
+Unmute is the reverse (`enabled = true`); the browser immediately resumes
+encoding real audio.
+
+### 2.3 Edge cases
+
+- **Mute before join / before publish.** The mute flag is stored even when no
+  mic track exists yet. When the track is acquired through the controls
+  manager (`controls.startMicrophone()`), the pending mute is applied to the
+  new track automatically:
+
+  ```ts
+  await controls.setMicrophoneMuted(true); // no track yet — flag stored
+  await room.join();
+  await controls.startMicrophone(); // track comes up muted
+  ```
+
+  If the app publishes the mic itself via `room.publish(track)`, call
+  `setMicrophoneMuted` after publishing (it applies to the live track).
+
+- **Mute survives device switches and republish.** `setCameraDevice`/
+  `setMicrophoneDevice` re-applies the muted flag to the replacement track.
+- **Permission denied.** `getUserMedia` rejects (`NotAllowedError`); the
+  promise propagates and nothing is published. Surface the error to the user.
+- **Track ended (device unplugged).** The publication's `track` becomes
+  `null`/ended; the mute flag persists so a re-acquired track starts muted.
+
+---
+
+## 3. Camera on/off and camera mute
+
+Camera control is split into two independent concepts — do not conflate them:
+
+| Action     | API                                         | Effect                                             |
+| ---------- | ------------------------------------------- | -------------------------------------------------- |
+| **Mute**   | `setCameraMuted(m)` / `toggleCameraMuted()` | `enabled=false`: black frames, no renegotiation    |
+| **On/off** | `toggleCamera()` / `stopCamera()`           | publish/unpublish the camera track (renegotiation) |
+
+### 3.1 API
+
+```ts
+const on = await controls.toggleCamera(); // publish via getUserMedia
+controls.on('camera-published', (on) => updateCameraTile(on));
+
+await controls.setCameraMuted(true); // black frames (still published)
+await controls.toggleCamera(); // unpublish + stop the track
+```
+
+### 3.2 Publish flow
+
+```
+toggleCamera() → true
+  getUserMedia({ video: preferredDevice | constraints })
+  track.enabled = !cameraMuted          (mute-before-publish applied)
+  room.publish(track, { source: 'camera' })
+  emit 'camera-published' true
+  ──► renegotiation with every peer ──► remote ontrack → remote tile
+```
+
+`toggleCamera()` returns the new publishing state. `stopCamera()` unpublishes
+and stops the local track (freeing the camera light).
+
+### 3.3 Edge cases
+
+- **Camera mute + camera off are independent.** You can mute the camera while
+  it is off — the flag persists and the next `toggleCamera()` publishes a
+  muted (black) track.
+- **Screen share interplay.** If the screen share is in _replace mode_ (see
+  §4) and you call `stopCamera()`, the share is stopped first so the camera
+  track can be restored, then the camera is unpublished. To keep camera +
+  screen simultaneously, publish the screen track yourself via
+  `room.publish(track, { source: 'screen' })` instead of
+  `controls.toggleScreenShare()`.
+- **iOS Safari.** `getUserMedia` requires a user gesture; the camera stops
+  when the tab backgrounds. Rendering remote video needs `playsinline` on
+  `<video>` elements.
+
+---
+
+## 4. Screen share
+
+### 4.1 API
+
+```ts
+const sharing = await controls.toggleScreenShare(); // start/stop
+await controls.startScreenShare();
+await controls.stopScreenShare('user');
+controls.on('screen-share-started', ({ track }) => showShareBadge());
+controls.on('screen-share-stopped', ({ reason }) => hideShareBadge(reason));
+```
+
+### 4.2 Two publication modes
+
+`toggleScreenShare()` picks a mode automatically:
+
+1. **Replace mode (camera published):** the display track is swapped onto the
+   camera's `RTCRtpSender`s with `RTCRtpSender.replaceTrack()` — **zero
+   renegotiation**. The remote keeps the same video m-line; its track object
+   does not change, only the content (the `screen-share` envelope tells the
+   app this video is now a screen share). When sharing stops, the camera
+   track is swapped back.
+
+   ```
+   startScreenShare()
+     getDisplayMedia({ video: true })            // browser picker
+     every peer: sender.replaceTrack(displayTrack)  // no SDP exchange
+     announce 'screen-share' start               // wire envelope
+     emit 'screen-share-started'
+     displayTrack.onended → stopScreenShare('track-ended')
+   ```
+
+2. **Separate mode (no camera):** the display track is published as a new
+   `screen` publication (new m-line, one renegotiation). The remote sees a
+   new video track and the `screen-share` envelope.
+
+### 4.3 Stop paths
+
+| Path                                                       | How                                                                                                 |
+| ---------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| App calls `stopScreenShare()` / `toggleScreenShare()`      | restore camera (replace mode) or unpublish (separate mode), stop the display track, announce `stop` |
+| User clicks the browser's native **"Stop sharing"** button | `displayTrack.onended` fires → automatic `stopScreenShare('track-ended')`                           |
+| Error mid-capture                                          | `getDisplayMedia` rejects → nothing published, error propagates                                     |
+
+### 4.4 Edge cases
+
+- **iOS Safari has no `getDisplayMedia`** — screen share is unsupported there;
+  feature-detect and hide the button (`'getDisplayMedia' in navigator.mediaDevices`).
+- **Camera + screen at the same time:** use `room.publish` for one of them;
+  `controls.toggleScreenShare()` deliberately reuses the camera slot to avoid
+  renegotiation.
+- **Track replacement:** `replaceTrack` keeps the same m-line/SSRC stream, so
+  the remote's publication bookkeeping is untouched; the `screen-share`
+  envelope is the source of truth for what the video actually shows.
+
+---
+
+## 5. Raise hand and reactions
+
+The wire protocol already defines reaction payloads
+(`ReactionPayload { emoji, targetSenderId, ts }`); the controls manager
+reuses them rather than inventing new message types.
+
+```ts
+await controls.raiseHand(); // sends a '✋' reaction + sets local flag
+await controls.lowerHand(); // clears the local flag
+await controls.toggleHand(); // flip; returns the new state
+await controls.sendReaction('🎉', 'b'); // any emoji, optionally targeted
+
+controls.on('hand-raised', (raised) => updateHandButton(raised));
+room.on('reaction', (e) => showFloatingEmoji(e.emoji, e.participantId));
+```
+
+Flow:
+
+```
+raiseHand()
+  room.sendReaction('✋')      ──►  wire envelope → every peer renders the overlay
+  handRaised = true           ──►  emit 'hand-raised' true → local button state
+```
+
+Notes:
+
+- `handRaised` is a **local** flag; peers see the reaction overlay, not a
+  structured "hand" state. Apps that need a persistent hand list can track
+  `✋` reactions per participant.
+- The default raise-hand emoji is `✋` (`RAISE_HAND_EMOJI`); override it with
+  `new ControlsManager(room, { raiseHandEmoji: '🙋' })`.
+- Reactions also flow over the per-peer data channel (`DataChannelBus`) for
+  lower latency when peer connections are up.
+
+---
+
+## 6. Device selection and `devicechange`
+
+### 6.1 Listing devices
+
+```ts
+const devices = await controls.listDevices();
+controls.state.devices; // { audioinput: [...], videoinput: [...], audiooutput: [...] }
+controls.on('devices-changed', (all) => rebuildDeviceMenus(all));
+```
+
+The manager subscribes to the platform `devicechange` event at construction
+(injectable), refreshes the categorized list, and emits `devices-changed`
+only when the list actually changed (a plug/unplug doesn't spam listeners).
+`dispose()` (called with the room's teardown) unsubscribes.
+
+### 6.2 Selecting a device
+
+```ts
+await controls.setMicrophoneDevice('mic-2');
+await controls.setCameraDevice('cam-9');
+```
+
+Strategy, per device kind:
+
+1. **`applyConstraints({ deviceId: { exact } })` on the live track** — no
+   renegotiation, no capture restart. Supported for video in Chromium-family
+   browsers and for audio in most modern browsers.
+2. **Fallback: re-acquire + `replaceTrack`.** If the browser rejects the
+   constraint (`NotSupportedError`), the manager re-runs `getUserMedia` with
+   the new `deviceId`, swaps the track onto every sender with
+   `RTCRtpSender.replaceTrack()`, stops the old track, and updates the
+   publication (preserving the muted flag).
+3. **No live track yet:** the choice is remembered and applied to the _next_
+   acquisition (`startMicrophone` / `startCamera` use the preferred device).
+
+```ts
+await controls.setCameraDevice('cam-9'); // before any camera exists
+await controls.toggleCamera(); // getUserMedia({ video: { deviceId: { exact: 'cam-9' } } })
+```
+
+`device-selected` fires on every successful switch.
+
+### 6.3 Relationship to `room.devices`
+
+`Room` also exposes a lower-level devices facade (`room.devices`,
+`packages/core/src/devices.ts`) with `listDevices(kind)`, `switchCamera()`
+(front/back via `facingMode`), and `restartTrack(kind, { deviceId })`.
+`room.controls` is the higher-level convenience (mute-aware, publication-aware,
+reaction/raise-hand surface); `room.devices` is the platform-facing utility
+(guarded, envelope-free). Both share the same underlying
+`navigator.mediaDevices` seam and are injectable for tests.
+
+---
+
+## 7. Echo and audio quality
+
+The default audio constraints applied by the controls manager
+(`DEFAULT_AUDIO_CONSTRAINTS`) request the browser's acoustic echo canceller,
+noise suppression, and auto-gain control:
+
+```ts
+{ echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+```
+
+- **Never disable echo cancellation** on the _local_ mic in a call; the
+  browser AEC (libwebrtc audio processing) is the first line of defense.
+- **Don't play remote audio near the mic** (speakerphone setups) — keep
+  output on headphones when possible; AEC handles moderate leakage.
+- **Safari/iOS AEC quirks** are real: echo at call start or after
+  mute/unmute cycles is a known WebKit issue. Community workarounds: delay
+  audio start a couple of seconds after `getUserMedia`, or re-toggle the mute
+  once. vidcall's mute implementation (`enabled=false`) is the least
+  disruptive way to do that (no renegotiation, no track restart).
+- Callers can override constraints per acquisition:
+  `controls.startMicrophone({ echoCancellation: true, noiseSuppression: false })`.
+
+---
+
+## 8. Full lifecycle example
+
+```ts
+import { Room } from '@mbsks/openrtc-core';
+import { SupabaseBackend } from '@mbsks/openrtc-backend-supabase';
+
+const room = new Room({
+  roomId: 'room-abc',
+  selfId: 'user-42',
+  transport: new SupabaseBackend({ url, anonKey }),
+});
+const controls = room.controls; // wired by @mbsks/openrtc-core
+
+controls.on('mic-muted', (m) => micButton.update(m));
+controls.on('camera-published', (on) => camButton.update(on));
+controls.on('screen-share-started', () => shareBadge.show());
+controls.on('screen-share-stopped', ({ reason }) => shareBadge.hide(reason));
+controls.on('devices-changed', () => void refreshDeviceMenus());
+
+await room.join();
+await controls.startMicrophone();
+await controls.toggleCamera();
+
+// Toolbar handlers
+micButton.onClick = () => controls.toggleMicrophone();
+camButton.onClick = () => controls.toggleCamera();
+shareButton.onClick = () => controls.toggleScreenShare();
+handButton.onClick = () => controls.toggleHand();
+
+// Later
+await room.leave(); // stops tracks, releases devicechange, closes peers
+```
+
+**Related:** `docs/features/call-models.md` (mesh/SFU topology — controls work
+identically in both) · `docs/features/scaling.md` (SFU layer selection is the
+receive-side counterpart of local mute/quality controls).
+
+---
+## Scaling — mesh → SFU, simulcast/SVC, signaling, recording
+Source: docs/features/scaling.md | URL: https://vidcall.dev/docs/features/scaling | Last-Modified: 2026-08-25T13:59:07.838Z
+
+# Scaling — mesh → SFU, simulcast/SVC, signaling, recording
+
+> Status: implementation doc. Builds on `docs/features/call-models.md` (topology
+> and bandwidth math) and `packages/sfu-gateway` (the SFU contract).
+
+vidcall scales in four independent planes:
+
+1. **Media plane**: mesh → SFU gateway (`SfuGateway` + `SfuSession`).
+2. **Codec plane**: simulcast/SVC so the SFU forwards one layer per subscriber.
+3. **Signaling plane**: pub/sub fan-out, chunking, heartbeat, rate discipline.
+4. **Recording plane**: client-side `MediaRecorder` hooks vs server-side egress.
+
+---
+
+## 1. Mesh → SFU: when and how
+
+### 1.1 When to migrate
+
+`docs/features/call-models.md` §3.2 shows the mesh breaking down at 4–6 video
+participants (uplink bandwidth, decode count, encode count, renegotiation
+storms). Operational signals that it is time:
+
+- `AdaptiveQualityController` reports sustained `network` downgrades on
+  typical participants (bitrate tiers pinned at 360p15 / audio-only).
+- `qualityLimitationReason: 'cpu'` on senders (encoders saturated).
+- Packet loss / RTT rising as N grows (uplink saturation).
+- Recording or compliance needs that want server-side capture (see §5).
+
+### 1.2 What changes
+
+|                  | Mesh          | SFU                                         |
+| ---------------- | ------------- | ------------------------------------------- |
+| Peer connections | N−1 per peer  | 1 per peer (to the gateway)                 |
+| Uplinks          | N−1           | **1**                                       |
+| Downlinks        | N−1           | N−1 (server forwards per-subscriber layers) |
+| Encode           | N−1 per track | 1 (simulcast/SVC layers)                    |
+| Decode           | N−1           | N−1 (but at chosen layers)                  |
+| Media server     | none          | yes (mediasoup/LiveKit/Janus/…)             |
+| Signaling        | unchanged     | **unchanged** (same envelope, `sfu` type)   |
+
+The client API (`Room`, `publish`, `track` events, `room.controls`) is the
+same; only the media-plane implementation behind it changes.
+
+### 1.3 How to migrate
+
+1. Deploy an SFU (see §2).
+2. Implement an `SfuGateway` adapter (or use the reference
+   `MediasoupAdapter`) mapping `join/publishTrack/subscribe/
+setPreferredLayers/requestKeyframe` onto the server.
+3. Route the wire `sfu` envelopes through `SfuRouter` (validates room
+   membership, requires a joined session, forwards to the session).
+4. In the client, replace per-peer `RTCPeerConnection` management with one
+   gateway session per participant; keep `room.publish` semantics by mapping
+   them to `session.publishTrack` + SDP passthrough (`handleOffer`).
+5. Flip a feature flag per room: small rooms stay mesh, large rooms go SFU.
+
+---
+
+## 2. Media server options
+
+### 2.1 Comparison
+
+|                       | **mediasoup**                                                                                  | **LiveKit**                                                                                                               | **Janus**                                                     | **Jitsi Videobridge**              |
+| --------------------- | ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- | ---------------------------------- |
+| Language              | Node.js (C++ workers)                                                                          | Go                                                                                                                        | C (plugins)                                                   | Java/Kotlin                        |
+| License               | ISC                                                                                            | Apache-2.0                                                                                                                | **GPLv3**                                                     | Apache-2.0                         |
+| Shape                 | **Library** — you build signaling + app                                                        | **Platform** — server + client SDK + protocol                                                                             | Gateway with plugins (`videoroom`, recorder)                  | SFU with COLIBRI protocol          |
+| Signaling             | None (you build it)                                                                            | LiveKit's own WebSocket protocol                                                                                          | Janus plugin protocol                                         | COLIBRI                            |
+| Simulcast/SVC         | First-class                                                                                    | First-class + **adaptive stream** (SDK auto-selects layer by tile size/visibility)                                        | Supported in videoroom                                        | Supported                          |
+| Recording/egress      | Via app (server side)                                                                          | **Egress** built in                                                                                                       | Recorder plugin                                               | In Jitsi Meet stack                |
+| vidcall fit           | Reference adapter ships in `@mbsks/openrtc-sfu-gateway`; you own signaling (matches vidcall's model) | Use `livekit-client` directly or a thin adapter — but LiveKit owns the peer connection, so pluggable backends don't apply | GPLv3 forces license review; plugin protocol needs an adapter | Apache-2.0; COLIBRI adapter needed |
+| Publish date / status | 2016-01-01, very active                                                                        | 2021-01-24, very active                                                                                                   | 2014, active                                                  | 2014, active                       |
+
+(All verified ≥14-day supply-chain age; details in `docs/research/webrtc-js.md` §3.2.)
+
+### 2.2 Recommendations
+
+- **Self-hosted, vidcall-native:** **mediasoup** — it is a library, not a
+  product, so the app keeps owning signaling (which vidcall already provides
+  via pluggable backends). The reference `MediasoupAdapter` maps
+  `SfuGateway` → mediasoup 1:1 (see §2.3).
+- **Managed, feature-rich:** **LiveKit** — best egress/adaptive-stream
+  story; use `livekit-client` directly for the media plane or wrap it in an
+  `SfuGateway` adapter. Note LiveKit's protocol owns the peer connection, so
+  it replaces (not plugs into) vidcall's engine.
+- **Existing infra / multipurpose:** **Janus** — powerful but GPLv3
+  (review licensing) and its plugin protocol needs a custom adapter.
+- **Jitsi stack already in use:** Jitsi Videobridge via a COLIBRI adapter.
+
+### 2.3 `SfuGateway` → mediasoup mapping (reference adapter)
+
+| `SfuGateway` / `SfuSession`          | mediasoup                                      |
+| ------------------------------------ | ---------------------------------------------- |
+| `join(roomId, participantId)`        | `router.createWebRtcTransport()`               |
+| `publishTrack(trackId, kind)`        | `transport.produce()` (after the client offer) |
+| `subscribe(participantId)`           | `transport.consume()`                          |
+| `setPreferredLayers(trackId, layer)` | `consumer.setPreferredLayers()`                |
+| `requestKeyframe(trackId)`           | `producer.requestKeyFrame()`                   |
+| `handleOffer` / `handleAnswer`       | `transport.connect({ dtlsParameters })`        |
+| `addIceCandidate`                    | `transport.addIceCandidate()`                  |
+| `leave()`                            | `transport.close()`                            |
+
+The adapter is deliberately SDP-minimal (see `packages/sfu-gateway/src/sdp.ts`);
+production deployments may swap in a full SDP translation layer.
+
+---
+
+## 3. Simulcast and SVC
+
+An SFU forwards **one layer per subscriber**, so the sender encodes layers
+once and the server trims per-subscriber. Two encodings achieve this:
+
+|                 | Simulcast (RFC 8853)                               | SVC (VP9/AV1 `scalabilityMode`)                           |
+| --------------- | -------------------------------------------------- | --------------------------------------------------------- |
+| Wire            | 2–3 independent streams (`rid: f/h/q`)             | one stream, spatial+temporal layers                       |
+| Layer down      | SFU drops packets                                  | SFU drops packets (cheap)                                 |
+| Layer up        | needs keyframe on the new layer                    | needs keyframe (spatial)                                  |
+| Browser support | Chrome/Edge/Firefox send; **Safari: no send-side** | Chrome VP9/AV1; Firefox VP9 temporal only; **Safari: no** |
+
+### 3.1 Send-side setup
+
+The engine requests layers when publishing (adapter maps to
+`RTCRtpSender.setParameters` encodings):
+
+```ts
+await session.publishTrack('cam-1', 'video', {
+  simulcast: true, // e.g. 1080p/720p/360p with rids f/h/q
+});
+```
+
+For single-stream (Safari) senders, the client falls back to bitrate caps via
+`AdaptiveQualityController` (maxBitrate / scaleResolutionDownBy /
+degradationPreference). Capability hints (`capabilities.simulcast/svc/codecs`)
+travel in the `join` envelope so the SFU knows what to expect.
+
+### 3.2 Receive-side layer selection
+
+```ts
+// wire: sfu{action:'layer-change', trackId, layer:'m'}
+await session.setPreferredLayers('cam-1', 'm'); // 'l' | 'm' | 'h'
+```
+
+Best practice: choose the layer from the rendered tile size + network state
+(LiveKit calls this "adaptive stream"; vidcall leaves the policy to the app
+or `AdaptiveQualityController`'s receive-side path). In mesh there are no
+layers to pick — the receive-side analog is `TrackSubscription.setEnabled()`
+(pause decoding of hidden tiles).
+
+### 3.3 Keyframes at scale
+
+- **Layer-up requires a keyframe.** Use `session.requestKeyframe(trackId)`
+  (wire `sfu{action:'keyframe-request'}`; mediasoup
+  `producer.requestKeyFrame()`, Chromium `RTCRtpScriptTransformer.
+generateKeyFrame()`).
+- **Join storms:** many viewers joining at once each requesting keyframes
+  spikes encoder+network. Stagger requests (jitter 0–1 s) and prefer SFUs
+  with keyframe caching (LiveKit fast-starts subscribers).
+- **PLI/FIR** (RFC 4585/5104) are handled automatically by browsers on loss;
+  don't build custom loss recovery.
+
+---
+
+## 4. Signaling scaling (pub/sub fan-out)
+
+Signaling is JSON envelopes over the backend's own pub/sub — one channel per
+room. The scaling levers:
+
+### 4.1 Envelope size and rate
+
+| Envelope                                  | Size       | Rate                                                      |
+| ----------------------------------------- | ---------- | --------------------------------------------------------- |
+| `offer`/`answer` (full SDP, unified-plan) | 3–10 KB    | per renegotiation (rare; `replaceTrack` avoids most)      |
+| `ice` candidate                           | ~100–300 B | burst of 2–10 per peer per connection                     |
+| `join`/`leave`/`presence`                 | ~200 B     | join/leave + heartbeat (30 s)                             |
+| `reaction`/`chat`                         | < 1 KB     | throttled (~≥250 ms between reactions; chat ≤ 4000 chars) |
+| `sfu` control                             | < 500 B    | per publish/subscribe/layer-change                        |
+
+A 100-person room therefore moves well under 1 MB/min of signaling — the
+bottleneck is _message rate limits_ on managed backends, not bytes.
+
+### 4.2 Backend fan-out characteristics
+
+| Backend           | Fan-out primitive                            | Scale notes                                                                                                  |
+| ----------------- | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| Supabase Realtime | one broadcast channel per room (`room:{id}`) | ordered per channel; watch per-channel message limits                                                        |
+| Convex            | mutation writes + subscription query         | eventually consistent; engine's `OrderedMessageBuffer` absorbs reordering                                    |
+| Firebase RTDB     | push at `rooms/{id}/msgs` + `child_added`    | ordered by key; `onDisconnect` presence                                                                      |
+| Appwrite          | realtime events on collection docs           | one-way → doc-write signaling + heartbeat presence                                                           |
+| Postgres          | `LISTEN/NOTIFY`                              | **7 KB NOTIFY payload cap** — the transport chunker splits larger envelopes; browser clients need a WS relay |
+| SQLite/libSQL     | BroadcastChannel                             | same-device only (dev/test)                                                                                  |
+
+All of them: the engine owns ordering/idempotency/glare, so adapters can be
+dumb and stay within each platform's limits.
+
+### 4.3 Rate discipline
+
+- **ICE coalescing** in the transport package merges candidate bursts per
+  peer per tick.
+- **Chunker** splits envelopes > backend limits (Postgres 7 KB NOTIFY) and
+  reassembles on the receiver.
+- **Heartbeat + presence expiry** (backend-native `onDisconnect` where
+  available) removes dead peers without explicit `leave`.
+- **Peer-addressed envelopes** (`targetSenderId`) keep SDP/ICE fan-out O(1)
+  instead of O(N) per peer.
+- For very large rooms, disable per-peer ICE in signaling and let the SFU
+  own media-plane signaling (only `sfu` envelopes + presence remain).
+
+---
+
+## 5. Recording at scale
+
+### 5.1 Client-side recording (vidcall default)
+
+`RoomRecordingFacade` (`room.recording`) composites the local stream + remote
+streams into a `MediaRecorder` and uploads chunks via the recording endpoint
+(`room.recording.startRecording({ localStream, remoteStreams })` →
+`recording:blob-chunk` → `FetchRecordingUploader` → finalize report). Wire:
+`recording-state` envelopes announce recorders to peers.
+
+**Costs that grow with N:**
+
+| Cost           | Behavior                                                           |
+| -------------- | ------------------------------------------------------------------ |
+| CPU            | each recording client encodes a composite — significant on mobile  |
+| Sync           | remote streams arrive over the network; composite timestamps drift |
+| Storage/egress | each client uploads its own composite; server must dedupe          |
+| Failure modes  | recorder dies with the tab; tab backgrounding kills MediaRecorder  |
+
+**Best for:** 1:1–small group calls, MVP recording, user-initiated
+"record this call on my device".
+
+### 5.2 Server-side egress (at scale)
+
+The SFU receives every stream once — recording there is O(N) media + O(1)
+per room:
+
+| Option                    | Notes                                                                                           |
+| ------------------------- | ----------------------------------------------------------------------------------------------- |
+| **LiveKit Egress**        | built-in: room/composite/track egress to S3; the strongest managed option                       |
+| **Janus recorder plugin** | per-participant WebM recordings; plugin-based                                                   |
+| **mediasoup + app**       | you run the recorder (e.g. FFmpeg/mediabunny) server-side against `producer`/`consumer` streams |
+| **vidcall RecordingHook** | the hook interface stays; SFU mode may delegate to egress instead of MediaRecorder              |
+
+**Why server-side wins at scale:** one copy of each stream, no client CPU,
+no client upload bandwidth, gapless even when participants drop, and
+compliance-grade capture (retention, redaction, audit) can be applied on the
+server.
+
+### 5.3 Decision guide
+
+| Scenario                      | Recording                                         |
+| ----------------------------- | ------------------------------------------------- |
+| 1:1 MVP, user-initiated       | client-side `room.recording` (MediaRecorder)      |
+| 2–4 mesh, "record this call"  | client-side composite; cap at 1 recorder          |
+| Classroom/webinar 10–100      | **SFU egress** (LiveKit Egress or Janus recorder) |
+| Compliance/archive            | **SFU egress** + server-side retention            |
+| Mobile participants recording | never client-side (CPU + backgrounding)           |
+
+---
+
+## 6. Reference architecture at scale
+
+```
+Clients (vidcall app)
+   │  signaling: backend pub/sub (Supabase/Convex/… )   [unchanged at scale]
+   │  media:     1 RTCPeerConnection each → SFU
+   ▼
+SFU (mediasoup via MediasoupAdapter | LiveKit | Janus)
+   │  simulcast/SVC layer forwarding (setPreferredLayers)
+   │  keyframe-request handling (requestKeyframe)
+   ├──► Egress/recorder (LiveKit Egress | Janus recorder | app-side)
+   ▼
+TURN (coTURN) for NAT-traversal failures          ──  STUN is not enough (§7.1 research)
+   ▲
+   └── signaling relay for Postgres/SQLite backends (WS bridge)
+```
+
+**Related:** `docs/features/call-models.md` (topologies + bandwidth math) ·
+`docs/features/controls.md` (local controls work identically in SFU mode).

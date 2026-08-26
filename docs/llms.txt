@@ -1,0 +1,23 @@
+# vidcall — llms.txt
+> Peer-to-peer calling for any app — mesh WebRTC, pluggable signaling, adaptive quality.
+
+> Generated: 2026-08-26T10:36:57.374Z | Source: docs/config.json
+
+- [Getting started with vidcall](https://vidcall.dev/docs/getting-started) — docs/getting-started.md (Last-Modified: 2026-08-26T10:35:52.896Z)
+- [vidcall — Architecture Blueprint (synthesized from research)](https://vidcall.dev/docs/architecture) — docs/architecture.md (Last-Modified: 2026-08-25T17:54:22.650Z)
+- [Transport — signaling and horizontal scale](https://vidcall.dev/docs/transport) — docs/transport.md (Last-Modified: 2026-08-25T17:47:23.897Z)
+- [Media — transport seam, topology, processors](https://vidcall.dev/docs/media) — docs/media.md (Last-Modified: 2026-08-25T17:47:05.897Z)
+- [Recording — client, SFU egress, storage](https://vidcall.dev/docs/recording) — docs/recording.md (Last-Modified: 2026-08-25T17:46:58.796Z)
+- [Security — auth, policy, E2EE, TURN](https://vidcall.dev/docs/security) — docs/security.md (Last-Modified: 2026-08-25T17:46:51.543Z)
+- [vidcall — Backend Adapter Limits](https://vidcall.dev/docs/limits) — docs/limits.md (Last-Modified: 2026-08-25T16:24:01.139Z)
+- [Deployment guide — from localhost to production](https://vidcall.dev/docs/guides/deployment) — docs/guides/deployment.md (Last-Modified: 2026-08-26T10:35:22.573Z)
+- [Error handling — taxonomy and what to do](https://vidcall.dev/docs/guides/error-handling) — docs/guides/error-handling.md (Last-Modified: 2026-08-26T10:35:31.153Z)
+- [Testing your app — fakes and harnesses](https://vidcall.dev/docs/guides/testing) — docs/guides/testing.md (Last-Modified: 2026-08-26T10:35:39.027Z)
+- [Migration guide — what breaks and how to update](https://vidcall.dev/docs/guides/migration) — docs/guides/migration.md (Last-Modified: 2026-08-26T10:35:46.015Z)
+- [vidcall testing — L0 / L1 / L2 matrix](https://vidcall.dev/docs/testing) — docs/testing.md (Last-Modified: 2026-08-25T13:59:08.000Z)
+- [Call models — 1:1, mesh, and SFU](https://vidcall.dev/docs/features/call-models) — docs/features/call-models.md (Last-Modified: 2026-08-25T13:59:07.836Z)
+- [Controls — mute, camera, screen share, reactions, devices](https://vidcall.dev/docs/features/controls) — docs/features/controls.md (Last-Modified: 2026-08-25T13:59:07.837Z)
+- [Scaling — mesh → SFU, simulcast/SVC, signaling, recording](https://vidcall.dev/docs/features/scaling) — docs/features/scaling.md (Last-Modified: 2026-08-25T13:59:07.838Z)
+
+## Full content
+See /llms-full.txt for concatenated markdown with URL parity.

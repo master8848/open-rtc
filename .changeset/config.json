@@ -4,7 +4,10 @@
   "baseBranch": "main",
   "changelog": "@changesets/cli/changelog",
   "commit": ["./commits.mjs", null],
-  "fixed": [],
+  "fixed": [
+    ["@mbsks/openrtc-core", "@mbsks/openrtc-quality", "@mbsks/openrtc-transport"],
+    ["@mbsks/openrtc-server", "@mbsks/openrtc-sfu-gateway"]
+  ],
   "linked": [],
   "privatePackages": {
     "version": false,

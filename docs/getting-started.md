@@ -238,10 +238,7 @@ and recording — is [`examples/vanilla/main.ts`](../examples/vanilla/main.ts).
 - **Recording** — `room.recording` composites local + remote streams into a
   MediaRecorder session and can upload chunks to `@mbsks/openrtc-server`, where
   disk or S3-compatible storage keeps them.
-- **Bigger calls** — the mesh is comfortable around 2–4 participants. Beyond
-  that you want an SFU: [`packages/sfu-gateway`](../packages/sfu-gateway/README.md)
-  has the interface and a mediasoup reference adapter (scaffolded; wiring into
-  `Room` is still TODO).
+- **Bigger calls** — the mesh is comfortable around 2–4 participants. Beyond that enable auto SFU: `new Room({ roomId, selfId, transport, topology: { topology: 'auto', autoThreshold: 4, sfu: { gateway } } })` (`packages/core/src/media/topology.ts:50`) — `TopologyController` migrates `mesh→SFU` when participant count exceeds the threshold via `SfuMediaTransport` (`docs/media.md:8`, `plans/03-media-topology.md:50`); manual `room.setTopology('mesh'|'sfu'|'auto')`. See [`packages/sfu-gateway`](../packages/sfu-gateway/README.md) (mediasoup reference adapter).
 - **Your own backend/transport** — implement the `SignalingTransport`
   interface from [`@mbsks/openrtc-transport`](../packages/transport/README.md),
   validate with the shared test suite (`runAdapterTestSuite`), and check wire

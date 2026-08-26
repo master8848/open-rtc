@@ -1,0 +1,45 @@
+{
+  "$schema": "https://vidcall.dev/schema/docs-config.json",
+  "title": "vidcall",
+  "description": "Peer-to-peer calling for any app — mesh WebRTC, pluggable signaling, adaptive quality.",
+  "baseUrl": "https://vidcall.dev",
+  "sidebar": [
+    {
+      "label": "Start",
+      "items": [
+        { "label": "Getting started", "path": "getting-started.md", "href": "/docs/getting-started" },
+        { "label": "Architecture", "path": "architecture.md", "href": "/docs/architecture" }
+      ]
+    },
+    {
+      "label": "Journey",
+      "items": [
+        { "label": "Transport & resilience", "path": "transport.md", "href": "/docs/transport" },
+        { "label": "Media & topology", "path": "media.md", "href": "/docs/media" },
+        { "label": "Recording & storage", "path": "recording.md", "href": "/docs/recording" },
+        { "label": "Security & auth", "path": "security.md", "href": "/docs/security" },
+        { "label": "Limits & backends", "path": "limits.md", "href": "/docs/limits" }
+      ]
+    },
+    {
+      "label": "Guides",
+      "items": [
+        { "label": "Deployment", "path": "guides/deployment.md", "href": "/docs/guides/deployment" },
+        { "label": "Error handling", "path": "guides/error-handling.md", "href": "/docs/guides/error-handling" },
+        { "label": "Testing your app", "path": "guides/testing.md", "href": "/docs/guides/testing" },
+        { "label": "Migration", "path": "guides/migration.md", "href": "/docs/guides/migration" }
+      ]
+    },
+    {
+      "label": "Reference",
+      "items": [
+        { "label": "Testing matrix", "path": "testing.md", "href": "/docs/testing" },
+        { "label": "Call models", "path": "features/call-models.md", "href": "/docs/features/call-models" },
+        { "label": "Controls", "path": "features/controls.md", "href": "/docs/features/controls" },
+        { "label": "Scaling", "path": "features/scaling.md", "href": "/docs/features/scaling" }
+      ]
+    }
+  ],
+  "search": { "provider": "algolia", "indexName": "vidcall" },
+  "llms": { "txt": "/llms.txt", "full": "/llms-full.txt" }
+}

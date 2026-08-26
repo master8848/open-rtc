@@ -80,7 +80,7 @@ node examples/vanilla/build.mjs && npx serve examples/vanilla
 | `@mbsks/openrtc-quality` | Adaptive quality policy (pure functions) |
 | `@mbsks/openrtc-transport` | `SignalingTransport` contract + shared backend tests |
 | `@mbsks/openrtc-server` | Relay server (REST + WS), stores for sqlite/postgres/mysql, adapters for express/fastify |
-| `@mbsks/openrtc-sfu-gateway` | Optional SFU path (mediasoup reference, not yet in Room) |
+| `@mbsks/openrtc-sfu-gateway` | Optional SFU path (mediasoup reference, wired via `SfuMediaTransport` + `topology:'auto'`) |
 | backends | `supabase` · `convex` · `firebase` · `appwrite` · `postgres` · `sqlite` |
 | mobile | `kotlin` · `swift` · `dart` — same wire protocol |
 | `protocol` | Versioned JSON envelope (`schema.json` + fixtures) |
@@ -91,11 +91,13 @@ node examples/vanilla/build.mjs && npx serve examples/vanilla
 - All packages exist and are tested, but expect breaking changes before first release.
 - See [CHANGELOG.md](CHANGELOG.md).
 
-## Further reading
+## Docs — start here
 
-- [Getting started](docs/getting-started.md)
-- [Testing matrix](docs/testing.md)
-- [Contributing](CONTRIBUTING.md)
+| Start | Connect | Stream | Record | Secure | Operate |
+|---|---|---|---|---|---|
+| [Get started](docs/getting-started.md) | [Choose a transport](docs/transport.md) | [Pick mesh or SFU](docs/media.md) | [Capture calls](docs/recording.md) | [Lock rooms & E2EE](docs/security.md) | [Know the limits](docs/limits.md) |
+
+Guides: [Deploy](docs/guides/deployment.md) · [Handle errors](docs/guides/error-handling.md) · [Test your app](docs/guides/testing.md) · [Migrate](docs/guides/migration.md) — Reference: [Testing matrix](docs/testing.md) · [Call models](docs/features/call-models.md) · [Controls](docs/features/controls.md) · [Scaling](docs/features/scaling.md) · [Architecture](docs/architecture.md) · [Contributing](CONTRIBUTING.md)
 
 ## License
 

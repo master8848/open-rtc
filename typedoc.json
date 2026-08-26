@@ -1,0 +1,16 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "entryPoints": [
+    "packages/core/src/index.ts",
+    "packages/server/src/index.ts",
+    "packages/transport/src/index.ts",
+    "packages/sfu-gateway/src/index.ts"
+  ],
+  "out": "docs/api",
+  "plugin": ["typedoc-plugin-markdown"],
+  "readme": "none",
+  "excludePrivate": true,
+  "excludeInternal": true,
+  "validation": { "notExported": false },
+  "_note": "Run `npx typedoc` to emit docs/api/. Not wired into bun run build so CI stays green until JSDoc @example coverage lands (see plans/08-coherence-dx-docs-plan.md Project 2.1)."
+}
