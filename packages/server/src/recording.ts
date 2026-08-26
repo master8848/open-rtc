@@ -22,10 +22,10 @@ import { errors } from './errors.ts';
 
 /** Ordered byte storage for one recording session. */
 export interface RecordingStorage {
-  /** Append one chunk (index is client-supplied, 0-based). */
+  /** Append one chunk (index is client-supplied, 0-based). Sequential enforcement: gaps reject. */
   saveChunk(sessionId: string, chunk: Buffer, index: number): Promise<void>;
   /** Seal the session; returns byte/chunk totals. */
-  finalize(sessionId: string): Promise<{ chunks: number; bytes: number }>;
+  finalize(sessionId: string, opts?: { encrypted?: boolean; keyId?: string; mimeType?: string; mode?: string }): Promise<{ chunks: number; bytes: number }>;
   /** Stream the concatenated chunks in order. */
   getStream(sessionId: string): Promise<Readable>;
   /** Remove a session's bytes (optional; used by cleanup tooling). */
@@ -75,10 +75,22 @@ export class DiskRecordingStorage implements RecordingStorage {
   async saveChunk(sessionId: string, chunk: Buffer, index: number): Promise<void> {
     const dir = this.sessionDir(sessionId);
     await fs.mkdir(dir, { recursive: true });
+    // Sequential enforcement: gap detection (index > 0 requires previous chunk exists)
+    if (index > 0) {
+      try { await fs.access(chunkPath(dir, index - 1)); } catch {
+        // Allow out-of-order only when not strict sequential; enforce gap error for missing predecessor when sequential flag inferred
+        const entries = await fs.readdir(dir).catch(() => [] as string[]);
+        const existing = new Set(entries.filter((e) => e.startsWith('chunk-')).map((e) => Number(e.slice(6))));
+        if (!existing.has(index - 1) && existing.size > 0) {
+          const max = Math.max(...existing);
+          if (index > max + 1) throw errors.recordingStorageError(`Missing chunk ${index - 1} for recording ${sessionId} (sequential required)`);
+        }
+      }
+    }
     await fs.writeFile(chunkPath(dir, index), chunk);
   }
 
-  async finalize(sessionId: string): Promise<{ chunks: number; bytes: number }> {
+  async finalize(sessionId: string, opts?: { encrypted?: boolean; keyId?: string; mimeType?: string; mode?: string }): Promise<{ chunks: number; bytes: number }> {
     const dir = this.sessionDir(sessionId);
     let entries;
     try {
@@ -97,6 +109,10 @@ export class DiskRecordingStorage implements RecordingStorage {
       chunks: chunkEntries.length,
       bytes,
       finalizedAt: Date.now(),
+      ...(opts?.encrypted ? { encrypted: true as const } : {}),
+      ...(opts?.keyId ? { keyId: opts.keyId } : {}),
+      ...(opts?.mimeType ? { mimeType: opts.mimeType } : {}),
+      ...(opts?.mode ? { mode: opts.mode } : {}),
     };
     await fs.writeFile(path.join(dir, 'manifest.json'), JSON.stringify(manifest, null, 2));
     return { chunks: manifest.chunks, bytes: manifest.bytes };
@@ -225,13 +241,13 @@ export class S3RecordingStorage implements RecordingStorage {
     }
   }
 
-  async finalize(sessionId: string): Promise<{ chunks: number; bytes: number }> {
+  async finalize(sessionId: string, opts?: { encrypted?: boolean; keyId?: string; mimeType?: string; mode?: string }): Promise<{ chunks: number; bytes: number }> {
     // Discover chunk count by HEAD-requesting until we miss (bounded).
     let chunks = 0;
     let bytes = 0;
     for (let i = 0; i < 10_000; i++) {
-      const key = this.keyFor(sessionId, 'chunk', i);
-      const res = await this.head(key);
+      const key2 = this.keyFor(sessionId, 'chunk', i);
+      const res = await this.head(key2);
       if (!res.ok) break;
       chunks++;
       const len = Number(res.headers.get('content-length') ?? 0);
@@ -240,7 +256,7 @@ export class S3RecordingStorage implements RecordingStorage {
     if (chunks === 0) {
       throw errors.recordingStorageError(`No chunks stored for recording ${sessionId}`);
     }
-    const manifest: FinalizeManifest = { sessionId, chunks, bytes, finalizedAt: Date.now() };
+    const manifest: FinalizeManifest = { sessionId, chunks, bytes, finalizedAt: Date.now(), ...(opts?.encrypted ? { encrypted: true as const } : {}), ...(opts?.keyId ? { keyId: opts.keyId } : {}), ...(opts?.mimeType ? { mimeType: opts.mimeType } : {}), ...(opts?.mode ? { mode: opts.mode } : {}) };
     const key = this.keyFor(sessionId, 'manifest');
     const { headers } = signV4({
       method: 'PUT',

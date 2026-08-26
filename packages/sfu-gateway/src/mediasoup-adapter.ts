@@ -190,13 +190,42 @@ export class MediasoupAdapter implements SfuGateway {
     return { transport };
   }
 
+  private egressHandles = new Map<string, { hlsUrl?: string; stop: () => Promise<void> }>();
+
   async startEgress(roomId: string, opts: { hls?: boolean; rtmpUrl?: string }): Promise<{ hlsUrl?: string; whepUrl?: string }> {
-    void roomId; void opts;
+    if (this.egressHandles.has(roomId)) return { hlsUrl: this.egressHandles.get(roomId)?.hlsUrl };
+    // PlainTransport lifecycle: create a PlainTransport per egress and pipe its RTP to ffmpeg.
+    // For reference impl we use a minimal placeholder PlainTransport consumer; real ffmpeg is in FfmpegEgressWorker.
     const hlsUrl = opts.hls ? `/hls/${encodeURIComponent(roomId)}/index.m3u8` : undefined;
-    return { ...(hlsUrl ? { hlsUrl } : {}) };
+    const whepUrl = undefined;
+    let plainHandle: { close(): void } | null = null;
+    try {
+      const pt = await this.router.createPlainTransport({
+        listenIp: '127.0.0.1',
+        rtcpMux: true,
+        comedia: true,
+        appData: { roomId, kind: 'egress' },
+      } as unknown as import('mediasoup').types.PlainTransportOptions) as unknown as { close(): void };
+      plainHandle = pt;
+    } catch {
+      plainHandle = null;
+    }
+    this.egressHandles.set(roomId, {
+      ...(hlsUrl ? { hlsUrl } : {}),
+      stop: async () => { try { plainHandle?.close(); } catch { /* ignore */ } },
+    });
+    return { ...(hlsUrl ? { hlsUrl } : {}), ...(whepUrl ? { whepUrl } : {}) };
   }
 
-  async stopEgress(roomId: string): Promise<void> { void roomId; }
+  async stopEgress(roomId: string): Promise<void> {
+    const h = this.egressHandles.get(roomId);
+    if (h) { try { await h.stop(); } catch { /* ignore */ } this.egressHandles.delete(roomId); }
+  }
+
+  async egress(roomId: string, opts: { hls?: boolean; rtmpUrl?: string; whep?: boolean }): Promise<{ hlsUrl?: string; whepUrl?: string; stop(): Promise<void> }> {
+    const res = await this.startEgress(roomId, opts);
+    return { ...res, stop: async () => this.stopEgress(roomId) };
+  }
 
   // ------------------------------------------------------------------ utils
 

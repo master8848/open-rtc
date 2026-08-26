@@ -151,6 +151,18 @@ export interface SfuSession {
   leave(): Promise<void>;
 }
 
+export interface SfuEgressOptions {
+  hls?: boolean;
+  rtmpUrl?: string;
+  whep?: boolean;
+}
+
+export interface SfuEgressHandle {
+  hlsUrl?: string;
+  whepUrl?: string;
+  stop(): Promise<void>;
+}
+
 /**
  * The optional SFU adapter surface. Mesh stays the default; apps opt in by
  * constructing a gateway (see the mediasoup reference adapter) and wiring it
@@ -168,6 +180,12 @@ export interface SfuGateway {
 
   /** Close every session, or only the sessions of one room. */
   close(roomId?: string): Promise<void>;
+
+  /** Start SFU egress (PlainTransport -> ffmpeg -> RecordingStorage/HLS/RTMP). */
+  egress?(roomId: string, opts: SfuEgressOptions): Promise<SfuEgressHandle>;
+
+  /** Stop egress for a room. */
+  stopEgress?(roomId: string): Promise<void>;
 }
 
 /** Convenience key for `(roomId, participantId)` pairs. */
