@@ -1,9 +1,12 @@
 # pr-preview — pkg-pr-new per-PR preview (TanStack pkg-pr-new stub)
+# ── DISABLED ── Disabled during building phase.
 name: pr-preview
-on: { pull_request: { types: [opened, synchronize] } }
+on:
+  workflow_dispatch:
 permissions: { contents: read, pull-requests: write }
 jobs:
   preview:
+    if: false
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

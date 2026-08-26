@@ -1,9 +1,12 @@
 # autofix — oxfmt/oxlint --fix autofix (idea stub)
+# ── DISABLED ── Disabled during building phase.
 name: autofix
-on: { pull_request: { branches: [main] } }
+on:
+  workflow_dispatch:
 permissions: { contents: write, pull-requests: write }
 jobs:
   autofix:
+    if: false
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

@@ -1,13 +1,18 @@
 name: ci
+# ── DISABLED ── CI disabled during building phase to save resources.
+# To re-enable, restore:
+# on:
+#   push:
+#     branches: [main]
+#   pull_request:
+#     branches: [main]
 on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:
   node:
+    if: false
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -34,12 +39,14 @@ jobs:
       - run: bun run changeset:dry-run
       - run: bun run check:quality
   swift:
+    if: false
     runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
       - run: swift --version
       - run: cd packages/swift && swift build && swift test
   dart:
+    if: false
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -47,6 +54,7 @@ jobs:
         with: { sdk: stable }
       - run: cd packages/dart && dart pub get && dart analyze && dart test
   kotlin:
+    if: false
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
