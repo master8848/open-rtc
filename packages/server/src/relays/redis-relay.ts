@@ -45,11 +45,12 @@ interface WireWrapper {
 export class RedisRelay implements Relay {
   private readonly local = new RoomHub();
   private readonly subscribed = new Set<string>();
+  private readonly pub: RedisPub;
+  private readonly sub: RedisSub;
 
-  constructor(
-    private readonly pub: RedisPub,
-    private readonly sub: RedisSub,
-  ) {
+  constructor(pub: RedisPub, sub: RedisSub) {
+    this.pub = pub;
+    this.sub = sub;
     this.sub.on('message', (channel: string, message: string) => {
       if (!channel.startsWith('vidcall:room:')) return;
       let wrapper: WireWrapper | Envelope | unknown;

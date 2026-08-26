@@ -67,7 +67,12 @@ function encodeChunks(json: string, maxBytes: number): ChunkFrame[] {
 }
 class ChunkAssembler {
   private groups = new Map<string, { parts: Map<number, string>; total: number; seen: Set<number>; startedAt: number }>();
-  constructor(private timeoutMs = 10_000, private maxGroups = 64) {}
+  private timeoutMs: number;
+  private maxGroups: number;
+  constructor(timeoutMs = 10_000, maxGroups = 64) { this.timeoutMs = timeoutMs; this.maxGroups = maxGroups; }
+  sweep(now = Date.now()): void {
+    for (const [id, g] of this.groups) if (now - g.startedAt > this.timeoutMs) this.groups.delete(id);
+  }
   push(frame: unknown): string | undefined {
     if (!isChunkFrame(frame)) return undefined;
     let g = this.groups.get(frame.id);
@@ -93,12 +98,14 @@ class ChunkAssembler {
 export class PostgresNotifyRelay implements Relay {
   private readonly local = new RoomHub();
   private readonly assembler = new ChunkAssembler();
+  private sweepTimer: ReturnType<typeof setInterval> | null = null;
   private started = false;
+  private readonly pool: PgPoolLike;
+  private readonly listener: PgClientLike;
 
-  constructor(
-    private readonly pool: PgPoolLike,
-    private readonly listener: PgClientLike,
-  ) {
+  constructor(pool: PgPoolLike, listener: PgClientLike) {
+    this.pool = pool;
+    this.listener = listener;
     this.listener.on('notification', (msg) => {
       if (msg.channel !== CHANNEL) return;
       if (!msg.payload) return;
@@ -129,10 +136,13 @@ export class PostgresNotifyRelay implements Relay {
     if (this.started) return;
     await this.listener.query(`LISTEN ${CHANNEL}`);
     this.started = true;
+    this.sweepTimer = setInterval(() => this.assembler.sweep(), 10_000);
+    this.sweepTimer.unref?.();
   }
 
   async stop(): Promise<void> {
     if (!this.started) return;
+    if (this.sweepTimer) { clearInterval(this.sweepTimer); this.sweepTimer = null; }
     await this.listener.query(`UNLISTEN ${CHANNEL}`).catch(() => {});
     this.started = false;
   }
@@ -145,9 +155,10 @@ export class PostgresNotifyRelay implements Relay {
     this.local.broadcast(roomId, envelope, opts);
     const wrapper: WireWrapper = opts?.exceptSenderId ? { envelope, exceptSenderId: opts.exceptSenderId } : { envelope };
     const json = JSON.stringify(wrapper);
-    const frames: unknown[] = json.length > CHUNK_MAX_BYTES ? encodeChunks(json, CHUNK_MAX_BYTES) : [wrapper];
+    const byteLen = new TextEncoder().encode(json).length;
+    const frames: unknown[] = byteLen > CHUNK_MAX_BYTES ? encodeChunks(json, CHUNK_MAX_BYTES) : [wrapper];
     for (const frame of frames) {
-      const payload = typeof (frame as ChunkFrame).k === 'string' ? JSON.stringify(frame) : JSON.stringify(frame);
+      const payload = JSON.stringify(frame);
       void this.pool.query('SELECT pg_notify($1, $2)', [CHANNEL, payload]).catch(() => {});
     }
   }
