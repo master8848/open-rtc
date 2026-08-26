@@ -69,12 +69,16 @@ CI matrix (`.github/workflows/ci.yml`, re-introduced Phase 4 — TanStack gates)
 
 | Job | Runner | Steps |
 |---|---|---|
-| `node` | `ubuntu-latest` Node 22 (pinned `mise.toml:10` `node = "22.22.2"`; `package.json:35` `engines >=18.18` allows ≥18.18 locally) | `bun install` → `bun run build` → `bun run typecheck` → `bun run test` → `bun run test:types` (`.test-d.tsx` multi-TS 5.5-5.9 placeholder) → `bun run test:build` (`publint --pack` + `attw --pack` stub) → `bun run size:core` (`size-limit` <15kB gz per `packages/core`) → backend loop `for p in packages/backend-*; do (cd "$p" && bun run test); done` → `changeset status --verbose` gate (`plans/07-roadmap.md:77` `version --dry-run` intent) |
+| `node` | `ubuntu-latest` Node 22 (pinned `mise.toml:10` `node = "22.22.2"`; `package.json:35` `engines >=18.18` allows ≥18.18 locally) | `bun install` → `bun run build` (ESM via `tsc -b`, CJS via `rslib.config.ts` / `tsconfig.cjs.json` → `dist/*.cjs` per `protocol,transport,core`) → `bun run typecheck` → `bun run test` → `bun run test:types` (`.test-d.tsx` multi-TS 5.5-5.9 placeholder) → `bun run test:build` (`publint --pack` green — exports `types/import/require/development + ./package.json` per `plans/05:34` — and `attw --pack` clean — `types: dist/*.d.ts`) → `bun run size:core` (`.size-limit.json` core <15kB gz, quality <5kB, react <3kB per `plans/05:111`; instruct `sideEffects:false`) → backend loop `for p in packages/backend-*; do (cd "$p" && bun run test); done` → `changeset status --verbose` gate (`plans/07-roadmap.md:77` `version --dry-run` intent) |
 | `swift` | `macos-14` | `swift build && swift test` |
 | `dart` | `ubuntu-latest` dart `stable` | `dart pub get && dart analyze && dart test` |
 | `kotlin` | `ubuntu-latest` `actions/setup-java@v4` `temurin 21` | `./gradlew test` |
 
 Additional workflow stubs: `pr-preview.yml` (`pkg-pr-new` per-PR preview), `autofix.yml` (`oxfmt`/`oxlint --fix` autofix), `check:quality` (`sherif`/`knip`/`zizmor` stubs), `affected` (`nx affected`/`turbo` stub for `bun` workspaces). Engines drift fixed: `package.json:35` `>=18.18` is the floor; CI pins Node 22 via `mise.toml:10`; `CONTRIBUTING.md` local dev notes the pin.
+
+## Publish gates
+
+`publint --pack` must be green (canonical `exports` with `types/import/require/development + ./package.json`, `files:["dist"]`, `sideEffects:false` per `plans/05:34`). `attw --pack` (`@arethetypeswrong/cli`) must be clean (`types: dist/*.d.ts`, no `src` leak, dual `import`/`require` resolved). `size-limit` enforces `.size-limit.json` (core <15kB gz, quality <5kB, react <3kB; `sideEffects:false` ensures tree-shakeable). Install gates: `bun add -d publint @arethetypeswrong/cli size-limit @size-limit/preset-small-lib` then `bun run test:build && bun run size`.
 
 ## Adding a backend
 

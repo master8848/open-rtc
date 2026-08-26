@@ -1,7 +1,7 @@
 {
   "name": "@mbsks/openrtc-backend-sqlite",
   "version": "0.1.0",
-  "description": "vidcall signaling backend adapter for SQLite/libSQL \u2014 same-device BroadcastChannel mode (dev/test) with a local-first durable signal log.",
+  "description": "vidcall signaling backend adapter for SQLite/libSQL — same-device BroadcastChannel mode (dev/test) with a local-first durable signal log.",
   "author": "Saurav Sanjel <jobarsanjel2@gmail.com>",
   "license": "MIT",
   "type": "module",
@@ -11,6 +11,7 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
+      "require": "./dist/index.cjs",
       "development": "./src/index.ts",
       "default": "./dist/index.js"
     },

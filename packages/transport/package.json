@@ -11,36 +11,42 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
+      "require": "./dist/index.cjs",
       "development": "./src/index.ts",
       "default": "./dist/index.js"
     },
     "./internal": {
       "types": "./dist/internal/index.d.ts",
       "import": "./dist/internal/index.js",
+      "require": "./dist/internal/index.cjs",
       "development": "./src/internal/index.ts",
       "default": "./dist/internal/index.js"
     },
     "./shared-tests": {
       "types": "./dist/shared-tests.d.ts",
       "import": "./dist/shared-tests.js",
+      "require": "./dist/shared-tests.cjs",
       "development": "./src/shared-tests.ts",
       "default": "./dist/shared-tests.js"
     },
     "./composite": {
       "types": "./dist/composite.d.ts",
       "import": "./dist/composite.js",
+      "require": "./dist/composite.cjs",
       "development": "./src/composite.ts",
       "default": "./dist/composite.js"
     },
     "./reconnecting": {
       "types": "./dist/reconnecting.d.ts",
       "import": "./dist/reconnecting.js",
+      "require": "./dist/reconnecting.cjs",
       "development": "./src/reconnecting.ts",
       "default": "./dist/reconnecting.js"
     },
     "./web-transport": {
       "types": "./dist/web-transport.d.ts",
       "import": "./dist/web-transport.js",
+      "require": "./dist/web-transport.cjs",
       "development": "./src/web-transport.ts",
       "default": "./dist/web-transport.js"
     },
@@ -56,7 +62,9 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "clean": "tsc -b --clean",
-    "test": "vitest run"
+    "test": "vitest run",
+    "build:cjs": "tsc -p tsconfig.cjs.json",
+    "build:dual": "tsc -p tsconfig.json && npm run build:cjs && node ../../scripts/post-build-cjs.mjs 2>/dev/null || node ../scripts/post-build-cjs.mjs 2>/dev/null || echo \"CJS .js -> .cjs rename pending (rslib produces .cjs natively)\""
   },
   "dependencies": {
     "@mbsks/openrtc-protocol": "0.1.0"

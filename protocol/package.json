@@ -1,7 +1,7 @@
 {
   "name": "@mbsks/openrtc-protocol",
   "version": "0.1.0",
-  "description": "vidcall wire protocol types (TS mirror of protocol/schema.json \u2014 the single source of truth).",
+  "description": "vidcall wire protocol types (TS mirror of protocol/schema.json — the single source of truth).",
   "license": "MIT",
   "type": "module",
   "main": "./dist/types.js",
@@ -10,6 +10,7 @@
     ".": {
       "types": "./dist/types.d.ts",
       "import": "./dist/types.js",
+      "require": "./dist/types.cjs",
       "development": "./types.ts",
       "default": "./dist/types.js"
     },
@@ -24,6 +25,8 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "clean": "tsc -b --clean"
+    "clean": "tsc -b --clean",
+    "build:cjs": "tsc -p tsconfig.cjs.json",
+    "build:dual": "tsc -p tsconfig.json && npm run build:cjs && node ../scripts/post-build-cjs.mjs 2>/dev/null || echo \"CJS .js -> .cjs rename pending (rslib produces .cjs natively)\""
   }
 }

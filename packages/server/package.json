@@ -11,78 +11,91 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
+      "require": "./dist/index.cjs",
       "development": "./src/index.ts",
       "default": "./dist/index.js"
     },
     "./shared-tests": {
       "types": "./dist/shared-tests.d.ts",
       "import": "./dist/shared-tests.js",
+      "require": "./dist/shared-tests.cjs",
       "development": "./src/shared-tests.ts",
       "default": "./dist/shared-tests.js"
     },
     "./express": {
       "types": "./dist/express.d.ts",
       "import": "./dist/express.js",
+      "require": "./dist/express.cjs",
       "development": "./src/express.ts",
       "default": "./dist/express.js"
     },
     "./fastify": {
       "types": "./dist/fastify.d.ts",
       "import": "./dist/fastify.js",
+      "require": "./dist/fastify.cjs",
       "development": "./src/fastify.ts",
       "default": "./dist/fastify.js"
     },
     "./stores/sqlite": {
       "types": "./dist/stores/SqliteStore.d.ts",
       "import": "./dist/stores/SqliteStore.js",
+      "require": "./dist/stores/SqliteStore.cjs",
       "development": "./src/stores/SqliteStore.ts",
       "default": "./dist/stores/SqliteStore.js"
     },
     "./stores/postgres": {
       "types": "./dist/stores/PostgresStore.d.ts",
       "import": "./dist/stores/PostgresStore.js",
+      "require": "./dist/stores/PostgresStore.cjs",
       "development": "./src/stores/PostgresStore.ts",
       "default": "./dist/stores/PostgresStore.js"
     },
     "./stores/mysql": {
       "types": "./dist/stores/MysqlStore.d.ts",
       "import": "./dist/stores/MysqlStore.js",
+      "require": "./dist/stores/MysqlStore.cjs",
       "development": "./src/stores/MysqlStore.ts",
       "default": "./dist/stores/MysqlStore.js"
     },
     "./stores/redis": {
       "types": "./dist/stores/RedisStore.d.ts",
       "import": "./dist/stores/RedisStore.js",
+      "require": "./dist/stores/RedisStore.cjs",
       "development": "./src/stores/RedisStore.ts",
       "default": "./dist/stores/RedisStore.js"
     },
     "./relays/redis": {
       "types": "./dist/relays/redis-relay.d.ts",
       "import": "./dist/relays/redis-relay.js",
+      "require": "./dist/relays/redis-relay.cjs",
       "development": "./src/relays/redis-relay.ts",
       "default": "./dist/relays/redis-relay.js"
     },
     "./relays/postgres-notify": {
       "types": "./dist/relays/postgres-notify-relay.d.ts",
       "import": "./dist/relays/postgres-notify-relay.js",
+      "require": "./dist/relays/postgres-notify-relay.cjs",
       "development": "./src/relays/postgres-notify-relay.ts",
       "default": "./dist/relays/postgres-notify-relay.js"
     },
     "./egress": {
       "types": "./dist/egress.d.ts",
       "import": "./dist/egress.js",
+      "require": "./dist/egress.cjs",
       "development": "./src/egress.ts",
       "default": "./dist/egress.js"
     },
     "./webhooks": {
       "types": "./dist/webhooks.d.ts",
       "import": "./dist/webhooks.js",
+      "require": "./dist/webhooks.cjs",
       "development": "./src/webhooks.ts",
       "default": "./dist/webhooks.js"
     },
     "./push": {
       "types": "./dist/push.d.ts",
       "import": "./dist/push.js",
+      "require": "./dist/push.cjs",
       "development": "./src/push.ts",
       "default": "./dist/push.js"
     },

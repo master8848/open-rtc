@@ -11,156 +11,182 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
+      "require": "./dist/index.cjs",
       "development": "./src/index.ts",
       "default": "./dist/index.js"
     },
     "./devices": {
       "types": "./dist/devices.d.ts",
       "import": "./dist/devices.js",
+      "require": "./dist/devices.cjs",
       "development": "./src/devices.ts",
       "default": "./dist/devices.js"
     },
     "./e2ee": {
       "types": "./dist/e2ee.d.ts",
       "import": "./dist/e2ee.js",
+      "require": "./dist/e2ee.cjs",
       "development": "./src/e2ee.ts",
       "default": "./dist/e2ee.js"
     },
     "./controls": {
       "types": "./dist/controls/index.d.ts",
       "import": "./dist/controls/index.js",
+      "require": "./dist/controls/index.cjs",
       "development": "./src/controls/index.ts",
       "default": "./dist/controls/index.js"
     },
     "./controls/ControlsManager": {
       "types": "./dist/controls/ControlsManager.d.ts",
       "import": "./dist/controls/ControlsManager.js",
+      "require": "./dist/controls/ControlsManager.cjs",
       "development": "./src/controls/ControlsManager.ts",
       "default": "./dist/controls/ControlsManager.js"
     },
     "./media/media-transport": {
       "types": "./dist/media/media-transport.d.ts",
       "import": "./dist/media/media-transport.js",
+      "require": "./dist/media/media-transport.cjs",
       "development": "./src/media/media-transport.ts",
       "default": "./dist/media/media-transport.js"
     },
     "./media/mesh-transport": {
       "types": "./dist/media/mesh-transport.d.ts",
       "import": "./dist/media/mesh-transport.js",
+      "require": "./dist/media/mesh-transport.cjs",
       "development": "./src/media/mesh-transport.ts",
       "default": "./dist/media/mesh-transport.js"
     },
     "./media/sfu-transport": {
       "types": "./dist/media/sfu-transport.d.ts",
       "import": "./dist/media/sfu-transport.js",
+      "require": "./dist/media/sfu-transport.cjs",
       "development": "./src/media/sfu-transport.ts",
       "default": "./dist/media/sfu-transport.js"
     },
     "./media/processor": {
       "types": "./dist/media/processor.d.ts",
       "import": "./dist/media/processor.js",
+      "require": "./dist/media/processor.cjs",
       "development": "./src/media/processor.ts",
       "default": "./dist/media/processor.js"
     },
     "./media/topology": {
       "types": "./dist/media/topology.d.ts",
       "import": "./dist/media/topology.js",
+      "require": "./dist/media/topology.cjs",
       "development": "./src/media/topology.ts",
       "default": "./dist/media/topology.js"
     },
     "./media/active-speaker": {
       "types": "./dist/media/active-speaker.d.ts",
       "import": "./dist/media/active-speaker.js",
+      "require": "./dist/media/active-speaker.cjs",
       "development": "./src/media/active-speaker.ts",
       "default": "./dist/media/active-speaker.js"
     },
     "./recording/encryption": {
       "types": "./dist/recording/encryption.d.ts",
       "import": "./dist/recording/encryption.js",
+      "require": "./dist/recording/encryption.cjs",
       "development": "./src/recording/encryption.ts",
       "default": "./dist/recording/encryption.js"
     },
     "./recording/media-recorder-recording-hook": {
       "types": "./dist/recording/media-recorder-recording-hook.d.ts",
       "import": "./dist/recording/media-recorder-recording-hook.js",
+      "require": "./dist/recording/media-recorder-recording-hook.cjs",
       "development": "./src/recording/media-recorder-recording-hook.ts",
       "default": "./dist/recording/media-recorder-recording-hook.js"
     },
     "./recording/recording-hook": {
       "types": "./dist/recording/recording-hook.d.ts",
       "import": "./dist/recording/recording-hook.js",
+      "require": "./dist/recording/recording-hook.cjs",
       "development": "./src/recording/recording-hook.ts",
       "default": "./dist/recording/recording-hook.js"
     },
     "./recording/recording-uploader": {
       "types": "./dist/recording/recording-uploader.d.ts",
       "import": "./dist/recording/recording-uploader.js",
+      "require": "./dist/recording/recording-uploader.cjs",
       "development": "./src/recording/recording-uploader.ts",
       "default": "./dist/recording/recording-uploader.js"
     },
     "./recording/room-recording-facade": {
       "types": "./dist/recording/room-recording-facade.d.ts",
       "import": "./dist/recording/room-recording-facade.js",
+      "require": "./dist/recording/room-recording-facade.cjs",
       "development": "./src/recording/room-recording-facade.ts",
       "default": "./dist/recording/room-recording-facade.js"
     },
     "./recording/composite-recording-hook": {
       "types": "./dist/recording/composite-recording-hook.d.ts",
       "import": "./dist/recording/composite-recording-hook.js",
+      "require": "./dist/recording/composite-recording-hook.cjs",
       "development": "./src/recording/composite-recording-hook.ts",
       "default": "./dist/recording/composite-recording-hook.js"
     },
     "./recording/sfu-egress": {
       "types": "./dist/recording/sfu-egress.d.ts",
       "import": "./dist/recording/sfu-egress.js",
+      "require": "./dist/recording/sfu-egress.cjs",
       "development": "./src/recording/sfu-egress.ts",
       "default": "./dist/recording/sfu-egress.js"
     },
     "./recording/index": {
       "types": "./dist/recording/index.d.ts",
       "import": "./dist/recording/index.js",
+      "require": "./dist/recording/index.cjs",
       "development": "./src/recording/index.ts",
       "default": "./dist/recording/index.js"
     },
     "./media/whip-transport": {
       "types": "./dist/media/whip-transport.d.ts",
       "import": "./dist/media/whip-transport.js",
+      "require": "./dist/media/whip-transport.cjs",
       "development": "./src/media/whip-transport.ts",
       "default": "./dist/media/whip-transport.js"
     },
     "./media/whep-transport": {
       "types": "./dist/media/whep-transport.d.ts",
       "import": "./dist/media/whep-transport.js",
+      "require": "./dist/media/whep-transport.cjs",
       "development": "./src/media/whep-transport.ts",
       "default": "./dist/media/whep-transport.js"
     },
     "./media/denoise-processor": {
       "types": "./dist/media/denoise-processor.d.ts",
       "import": "./dist/media/denoise-processor.js",
+      "require": "./dist/media/denoise-processor.cjs",
       "development": "./src/media/denoise-processor.ts",
       "default": "./dist/media/denoise-processor.js"
     },
     "./media/virtual-background-processor": {
       "types": "./dist/media/virtual-background-processor.d.ts",
       "import": "./dist/media/virtual-background-processor.js",
+      "require": "./dist/media/virtual-background-processor.cjs",
       "development": "./src/media/virtual-background-processor.ts",
       "default": "./dist/media/virtual-background-processor.js"
     },
     "./media/egress": {
       "types": "./dist/media/egress.d.ts",
       "import": "./dist/media/egress.js",
+      "require": "./dist/media/egress.cjs",
       "development": "./src/media/egress.ts",
       "default": "./dist/media/egress.js"
     },
     "./media/transcription": {
       "types": "./dist/media/transcription.d.ts",
       "import": "./dist/media/transcription.js",
+      "require": "./dist/media/transcription.cjs",
       "development": "./src/media/transcription.ts",
       "default": "./dist/media/transcription.js"
     },
     "./client": {
       "types": "./dist/client.d.ts",
       "import": "./dist/client.js",
+      "require": "./dist/client.cjs",
       "development": "./src/client.ts",
       "default": "./dist/client.js"
     },
@@ -175,7 +201,9 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "clean": "tsc -b --clean"
+    "clean": "tsc -b --clean",
+    "build:cjs": "tsc -p tsconfig.cjs.json",
+    "build:dual": "tsc -p tsconfig.json && npm run build:cjs && node ../../scripts/post-build-cjs.mjs 2>/dev/null || node ../scripts/post-build-cjs.mjs 2>/dev/null || echo \"CJS .js -> .cjs rename pending (rslib produces .cjs natively)\""
   },
   "dependencies": {
     "@mbsks/openrtc-protocol": "0.1.0",

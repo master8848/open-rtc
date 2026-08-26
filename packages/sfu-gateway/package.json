@@ -11,12 +11,14 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
+      "require": "./dist/index.cjs",
       "development": "./src/index.ts",
       "default": "./dist/index.js"
     },
     "./mediasoup": {
       "types": "./dist/mediasoup-adapter.d.ts",
       "import": "./dist/mediasoup-adapter.js",
+      "require": "./dist/mediasoup-adapter.cjs",
       "development": "./src/mediasoup-adapter.ts",
       "default": "./dist/mediasoup-adapter.js"
     },

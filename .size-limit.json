@@ -1,0 +1,21 @@
+[
+  {
+    "name": "@mbsks/openrtc-core",
+    "path": "packages/core/dist/index.js",
+    "limit": "15 kB",
+    "gzip": true,
+    "import": "{ Room } from '@mbsks/openrtc-core'"
+  },
+  {
+    "name": "@mbsks/openrtc-quality",
+    "path": "packages/quality/dist/index.js",
+    "limit": "5 kB",
+    "gzip": true
+  },
+  {
+    "name": "@mbsks/openrtc-react",
+    "path": "packages/react/dist/index.js",
+    "limit": "3 kB",
+    "gzip": true
+  }
+]
