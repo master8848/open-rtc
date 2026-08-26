@@ -28,12 +28,22 @@ export interface TranscriptionSource {
   onTranscript(cb: (e: TranscriptEvent) => void): () => void;
 }
 
+/** Server-side STT worker stub (parallel to EgressWorker): SFU Consumer -> STT -> transcript envelope */
+export class SfuTranscriptionWorker {
+  private running = false;
+  start(_roomId: string, _opts: TranscriptionOptions = {}): void { this.running = true; }
+  stop(): void { this.running = false; }
+  get isRunning(): boolean { return this.running; }
+  // In prod, consume SFU audio PlainTransport RTP -> STT service -> dispatch transcript envelope
+}
+
 export class TranscriptionController implements TranscriptionSource {
   private running = false;
   private lang = 'en-US';
   private interim = true;
   private recognition: unknown | null = null;
   private readonly cbs = new Set<(e: TranscriptEvent) => void>();
+  readonly sfuWorker = new SfuTranscriptionWorker();
 
   async start(opts: TranscriptionOptions = {}): Promise<TranscriptionHandle> {
     this.running = true;

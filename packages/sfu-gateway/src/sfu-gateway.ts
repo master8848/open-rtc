@@ -66,10 +66,23 @@ export interface PublishOptions {
   keyFrameRequestDelayMs?: number;
 }
 
+/** Unified video quality for SFU layer selection (TanStack explicit). */
+export const VideoQuality = {
+  Low: 'low',
+  Medium: 'medium',
+  High: 'high',
+  /** Short aliases for simulcast layers (mediasoup `l`/`m`/`h`). */
+  L: 'l',
+  M: 'm',
+  H: 'h',
+} as const;
+
+export type VideoQuality = (typeof VideoQuality)[keyof typeof VideoQuality];
+
 /** Options for `SfuSession.subscribe`. */
 export interface SubscribeOptions {
-  /** Preferred layers for the subscription, e.g. `'l' | 'm' | 'h'` (simulcast/SVC). */
-  layers?: string[];
+  /** Preferred layers for the subscription (see `VideoQuality`). */
+  layers?: (VideoQuality | string)[];
 }
 
 /**
@@ -119,8 +132,8 @@ export interface SfuSession {
   /** Subscribe to a remote participant's published tracks. */
   subscribe(participantId: string, opts?: SubscribeOptions): Promise<void>;
 
-  /** Prefer a specific simulcast/SVC layer (`'l' | 'm' | 'h'`) for a remote track. */
-  setPreferredLayers(trackId: string, layer: string): Promise<void>;
+  /** Prefer a specific simulcast/SVC layer (see `VideoQuality`). */
+  setPreferredLayers(trackId: string, layer: VideoQuality | string): Promise<void>;
 
   /** Ask the sender for a keyframe for a track (recovery after layer switch). */
   requestKeyframe(trackId: string): Promise<void>;

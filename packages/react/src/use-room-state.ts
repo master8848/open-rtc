@@ -14,16 +14,40 @@ import type { RoomParticipantSnapshot, RoomSnapshot } from '@mbsks/openrtc-core'
 /**
  * The room's current immutable snapshot. Re-renders only when the engine
  * produced a new snapshot reference (i.e. tracked state actually changed).
+ * When a `selector` is provided, re-renders only when the selected slice
+ * changes (TanStack Store style).
  */
-export function useRoomState(room: Room): RoomSnapshot {
+export function useRoomState(room: Room): RoomSnapshot;
+export function useRoomState<T>(room: Room, selector: (snapshot: RoomSnapshot) => T): T;
+export function useRoomState<T>(room: Room, selector?: (snapshot: RoomSnapshot) => T): RoomSnapshot | T {
   const subscribe = useCallback(
-    (onStoreChange: () => void) => room.store.subscribe(onStoreChange),
+    (onStoreChange: () => void) => (room as unknown as { subscribe: (cb: () => void) => () => void }).subscribe?.(onStoreChange) ?? room.store.subscribe(onStoreChange),
     [room],
   );
   const getSnapshot = useCallback(() => room.getSnapshot(), [room]);
-  // The snapshot is synchronously available on the server too, so the same
-  // getter serves as the server snapshot.
-  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+  if (!selector) {
+    // The snapshot is synchronously available on the server too, so the same
+    // getter serves as the server snapshot.
+    return useSyncExternalStore(subscribe, getSnapshot, getSnapshot) as RoomSnapshot;
+  }
+  // Selector path: only re-render when selected value changes (Object.is).
+  const getSelectedSnapshot = useCallback(() => selector(room.getSnapshot()), [room, selector]);
+  type Listener = () => void;
+  const subscribeSelector = useCallback(
+    (onStoreChange: Listener) => {
+      let last = selector(room.getSnapshot());
+      const baseSubscribe = (room as unknown as { subscribe: (cb: () => void) => () => void }).subscribe?.bind(room) ?? room.store.subscribe.bind(room.store);
+      return baseSubscribe(() => {
+        const next = selector(room.getSnapshot());
+        if (!Object.is(last, next)) {
+          last = next;
+          onStoreChange();
+        }
+      });
+    },
+    [room, selector],
+  );
+  return useSyncExternalStore(subscribeSelector, getSelectedSnapshot, getSelectedSnapshot) as T;
 }
 
 /**

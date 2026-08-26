@@ -45,10 +45,16 @@ export class TypedEmitter<E extends EventMap = EventMap> {
   emit<K extends keyof E>(event: K, ...args: E[K]): boolean {
     const set = this.listeners.get(event);
     if (!set || set.size === 0) return false;
-    // Snapshot so listeners added/removed during emit don't affect this pass.
+    // Snapshot + isolation parity with ObservableStore: one throwing listener never prevents others.
+    let failure: { error: unknown } | undefined;
     for (const listener of [...set]) {
-      listener(...(args as unknown[]));
+      try {
+        listener(...(args as unknown[]));
+      } catch (err) {
+        failure ??= { error: err };
+      }
     }
+    if (failure) throw failure.error;
     return true;
   }
 

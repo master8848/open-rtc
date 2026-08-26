@@ -8,6 +8,13 @@ export interface TopologyConfig {
   sfu?: { gateway?: unknown; participantId?: string };
 }
 
+/**
+ * Controls mesh↔SFU topology. Default `topology:'auto'` migrates `mesh→sfu`
+ * when `remoteCount > autoThreshold` (default 4). `sfu→mesh` auto-downgrade
+ * stays on SFU for v1 (emits `topology:stay-sfu` debug) — use
+ * `room.setTopology('mesh')` for manual downgrade. `topology:changed` is
+ * emitted by `Room` after a successful switch (see `packages/core/src/room.ts`).
+ */
 export class TopologyController {
   private readonly getParticipantCount: () => number;
   private readonly getTransport: () => MediaTransport;
@@ -44,6 +51,12 @@ export class TopologyController {
 
   desiredKind(): 'mesh' | 'sfu' { return this.shouldBeSfu() ? 'sfu' : 'mesh'; }
 
+  /**
+   * Auto-migrate `mesh→sfu` when `topology==='auto'` and `count > autoThreshold`.
+   * `sfu→mesh` is intentionally a no-op in v1 (`topology:stay-sfu`) to avoid
+   * flapping; callers should use `setTopology('mesh')` for manual downgrade.
+   * Room wires this to `participant-joined`/`participant-left` when auto.
+   */
   async maybeMigrate(): Promise<void> {
     if (this.cfg.topology !== 'auto') return;
     const desired = this.desiredKind();

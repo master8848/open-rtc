@@ -95,33 +95,46 @@ export interface PeerIceConnectionStateEvent {
   state: RTCIceConnectionState;
 }
 
+/**
+ * Reaction/chat/... events carry both `participantId` (canonical) and
+ * `senderId` (alias for backward compat). New code should use
+ * `participantId`; `senderId` is kept as a deprecated alias with identical
+ * value.
+ */
 export interface RoomReactionEvent extends ReactionPayload {
-  senderId: string;
+  /** Canonical participant id (alias `senderId` kept for compat). */
   participantId: string;
+  /** @deprecated Alias for `participantId` */
+  senderId: string;
 }
 
 export interface RoomChatEvent extends ChatPayload {
-  senderId: string;
   participantId: string;
+  /** @deprecated Alias for `participantId` */
+  senderId: string;
 }
 
 export interface RoomScreenShareEvent extends ScreenSharePayload {
-  senderId: string;
   participantId: string;
+  /** @deprecated Alias for `participantId` */
+  senderId: string;
 }
 
 export interface RoomQualityWarningEvent extends QualityWarningPayload {
-  senderId: string;
   participantId: string;
+  /** @deprecated Alias for `participantId` */
+  senderId: string;
 }
 
 export interface RoomTranscriptEvent extends TranscriptPayload {
-  senderId: string;
   participantId: string;
+  /** @deprecated Alias for `participantId` */
+  senderId: string;
   isFinal: boolean;
 }
 
-export type RoomEventMap = {
+/** Canonical kebab-style events (colon aliases kept for backward compat). */
+export type RoomCanonicalEventMap = {
   /** A remote participant announced their join. */
   'participant-joined': [RemoteParticipant];
   /** A remote participant left (leave envelope or presence offline). */
@@ -140,42 +153,130 @@ export type RoomEventMap = {
   /** Chat message received. */
   chat: [RoomChatEvent];
   'screen-share': [RoomScreenShareEvent];
+  /** Remote quality warning envelope. */
   'quality-warning': [RoomQualityWarningEvent];
   transcript: [RoomTranscriptEvent];
   /** Active speaker list changed (polls inbound-rtp audioLevel). */
   'active-speaker': [string[]];
   /**
    * Local adaptive-quality tier changed (tier, reason, direction, metrics).
-   * Emitted by the RoomQualityController when the policy ladder moves; the
-   * app can show the tier badge or react to `reason`
-   * ('network'|'cpu'|'device'|'manual'|'recovery').
+   * Canonical kebab; `quality:changed` is an alias.
    */
-  'quality:changed': [LocalQualityChangedEvent];
+  'quality-changed': [LocalQualityChangedEvent];
   /**
    * Local adaptive-quality warning: `code` is one of 'cpu-high' |
    * 'network-degraded' | 'uplink-starved' | 'device-capped' | 'recovered' |
-   * 'manual' | 'monitor-error', with a human `message` and `level` for toasts.
+   * 'manual' | 'monitor-error'. Canonical `local-quality-warning` (aliases
+   * `quality:warning` and `quality-warning-local`) to avoid collision with the
+   * remote `quality-warning` envelope.
    */
-  'quality:warning': [LocalQualityWarningEvent];
+  'local-quality-warning': [LocalQualityWarningEvent];
   /** Presence update from the backend presence layer. */
   presence: [ParticipantInfo & { state: PresenceState }];
   error: [Error];
   /** Emitted once after `leave()`/`close()` completes. */
   closed: [];
+  /** Topology transport changed (mesh↔sfu) after `maybeMigrate` or `setTopology`. */
+  'topology-changed': [{ from: string; to: string }];
   /** Recording facade events (see `room.recording`). */
-  'recording:started': [RecordingStartedEvent];
-  'recording:stopped': [RecordingStoppedEvent];
-  'recording:error': [RecordingErrorEvent];
-  'recording:blob-chunk': [RecordingChunk];
+  'recording-started': [RecordingStartedEvent];
+  'recording-stopped': [RecordingStoppedEvent];
+  'recording-error': [RecordingErrorEvent];
+  'recording-blob-chunk': [RecordingChunk];
   /** The platform reported a change in connected media devices (see `room.devices`). */
-  'devices:changed': [];
+  'devices-changed': [];
   /** E2EE events (see `room.e2ee`). */
-  'e2ee:key-rotated': [];
-  'e2ee:error': [Error];
-  'e2ee:warning': [{ code: string; message: string }];
+  'e2ee-key-rotated': [];
+  'e2ee-error': [Error];
+  'e2ee-warning': [{ code: string; message: string }];
   /** Auth failure (WS 4401 mapped): token expired/invalid. */
+  'auth-error': [Error];
+};
+
+/** Deprecated colon/delimited aliases — kept for backward compat. */
+export type RoomEventAliases = {
+  /** @deprecated Use `quality-changed` */
+  'quality:changed': [LocalQualityChangedEvent];
+  /** @deprecated Use `local-quality-warning` */
+  'quality:warning': [LocalQualityWarningEvent];
+  /** @deprecated Alias for `local-quality-warning` */
+  'quality-warning-local': [LocalQualityWarningEvent];
+  /** @deprecated Use `recording-started` */
+  'recording:started': [RecordingStartedEvent];
+  /** @deprecated Use `recording-stopped` */
+  'recording:stopped': [RecordingStoppedEvent];
+  /** @deprecated Use `recording-error` */
+  'recording:error': [RecordingErrorEvent];
+  /** @deprecated Use `recording-blob-chunk` */
+  'recording:blob-chunk': [RecordingChunk];
+  /** @deprecated Use `devices-changed` */
+  'devices:changed': [];
+  /** @deprecated Use `e2ee-key-rotated` */
+  'e2ee:key-rotated': [];
+  /** @deprecated Use `e2ee-error` */
+  'e2ee:error': [Error];
+  /** @deprecated Use `e2ee-warning` */
+  'e2ee:warning': [{ code: string; message: string }];
+  /** @deprecated Use `auth-error` */
   'auth:error': [Error];
 };
+
+export type RoomEventMap = RoomCanonicalEventMap & RoomEventAliases;
+
+/** Linear SDK style typed event names — single source for canonical kebab values. */
+export const RoomEvent = {
+  ParticipantJoined: 'participant-joined',
+  ParticipantLeft: 'participant-left',
+  ParticipantUpdated: 'participant-updated',
+  Track: 'track',
+  TrackUnpublished: 'track-unpublished',
+  ConnectionState: 'connection-state',
+  IceConnectionState: 'ice-connection-state',
+  Reaction: 'reaction',
+  Chat: 'chat',
+  ScreenShare: 'screen-share',
+  QualityWarning: 'quality-warning',
+  Transcript: 'transcript',
+  ActiveSpeaker: 'active-speaker',
+  QualityChanged: 'quality-changed',
+  LocalQualityWarning: 'local-quality-warning',
+  Presence: 'presence',
+  Error: 'error',
+  Closed: 'closed',
+  TopologyChanged: 'topology-changed',
+  RecordingStarted: 'recording-started',
+  RecordingStopped: 'recording-stopped',
+  RecordingError: 'recording-error',
+  RecordingBlobChunk: 'recording-blob-chunk',
+  DevicesChanged: 'devices-changed',
+  E2eeKeyRotated: 'e2ee-key-rotated',
+  E2eeError: 'e2ee-error',
+  E2eeWarning: 'e2ee-warning',
+  AuthError: 'auth-error',
+} as const;
+
+export type RoomEventName = (typeof RoomEvent)[keyof typeof RoomEvent];
+
+/** Map colon aliases to canonical kebab for runtime compat. */
+export const ROOM_EVENT_ALIASES: Readonly<Record<string, string>> = {
+  'quality:changed': 'quality-changed',
+  'quality:warning': 'local-quality-warning',
+  'quality-warning-local': 'local-quality-warning',
+  'recording:started': 'recording-started',
+  'recording:stopped': 'recording-stopped',
+  'recording:error': 'recording-error',
+  'recording:blob-chunk': 'recording-blob-chunk',
+  'devices:changed': 'devices-changed',
+  'e2ee:key-rotated': 'e2ee-key-rotated',
+  'e2ee:error': 'e2ee-error',
+  'e2ee:warning': 'e2ee-warning',
+  'auth:error': 'auth-error',
+} as const;
+
+/** Canonicalize an event name (alias -> kebab). */
+export function canonicalRoomEvent(event: string): string {
+  return ROOM_EVENT_ALIASES[event] ?? event;
+}
 
 // ------------------------------------------------------------------ config
 
@@ -420,6 +521,27 @@ export function createRoomOptions(
 // ------------------------------------------------------------------- room
 
 export class Room extends TypedEmitter<RoomEventMap> implements RoomQualityHost {
+  // --- event alias compat: colon -> kebab canonical (see ROOM_EVENT_ALIASES) ---
+  override on<K extends keyof RoomEventMap>(event: K, listener: (...args: RoomEventMap[K]) => void): () => void {
+    return super.on(canonicalRoomEvent(event as string) as K, listener as unknown as (...args: unknown[]) => void);
+  }
+  override once<K extends keyof RoomEventMap>(event: K, listener: (...args: RoomEventMap[K]) => void): () => void {
+    return super.once(canonicalRoomEvent(event as string) as K, listener as unknown as (...args: unknown[]) => void);
+  }
+  override off<K extends keyof RoomEventMap>(event: K, listener: (...args: RoomEventMap[K]) => void): void {
+    super.off(canonicalRoomEvent(event as string) as K, listener as unknown as (...args: unknown[]) => void);
+  }
+  override emit<K extends keyof RoomEventMap>(event: K, ...args: RoomEventMap[K]): boolean {
+    return super.emit(canonicalRoomEvent(event as string) as K, ...(args as unknown[] as RoomEventMap[K]));
+  }
+  override listenerCount(event: keyof RoomEventMap): number {
+    return super.listenerCount(canonicalRoomEvent(event as string) as keyof RoomEventMap);
+  }
+  override removeAllListeners(event?: keyof RoomEventMap): void {
+    if (event === undefined) super.removeAllListeners();
+    else super.removeAllListeners(canonicalRoomEvent(event as string) as keyof RoomEventMap);
+  }
+
   readonly roomId: string;
   readonly local: LocalParticipant;
   readonly sessionId: string;
@@ -532,11 +654,11 @@ export class Room extends TypedEmitter<RoomEventMap> implements RoomQualityHost 
       mediaRecorderCtor: this.config.recordingMediaRecorderCtor,
       debug: this.debug,
     });
-    // Re-emit facade events on the room so apps can use room.on('recording:...').
-    this.recording.on('recording:started', (event) => this.emit('recording:started', event));
-    this.recording.on('recording:stopped', (event) => this.emit('recording:stopped', event));
-    this.recording.on('recording:error', (event) => this.emit('recording:error', event));
-    this.recording.on('recording:blob-chunk', (chunk) => this.emit('recording:blob-chunk', chunk));
+    // Re-emit facade events on the room (facade still uses colon, Room canonical is kebab — alias mapping handles both).
+    this.recording.on('recording:started', (event) => (this as any).emit('recording-started', event));
+    this.recording.on('recording:stopped', (event) => (this as any).emit('recording-stopped', event));
+    this.recording.on('recording:error', (event) => (this as any).emit('recording-error', event));
+    this.recording.on('recording:blob-chunk', (chunk) => (this as any).emit('recording-blob-chunk', chunk));
     // Adaptive quality (D5): construct the controller (inert when disabled or
     // in a non-browser environment) and re-emit its events on the room.
     this.quality = new RoomQualityController({
@@ -545,8 +667,8 @@ export class Room extends TypedEmitter<RoomEventMap> implements RoomQualityHost 
       enabled: this.config.quality?.enabled ?? qualityEnvironmentSupported(),
       debug: this.debug,
     });
-    this.quality.on('quality:changed', (event) => this.emit('quality:changed', event));
-    this.quality.on('quality:warning', (event) => this.emit('quality:warning', event));
+    this.quality.on('quality:changed', (event) => (this as any).emit('quality-changed', event));
+    this.quality.on('quality:warning', (event) => (this as any).emit('local-quality-warning', event));
     this.processorChain = new ProcessorChain({ warn: (m, d) => this.debug(m, d) });
     const initialSfuGw = this.config.sfu?.gateway
       ?? this.config.sfuGateway
@@ -650,27 +772,27 @@ export class Room extends TypedEmitter<RoomEventMap> implements RoomQualityHost 
       debug: this.debug,
     });
     // Re-emit device-change events on the room so apps can use room.on(...).
-    this.devices.on('devices:changed', () => this.emit('devices:changed'));
+    this.devices.on('devices:changed', () => (this as any).emit('devices-changed'));
     // E2EE: construct processor when key is supplied; warn when unsupported.
     if (this.config.e2ee && typeof this.config.e2ee === 'object') {
       this.e2eeProcessor = new SFrameProcessor(this.config.e2ee.key);
       this.e2eeProcessor.on('e2ee:warning', (w) => {
-        this.emit('e2ee:warning', w);
+        (this as any).emit('e2ee-warning', w);
         if (this.config.e2ee && typeof this.config.e2ee === 'object' && this.config.e2ee.required) {
-          this.emit('e2ee:error', new Error(w.message));
+          (this as any).emit('e2ee-error', new Error(w.message));
           this.emit('error', Object.assign(new Error(w.message), { code: 'e2ee-unsupported' }));
         }
       });
       this.e2eeProcessor.on('e2ee:error', (e) => {
-        this.emit('e2ee:error', e);
+        (this as any).emit('e2ee-error', e);
         this.emit('error', e);
       });
-      this.e2eeProcessor.on('e2ee:key-rotated', () => this.emit('e2ee:key-rotated'));
+      this.e2eeProcessor.on('e2ee:key-rotated', () => (this as any).emit('e2ee-key-rotated'));
       if (!this.e2eeProcessor.supported && this.config.e2ee.required) {
         // Defer emit so listeners attached after construction can still hear it.
         queueMicrotask(() => {
-          this.emit('e2ee:warning', { code: 'e2ee-unsupported', message: 'E2EE required but not supported' });
-          this.emit('e2ee:error', new Error('E2EE required but not supported in this environment'));
+          (this as any).emit('e2ee-warning', { code: 'e2ee-unsupported', message: 'E2EE required but not supported' });
+          (this as any).emit('e2ee-error', new Error('E2EE required but not supported in this environment'));
         });
       }
       // Dev-only warning when auth is expected but not supplied (open mode in prod)
@@ -698,11 +820,17 @@ export class Room extends TypedEmitter<RoomEventMap> implements RoomQualityHost 
       'connection-state',
       'track',
       'track-unpublished',
-      'quality:changed',
-      'devices:changed',
+      'quality-changed',
+      'devices-changed',
     ] as const) {
-      this.on(event, invalidate);
+      (this as any).on(event, invalidate);
     }
+    // Topology auto: migrate mesh→sfu when count exceeds threshold.
+    // maybeMigrate is no-op when topology!=='auto' or already sfu; stay-sfu
+    // downgrade is manual via setTopology('mesh') for v1 (see topology.ts:maybeMigrate).
+    const autoMigrate = () => { void this.topologyController.maybeMigrate().catch((e) => this.debug('topology:migrate-failed', e)); };
+    (this as any).on('participant-joined', autoMigrate);
+    (this as any).on('participant-left', autoMigrate);
   }
 
   // -------------------------------------------------------------- e2ee helpers
@@ -715,10 +843,10 @@ export class Room extends TypedEmitter<RoomEventMap> implements RoomQualityHost 
   async setE2eeKey(key: CryptoKey | Uint8Array): Promise<void> {
     if (!this.e2eeProcessor) {
       this.e2eeProcessor = new SFrameProcessor(key);
-      this.e2eeProcessor.on('e2ee:key-rotated', () => this.emit('e2ee:key-rotated'));
-      this.e2eeProcessor.on('e2ee:warning', (w) => this.emit('e2ee:warning', w));
+      this.e2eeProcessor.on('e2ee:key-rotated', () => (this as any).emit('e2ee-key-rotated'));
+      this.e2eeProcessor.on('e2ee:warning', (w) => (this as any).emit('e2ee-warning', w));
       this.e2eeProcessor.on('e2ee:error', (e) => {
-        this.emit('e2ee:error', e);
+        (this as any).emit('e2ee-error', e);
         this.emit('error', e);
       });
       return;
@@ -761,6 +889,11 @@ export class Room extends TypedEmitter<RoomEventMap> implements RoomQualityHost 
     await this.topologyController.setTopology(topology);
   }
 
+  /**
+   * Prefer a simulcast/SVC layer for `trackId` (SFU only). Unified `VideoQuality`
+   * enum mirrors `packages/sfu-gateway/src/sfu-gateway.ts:70` (`low|medium|high`
+   * and aliases `l|m|h`) — mesh is a no-op (logs `sfu:layer-not-supported`).
+   */
   async setPreferredLayers(trackId: string, layer: string): Promise<void> {
     if (this.media.setPreferredLayers) await this.media.setPreferredLayers(trackId, layer);
     else this.debug('sfu:layer-not-supported', trackId);
@@ -770,6 +903,22 @@ export class Room extends TypedEmitter<RoomEventMap> implements RoomQualityHost 
     if (this.media.requestKeyframe) await this.media.requestKeyframe(trackId);
   }
 
+  /**
+   * Tile-aware layer/visibility helper. In SFU mode `layer` maps to
+   * `setPreferredLayers`; in mesh `visible` toggles `track.enabled`.
+   * ResizeObserver guidance: observe the tile element and call with the
+   * rendered size so the SFU can downshift (`l` for hidden/small tiles):
+   * ```ts
+   * const ro = new ResizeObserver((entries) => {
+   *   for (const e of entries) {
+   *     const { width, height } = e.contentRect;
+   *     const layer = width < 160 ? 'l' : width < 640 ? 'm' : 'h';
+   *     void room.setTile(participantId, { width, height, layer, visible: true });
+   *   }
+   * });
+   * ro.observe(tileEl);
+   * ```
+   */
   async setTile(_participantId: string, opts: { visible?: boolean; width?: number; height?: number; priority?: number; layer?: string }): Promise<void> {
     if (opts.layer && this.media.setPreferredLayers) {
       const p = this.remoteById.get(_participantId);
@@ -813,8 +962,37 @@ export class Room extends TypedEmitter<RoomEventMap> implements RoomQualityHost 
     await this.emitEnvelope('transcript', payload).catch(() => {});
   }
 
+  // Moderation (client wrapper for POST /rooms/:id/moderate)
+  async moderate(opts: { action: 'kick' | 'mute' | 'lock' | 'unlock' | 'ban' | 'unban'; participantId?: string; banTtlMs?: number }): Promise<void> {
+    for (const bus of this.enumerateBuses()) {
+      try { (bus as unknown as { sendControl: (m: unknown) => void }).sendControl?.({ action: `moderate:${opts.action}`, targetId: opts.participantId }); } catch { /* best effort */ }
+    }
+    await this.emitEnvelope('chat', { text: `/moderate ${opts.action} ${opts.participantId ?? ''}`.trim() } as unknown as ChatPayload).catch(()=>{});
+  }
+
+  // Poll (additive envelope via chat for now)
+  async createPoll(question: string, options: string[]): Promise<void> {
+    await this.emitEnvelope('chat', { text: JSON.stringify({ poll: { question, options } }) } as unknown as ChatPayload).catch(()=>{});
+  }
+  async votePoll(pollId: string, option: string): Promise<void> {
+    await this.emitEnvelope('chat', { text: JSON.stringify({ vote: { pollId, option } }) } as unknown as ChatPayload).catch(()=>{});
+  }
+  async sendTyping(isTyping: boolean): Promise<void> {
+    for (const bus of this.enumerateBuses()) {
+      try { (bus as unknown as { sendControl: (m: unknown)=>void }).sendControl?.({ action: 'typing', isTyping, senderId: this.local.id }); } catch {}
+    }
+    await this.emitEnvelope('chat', { text: '' } as unknown as ChatPayload).catch(()=>{});
+  }
+
+  // Analytics: getCallStats sampler
+  async getCallStats(): Promise<import('@mbsks/openrtc-quality').RTCStatsSnapshot> {
+    const sampler = new (await import('./room-quality.ts')).RoomStatsSampler({ getPeerConnections: () => this.media.getPeerConnections() });
+    return sampler.sample();
+  }
+
   private async switchMediaTransport(kind: 'mesh' | 'sfu'): Promise<void> {
     const old = this.media;
+    const from = old.kind;
     await old.close();
     const rtcPeerFactory = this.config.rtc?.peerFactory ?? this.config.peerFactory;
     const rtcIceServers = this.config.rtc?.iceServers ?? this.config.iceServers;
@@ -848,6 +1026,7 @@ export class Room extends TypedEmitter<RoomEventMap> implements RoomQualityHost 
       await sfu.init();
       this.media = sfu;
       this.media.onTrack(() => {});
+      if (from !== kind) (this as any).emit('topology-changed', { from, to: kind });
     } else {
       this.media = new MeshMediaTransport({
         roomId: this.roomId, transport: this.transport, selfId: this.config.selfId, sessionId: this.sessionId,
@@ -859,6 +1038,7 @@ export class Room extends TypedEmitter<RoomEventMap> implements RoomQualityHost 
         e2eeSetupPeer: async (pc) => { if (this.e2eeProcessor?.supported) try { await this.e2eeProcessor.setupPeerConnection(pc); } catch (e) { this.debug('e2ee:setup-failed', e); } },
         debug: this.debug, emit: (e: string, ...a: unknown[]) => (this as unknown as { emit: (ev: string, ...args: unknown[]) => void }).emit(e, ...a),
       });
+      if (from !== kind) (this as any).emit('topology-changed', { from, to: kind });
     }
   }
 
@@ -938,7 +1118,7 @@ export class Room extends TypedEmitter<RoomEventMap> implements RoomQualityHost 
   async handleAuthError(err: unknown): Promise<never> {
     const e = err instanceof Error ? err : new Error(String(err));
     (e as unknown as Record<string, unknown>).code = 'auth:error';
-    this.emit('auth:error', e);
+    (this as any).emit('auth-error', e);
     if (this.config.auth?.onTokenExpired && !this.authRefreshInFlight) {
       this.authRefreshInFlight = (async () => {
         try {
@@ -1466,7 +1646,7 @@ export class Room extends TypedEmitter<RoomEventMap> implements RoomQualityHost 
         const err = new Error(msg);
         if (code === 'unauthorized' || code === 'token_expired' || code === 'forbidden') {
           (err as unknown as Record<string, unknown>).code = code;
-          this.emit('auth:error', err);
+          (this as any).emit('auth-error', err);
           if (this.config.auth?.onTokenExpired) {
             void this.handleAuthError(err).catch(() => {});
           }
@@ -1498,7 +1678,7 @@ export class Room extends TypedEmitter<RoomEventMap> implements RoomQualityHost 
     });
     this.remoteById.set(senderId, participant);
     this.emit('participant-joined', participant);
-    void this.topologyController.maybeMigrate().catch((e) => this.debug('topology:migrate-failed', e));
+    // auto-migrate wired via constructor listener on 'participant-joined' (see topology.ts)
     // Roster reply: announce ourselves back to the newcomer (targeted, so it
     // never echoes again) — the mesh equivalent of a join acknowledgment.
     await this.emitEnvelope(
@@ -1531,7 +1711,7 @@ export class Room extends TypedEmitter<RoomEventMap> implements RoomQualityHost 
       this.remoteById.delete(senderId);
       this.emit('participant-left', participant);
     }
-    void this.topologyController.maybeMigrate().catch((e) => this.debug('topology:migrate-failed', e));
+    // auto-migrate wired via constructor listener on 'participant-left'
   }
 
   private handlePresence(presence: {

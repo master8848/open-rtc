@@ -8,3 +8,11 @@
  */
 export { useRoomState, useParticipants, useParticipant } from './use-room-state.ts';
 export { useJoin, type UseJoinOptions } from './use-join.ts';
+export { useRecording } from './use-recording.ts';
+export { useTranscription, useLatestTranscript } from './use-transcription.ts';
+export { useQuality, type UseQualityReturn } from './use-quality.ts';
+export { useDevices, type UseDevicesReturn } from './use-devices.ts';
+export { useActiveSpeaker } from './use-active-speaker.ts';
+export { useConnectionState } from './use-connection-state.ts';
+export { useRemoteTrack, useRemoteTracks } from './use-remote-track.ts';
+export { createRoomHook, type CreateRoomHookOptions, type RoomHookReturn } from './create-room-hook.ts';

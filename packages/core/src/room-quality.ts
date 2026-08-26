@@ -1,6 +1,8 @@
 /**
  * RoomQualityController — the adaptive-quality runtime for a vidcall Room
  * (docs/architecture.md D5, docs/research/webrtc-js.md §5).
+ * quality label papercut sweep: track <1h fixes via GitHub label `quality`
+ * (Linear Quality Wednesdays — see plans/08-coherence-dx-docs-plan.md:20).
  *
  * Wires the pure `@mbsks/openrtc-quality` policy engine to live WebRTC senders:
  *
