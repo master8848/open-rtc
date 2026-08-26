@@ -179,16 +179,27 @@ export function dtlsParametersFromSdp(sdp: string): {
   };
 }
 
+function randomSsrc(): number {
+  const buf = new Uint32Array(1);
+  // Prefer crypto.getRandomValues (available in Node >=18 and browsers); avoid SSRC 0 (reserved per RFC 3550).
+  try {
+    crypto.getRandomValues(buf);
+  } catch {
+    // Fallback for environments without crypto
+    buf[0] = Math.floor(Math.random() * 0xffffffff);
+  }
+  let ssrc = buf[0]!;
+  if (ssrc === 0) ssrc = 1;
+  return ssrc >>> 0;
+}
+
 /**
  * Minimal mediasoup `RtpParameters` for `produce()`, built from the offer's
  * m-line for `kind`. `'screen'` is mapped to `'video'` (a screen-share is a
  * video track). Reference quality: rtcp-fb, extmap and fmtp are not parsed,
- * and encodings carry a **placeholder SSRC** so the wiring is exercisable
- * without a browser. Production must replace this with the sender's real RTP
- * parameters (e.g. parsed from the client SDP, as mediasoup-client does).
+ * and encodings carry a **random SSRC** (crypto.getRandomValues when available, 32-bit).
+ * Production should replace this with the sender's real RTP parameters.
  */
-let placeholderSsrc = 1_000_000;
-
 export function minimalRtpParameters(
   sdp: string,
   kind: SfuKind,
@@ -201,7 +212,6 @@ export function minimalRtpParameters(
   const codec = section?.codec;
   if (!codec || !codec.codec) return null;
   const mimeType = mediaKind === 'audio' ? `audio/${codec.codec}` : `video/${codec.codec}`;
-  placeholderSsrc += 1;
   return {
     codecs: [
       {
@@ -211,7 +221,7 @@ export function minimalRtpParameters(
         ...(codec.channels !== undefined ? { channels: codec.channels } : {}),
       },
     ],
-    encodings: [{ ssrc: placeholderSsrc }],
+    encodings: [{ ssrc: randomSsrc() }],
   };
 }
 
