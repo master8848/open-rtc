@@ -211,13 +211,13 @@ test('Room: data channel bus is created per peer and forwards bus events', async
   await a.room.publish(track);
   await waitFor(() => b.room.getParticipant('a')?.publications.length === 1);
 
-  const busB = b.room.getDataChannelBus('a');
+  const busB = b.room.getDataChannelBus('a') as unknown as { isOpen: boolean; sendReaction: (emoji: string) => void };
   assert.ok(busB, 'bus exists');
   await waitFor(() => busB.isOpen, { timeoutMs: 3000, message: 'datachannel opens' });
 
   const reactions: string[] = [];
   b.room.on('reaction', (e) => reactions.push(e.emoji));
-  const busA = a.room.getDataChannelBus('b')!;
+  const busA = a.room.getDataChannelBus('b')! as unknown as { isOpen: boolean; sendReaction: (emoji: string) => void };
   await waitFor(() => busA.isOpen, { timeoutMs: 3000, message: 'a datachannel opens' });
   busA.sendReaction('🚀');
   await waitFor(() => reactions.includes('🚀'));
