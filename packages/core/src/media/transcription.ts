@@ -10,6 +10,7 @@
  */
 
 import type { TranscriptPayload } from '@mbsks/openrtc-protocol';
+import { resolveTranscriber } from './transcribe-registry.ts';
 
 export interface TranscriptEvent extends TranscriptPayload {
   participantId: string;
@@ -33,37 +34,14 @@ export type TranscriberFn = (chunk: Uint8Array, opts: { lang?: string }) => Prom
 export interface SfuTranscriptionWorkerOptions extends TranscriptionOptions {
   chunkMs?: number;
   transcriber?: TranscriberFn;
+  provider?: string;
   dispatch?: (envelope: unknown) => void;
   fetchImpl?: typeof fetch;
 }
 
-function mockTranscriber(_chunk: Uint8Array, _opts: { lang?: string }): Promise<{ text: string; isFinal: boolean }> {
-  return Promise.resolve({ text: '[mock transcript]', isFinal: true });
-}
-
-async function openAiTranscriber(chunk: Uint8Array, opts: { lang?: string; fetchImpl?: typeof fetch }): Promise<{ text: string; isFinal: boolean }> {
-  const key = (globalThis as unknown as Record<string, unknown>)['process'] !== undefined
-    ? (globalThis as unknown as { process?: { env?: Record<string, string> } }).process?.env?.OPENAI_API_KEY
-    : undefined;
-  if (!key) return mockTranscriber(chunk, opts);
-  try {
-    const fetchFn = opts.fetchImpl ?? fetch;
-    const form = new FormData();
-    form.append('file', new Blob([chunk as unknown as BlobPart], { type: 'audio/webm' }), 'chunk.webm');
-    form.append('model', 'whisper-1');
-    if (opts.lang) form.append('language', opts.lang);
-    const res = await fetchFn('https://api.openai.com/v1/audio/transcriptions', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${key}` },
-      body: form as unknown as BodyInit,
-    });
-    if (!res.ok) return mockTranscriber(chunk, opts);
-    const json = await res.json() as { text?: string };
-    return { text: json.text ?? '', isFinal: true };
-  } catch {
-    return mockTranscriber(chunk, opts);
-  }
-}
+// re-export registry for consumers (zero-dep)
+export { mockTranscriber, getTranscriptionProvider, listTranscriptionProviders, registerTranscriptionProvider, resolveTranscriber } from './transcribe-registry.ts';
+export type { TranscriptionProvider } from './transcribe-registry.ts';
 
 /** Server-side STT worker (parallel to EgressWorker): SFU Consumer -> STT -> transcript envelope */
 export class SfuTranscriptionWorker {
@@ -107,10 +85,10 @@ export class SfuTranscriptionWorker {
     this.buffer = [];
     this.bufferedMs = 0;
     const lang = this.opts.lang ?? 'en-US';
-    const transcriber = this.opts.transcriber ?? ((c: Uint8Array, o: { lang?: string }) => openAiTranscriber(c, { lang: o.lang, fetchImpl: this.opts.fetchImpl }));
+    const transcriber = this.opts.transcriber ?? resolveTranscriber(this.opts.provider ?? 'openai');
     let result: { text: string; isFinal: boolean };
     try {
-      result = await transcriber(combined, { lang });
+      result = await transcriber(combined, { lang, fetchImpl: this.opts.fetchImpl } as unknown as { lang?: string });
     } catch {
       result = { text: '', isFinal: true };
     }
