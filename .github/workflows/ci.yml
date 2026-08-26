@@ -1,0 +1,61 @@
+# ci — Phase 4 quality gates (TanStack-style)
+# Matrix: docs/testing.md CI (build/test/typecheck/lint + backend vitest + swift macos-14 + dart + kotlin temurin21)
+# Local gate kept: bun run build && bun run typecheck && bun run test && bun run lint
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  node:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with: { bun-version: "1.4.0" }
+      - uses: actions/setup-node@v4
+        with: { node-version: "22.22.2" } # pinned mise.toml:10; engines >=18.18 floor (package.json:35)
+      - run: bun install --frozen-lockfile
+      - run: bun run build
+      - run: bun run typecheck
+      - run: bun run test
+      - run: bun run test:types
+        # placeholder: .test-d.tsx with expectTypeOf; expand to matrix strategy TS 5.5-5.9 when files land
+      - run: bun run test:build
+        # stub: publint --pack + attw --pack; add deps then replace echo
+      - run: bun run size:core
+        # stub: size-limit <15kB gz per packages/core
+      - run: |
+          for p in packages/backend-*; do
+            echo "backend $p"
+            (cd "$p" && bun run test || echo "skip $p")
+          done
+      - run: bun run lint
+      - run: bun run verify:docs
+      - run: bun run changeset:dry-run
+        # gate: changeset status --verbose (plans/07-roadmap.md:77 version --dry-run intent)
+      - run: bun run check:quality
+        # stubs: sherif / knip / zizmor — replace echos when adopted
+  swift:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - run: swift --version
+      - run: cd packages/swift && swift build && swift test
+  dart:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dart-lang/setup-dart@v1
+        with: { sdk: stable }
+      - run: cd packages/dart && dart pub get && dart analyze && dart test
+  kotlin:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "21" }
+      - run: cd packages/kotlin && ./gradlew test

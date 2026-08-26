@@ -399,6 +399,15 @@ async function handleJoin(
     hub.attach(roomId, socket, envelope.senderId, envelope.sessionId);
     // Peers learn about the newcomer; the joiner gets the `joined` ack below.
     hub.broadcast(roomId, delivery.envelope, { exceptSenderId: envelope.senderId });
+    // Push notification trigger on offline join (if push service configured)
+    if (services.push) {
+      void services.push.notify(roomId, { event: 'join', participantId: envelope.senderId }).catch(() => {});
+    }
+    // webhook dispatch for join
+    if (services.webhooks?.length) {
+      const { dispatchWebhooks } = await import('./webhooks.ts');
+      void dispatchWebhooks(services.webhooks, { event: 'join', roomId, payload: { participantId: envelope.senderId }, ts: Date.now() });
+    }
     const joined: JoinedMessage = {
       type: 'joined',
       roomId,
@@ -407,6 +416,13 @@ async function handleJoin(
     };
     sendJson(socket, joined);
   } catch (err) {
+    // lobby waiting webhook when locked
+    if ((err as { code?: string })?.code === 'forbidden' && String((err as Error).message).includes('lobby')) {
+      if (services.webhooks?.length) {
+        const { dispatchWebhooks } = await import('./webhooks.ts');
+        void dispatchWebhooks(services.webhooks, { event: 'lobby.waiting', roomId, payload: { participantId: envelope.senderId }, ts: Date.now() });
+      }
+    }
     sendJson(socket, errorEnvelope(roomId, errCode(err), errMessage(err)));
   }
 }

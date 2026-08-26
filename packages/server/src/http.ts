@@ -234,38 +234,56 @@ async function joinHandler(services: Services, ctx: RouteContext): Promise<Route
     }
     // Locked room: moderators/admins may join; handled in joinRoom via role/moderator check
     const isModerator = policy.moderatorIds?.includes(claims.participantId) ?? false;
-    const result = await joinRoom(
-      services.store,
-      roomId,
-      { participantId, sessionId, displayName, metadata },
-      { actorRole: claims.role, isModerator },
-    );
+    try {
+      const result = await joinRoom(
+        services.store,
+        roomId,
+        { participantId, sessionId, displayName, metadata },
+        { actorRole: claims.role, isModerator },
+      );
+      services.relay?.broadcast(
+        roomId,
+        buildJoinEnvelope(roomId, { participantId, sessionId, displayName, metadata }),
+      );
+      if (services.push) void services.push.notify(roomId, { event: 'join', participantId }).catch(()=>{});
+      return {
+        status: 200,
+        body: { room: result.room, participant: result.participant, participants: result.participants },
+      };
+    } catch (e) {
+      if ((e as { code?: string })?.code === 'forbidden' && String((e as Error).message).includes('lobby') && services.webhooks?.length) {
+        const { dispatchWebhooks } = await import('./webhooks.ts');
+        void dispatchWebhooks(services.webhooks, { event: 'lobby.waiting', roomId, payload: { participantId }, ts: Date.now() });
+      }
+      throw e;
+    }
+  }
+
+  // Open mode: still enforce locked/maxParticipants via joinRoom
+  try {
+    const result = await joinRoom(services.store, roomId, {
+      participantId,
+      sessionId,
+      displayName,
+      metadata,
+    });
+    // Broadcast the join so WS peers learn about the newcomer.
     services.relay?.broadcast(
       roomId,
       buildJoinEnvelope(roomId, { participantId, sessionId, displayName, metadata }),
     );
+    if (services.push) void services.push.notify(roomId, { event: 'join', participantId }).catch(()=>{});
     return {
       status: 200,
       body: { room: result.room, participant: result.participant, participants: result.participants },
     };
+  } catch (e) {
+    if ((e as { code?: string })?.code === 'forbidden' && String((e as Error).message).includes('lobby') && services.webhooks?.length) {
+      const { dispatchWebhooks } = await import('./webhooks.ts');
+      void dispatchWebhooks(services.webhooks, { event: 'lobby.waiting', roomId, payload: { participantId }, ts: Date.now() });
+    }
+    throw e;
   }
-
-  // Open mode: still enforce locked/maxParticipants via joinRoom
-  const result = await joinRoom(services.store, roomId, {
-    participantId,
-    sessionId,
-    displayName,
-    metadata,
-  });
-  // Broadcast the join so WS peers learn about the newcomer.
-  services.relay?.broadcast(
-    roomId,
-    buildJoinEnvelope(roomId, { participantId, sessionId, displayName, metadata }),
-  );
-  return {
-    status: 200,
-    body: { room: result.room, participant: result.participant, participants: result.participants },
-  };
 }
 
 async function leaveHandler(services: Services, ctx: RouteContext): Promise<RouteResult> {
@@ -598,10 +616,11 @@ async function moderateHandler(services: Services, ctx: RouteContext): Promise<R
   const roomId = ctx.params['id']!;
   const body = asRecord(ctx.body) ?? {};
   const action = requireString(body.action, 'action') as ModerationAction;
-  if (!['kick', 'mute', 'lock', 'unlock'].includes(action)) {
-    throw errors.invalidRequest('action must be kick|mute|lock|unlock');
+  if (!['kick', 'mute', 'lock', 'unlock', 'ban', 'unban'].includes(action)) {
+    throw errors.invalidRequest('action must be kick|mute|lock|unlock|ban|unban');
   }
   const targetId = asString(body.targetId);
+  const banTtlMs = typeof body.banTtlMs === 'number' ? body.banTtlMs : typeof body.expiresInMs === 'number' ? body.expiresInMs : undefined;
   // auth + moderator check
   const claims = requireAuth(services, ctx, roomId);
   if (!claims) throw errors.unauthorized('Moderation requires authentication');
@@ -614,13 +633,25 @@ async function moderateHandler(services: Services, ctx: RouteContext): Promise<R
   if (!isAdmin && !(isModerator && hasModerateCap)) {
     throw errors.forbidden('Moderator or admin required');
   }
-  const result = await moderateRoom(services.store, roomId, claims.participantId, action, targetId);
-  // For kick, broadcast leave to remaining members
-  if (action === 'kick' && result.kicked) {
-    const envelope = { v: 1 as const, type: 'leave' as const, roomId, senderId: result.kicked, sessionId: '', ts: Date.now(), seq: 0, payload: { reason: 'kicked' } } as unknown as import('@mbsks/openrtc-protocol').Envelope;
+  const result = await moderateRoom(services.store, roomId, claims.participantId, action, targetId, { ...(banTtlMs ? { banTtlMs } : {}) });
+  // For kick/ban, broadcast leave to remaining members
+  if ((action === 'kick' || action === 'ban') && result.kicked) {
+    const envelope = { v: 1 as const, type: 'leave' as const, roomId, senderId: result.kicked, sessionId: '', ts: Date.now(), seq: 0, payload: { reason: action === 'ban' ? 'banned' : 'kicked' } } as unknown as import('@mbsks/openrtc-protocol').Envelope;
     services.relay?.broadcast(roomId, envelope);
   }
-  return { status: 200, body: { room: result.room, ...(result.kicked ? { kicked: result.kicked } : {}) } };
+  if (action === 'mute' && targetId) {
+    // mute-remote fanout via DataChannelBus control broadcast (relay as control envelope)
+    const envelope = { v: 1 as const, type: 'chat' as const, roomId, senderId: claims.participantId, sessionId: '', ts: Date.now(), seq: 0, payload: { text: `/mute ${targetId}` } } as unknown as import('@mbsks/openrtc-protocol').Envelope;
+    services.relay?.broadcast(roomId, envelope, { exceptSenderId: targetId });
+    // Also direct control broadcast for DataChannelBus listeners
+    const ctrl = { v: 1 as const, type: 'error' as const, roomId, senderId: 'server', sessionId: 'server', ts: Date.now(), seq: 0, payload: { code: 'muted', message: `muted:${targetId}` } } as unknown as import('@mbsks/openrtc-protocol').Envelope;
+    services.relay?.broadcast(roomId, ctrl);
+  }
+  if (action === 'lock' || action === 'unlock') {
+    const envelope = { v: 1 as const, type: 'presence' as const, roomId, senderId: 'server', sessionId: 'server', ts: Date.now(), seq: 0, payload: { state: 'online', metadata: { locked: action === 'lock' } } } as unknown as import('@mbsks/openrtc-protocol').Envelope;
+    services.relay?.broadcast(roomId, envelope);
+  }
+  return { status: 200, body: { room: result.room, ...(result.kicked ? { kicked: result.kicked } : {}), ...(result.banned ? { banned: result.banned } : {}) } };
 }
 
 async function turnCredentialsHandler(services: Services, ctx: RouteContext): Promise<RouteResult> {
@@ -705,14 +736,27 @@ async function breakoutHandler(services: Services, ctx: RouteContext): Promise<R
   const roomId = ctx.params['id']!;
   if (services.auth) verifyWithRotation(services.auth, bearerToken(ctx.header('authorization')));
   const body = asRecord(ctx.body) ?? {};
-  const count = typeof body.count === 'number' ? body.count : 2;
+  const count = typeof body.count === 'number' ? body.count : (Array.isArray(body.ids) ? body.ids.length : 2);
+  const ids: string[] | undefined = Array.isArray(body.ids) ? body.ids as string[] : undefined;
+  const assignments = asRecord(body.assignments) as Record<string, string> | undefined;
   const breakoutIds: string[] = [];
-  for (let i = 0; i < count; i++) {
-    const id = `${roomId}--breakout-${i + 1}`;
-    try { await createRoom(services.store, { roomId: id }); } catch { /* already exists */ }
+  const num = ids ? ids.length : count;
+  for (let i = 0; i < num; i++) {
+    const id = ids?.[i] ?? `${roomId}--breakout-${i + 1}`;
+    try { await createRoom(services.store, { roomId: id, metadata: { parentRoomId: roomId } }); } catch { /* already exists */ }
     breakoutIds.push(id);
   }
-  return { status: 201, body: { breakoutIds } };
+  // Move participants if assignments provided: { participantId: breakoutId }
+  if (assignments) {
+    for (const [pid, targetRoomId] of Object.entries(assignments)) {
+      const p = await services.store.getParticipant(roomId, pid);
+      if (p && breakoutIds.includes(targetRoomId)) {
+        await services.store.deleteParticipant(roomId, pid);
+        await services.store.putParticipant({ ...p, roomId: targetRoomId });
+      }
+    }
+  }
+  return { status: 201, body: { breakoutIds, parentRoomId: roomId } };
 }
 
 async function lobbyAdmitHandler(services: Services, ctx: RouteContext): Promise<RouteResult> {
@@ -720,8 +764,74 @@ async function lobbyAdmitHandler(services: Services, ctx: RouteContext): Promise
   if (services.auth) verifyWithRotation(services.auth, bearerToken(ctx.header('authorization')));
   const body = asRecord(ctx.body) ?? {};
   const participantId = requireString(body.participantId, 'participantId');
-  // Lobby is modeled as RoomPolicy.locked + admitted via join; here we just ack.
+  const { admitLobby } = await import('./core.ts');
+  admitLobby(roomId, participantId);
+  // webhook dispatch for lobby admit (reuse lobby.waiting clearing)
+  if (services.webhooks?.length) {
+    const { dispatchWebhooks } = await import('./webhooks.ts');
+    void dispatchWebhooks(services.webhooks, { event: 'lobby.waiting', roomId, payload: { participantId, admitted: true }, ts: Date.now() });
+  }
   return { status: 200, body: { admitted: participantId, roomId } };
+}
+
+async function lobbyListHandler(services: Services, ctx: RouteContext): Promise<RouteResult> {
+  const roomId = ctx.params['id']!;
+  if (services.auth) verifyWithRotation(services.auth, bearerToken(ctx.header('authorization')));
+  const { listLobbyWaiting } = await import('./core.ts');
+  return { status: 200, body: { waiting: listLobbyWaiting(roomId) } };
+}
+
+async function bansListHandler(services: Services, ctx: RouteContext): Promise<RouteResult> {
+  const roomId = ctx.params['id']!;
+  if (services.auth) verifyWithRotation(services.auth, bearerToken(ctx.header('authorization')));
+  const { listBans } = await import('./core.ts');
+  return { status: 200, body: { bans: listBans(roomId) } };
+}
+
+async function pollCreateHandler(services: Services, ctx: RouteContext): Promise<RouteResult> {
+  const roomId = ctx.params['id']!;
+  const claims = requireAuth(services, ctx, roomId);
+  const body = asRecord(ctx.body) ?? {};
+  const question = requireString(body.question, 'question');
+  const options = body.options;
+  if (!Array.isArray(options) || options.length < 2) throw errors.invalidRequest('options must be array with >=2');
+  const { createPoll } = await import('./core.ts');
+  const poll = createPoll(roomId, claims?.participantId ?? 'server', question, options as string[]);
+  const envelope = { v: 1 as const, type: 'chat' as const, roomId, senderId: claims?.participantId ?? 'server', sessionId: '', ts: Date.now(), seq: 0, payload: { text: JSON.stringify({ poll }), replyTo: undefined } } as unknown as import('@mbsks/openrtc-protocol').Envelope;
+  services.relay?.broadcast(roomId, envelope);
+  return { status: 201, body: { poll } };
+}
+
+async function pollVoteHandler(services: Services, ctx: RouteContext): Promise<RouteResult> {
+  const roomId = ctx.params['id']!;
+  const pollId = ctx.params['pollId']!;
+  const claims = requireAuth(services, ctx, roomId);
+  const body = asRecord(ctx.body) ?? {};
+  const option = requireString(body.option, 'option');
+  const { votePoll } = await import('./core.ts');
+  const ok = votePoll(roomId, pollId, claims?.participantId ?? requireString(body.participantId, 'participantId'), option);
+  if (!ok) throw errors.invalidRequest('Invalid poll or option');
+  return { status: 200, body: { pollId, option } };
+}
+
+async function handQueueHandler(services: Services, ctx: RouteContext): Promise<RouteResult> {
+  const roomId = ctx.params['id']!;
+  const claims = requireAuth(services, ctx, roomId);
+  const body = asRecord(ctx.body) ?? {};
+  const action = asString(body.action) ?? 'raise';
+  const { enqueueHand, dequeueHand, getHandQueue } = await import('./core.ts');
+  const pid = claims?.participantId ?? asString(body.participantId) ?? 'unknown';
+  if (action === 'raise') enqueueHand(roomId, pid);
+  else dequeueHand(roomId, pid);
+  return { status: 200, body: { queue: getHandQueue(roomId) } };
+}
+
+async function metricsHandler(services: Services, ctx: RouteContext): Promise<RouteResult> {
+  const roomId = ctx.params['id']!;
+  if (services.auth) verifyWithRotation(services.auth, bearerToken(ctx.header('authorization')));
+  const signals = await services.store.listSignals(roomId, 0).catch(() => []);
+  const clientCount = services.relay?.clientCount(roomId) ?? 0;
+  return { status: 200, body: { roomId, signalCount: signals.length, clientCount } };
 }
 
 export const routes: readonly Route[] = [
@@ -741,7 +851,14 @@ export const routes: readonly Route[] = [
   { method: 'POST', pattern: '/rooms/:id/egress/start', handler: egressStartHandler },
   { method: 'POST', pattern: '/rooms/:id/egress/stop', handler: egressStopHandler },
   { method: 'POST', pattern: '/rooms/:id/breakouts', handler: breakoutHandler },
+  { method: 'POST', pattern: '/rooms/:id/breakouts/move', handler: breakoutHandler },
   { method: 'POST', pattern: '/rooms/:id/lobby/admit', handler: lobbyAdmitHandler },
+  { method: 'GET', pattern: '/rooms/:id/lobby/waiting', handler: lobbyListHandler },
+  { method: 'GET', pattern: '/rooms/:id/bans', handler: bansListHandler },
+  { method: 'POST', pattern: '/rooms/:id/polls', handler: pollCreateHandler },
+  { method: 'POST', pattern: '/rooms/:id/polls/:pollId/vote', handler: pollVoteHandler },
+  { method: 'POST', pattern: '/rooms/:id/hand', handler: handQueueHandler },
+  { method: 'GET', pattern: '/rooms/:id/metrics', handler: metricsHandler },
   { method: 'DELETE', pattern: '/rooms/:id', handler: deleteRoomHandler },
   { method: 'GET', pattern: '/rooms/:id/state', handler: stateHandler },
   { method: 'GET', pattern: '/rooms/:id/recordings', handler: recordingsListHandler },

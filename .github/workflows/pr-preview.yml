@@ -1,0 +1,14 @@
+# pr-preview — pkg-pr-new per-PR preview (TanStack pkg-pr-new stub)
+name: pr-preview
+on: { pull_request: { types: [opened, synchronize] } }
+permissions: { contents: read, pull-requests: write }
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with: { bun-version: "1.4.0" }
+      - run: bun install --frozen-lockfile
+      - run: bun run build
+      - run: echo "pkg-pr-new stub — replace with: npx pkg-pr-new publish './packages/*' --compact when adopted"

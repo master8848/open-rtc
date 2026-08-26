@@ -191,7 +191,87 @@ export async function updateRoomPolicy(
   return updated;
 }
 
-export type ModerationAction = 'kick' | 'mute' | 'lock' | 'unlock';
+export type ModerationAction = 'kick' | 'mute' | 'lock' | 'unlock' | 'ban' | 'unban';
+
+export interface BanEntry {
+  participantId: string;
+  bannedAt: number;
+  expiresAt?: number;
+}
+
+// In-memory ban/lobby/hand/poll stores (Process-local; pluggable stores may persist via policy or external DB)
+const banStore = new Map<string, Map<string, BanEntry>>(); // roomId -> participantId -> BanEntry
+const lobbyStore = new Map<string, Map<string, number>>(); // roomId -> participantId -> enqueuedAt
+const handQueueStore = new Map<string, string[]>(); // roomId -> ordered participantIds with hand raised
+const pollStore = new Map<string, Map<string, { id: string; question: string; options: string[]; votes: Map<string, string>; createdBy: string; createdAt: number }>>();
+
+export function listBans(roomId: string, now?: number): BanEntry[] {
+  const t = nowMs(now);
+  const m = banStore.get(roomId);
+  if (!m) return [];
+  const out: BanEntry[] = [];
+  for (const [pid, e] of [...m.entries()]) {
+    if (e.expiresAt !== undefined && e.expiresAt <= t) { m.delete(pid); continue; }
+    out.push(e);
+  }
+  return out;
+}
+
+export function isBanned(roomId: string, participantId: string, now?: number): boolean {
+  const m = banStore.get(roomId);
+  if (!m) return false;
+  const e = m.get(participantId);
+  if (!e) return false;
+  if (e.expiresAt !== undefined && e.expiresAt <= nowMs(now)) { m.delete(participantId); return false; }
+  return true;
+}
+
+export function listLobbyWaiting(roomId: string): Array<{ participantId: string; enqueuedAt: number }> {
+  const m = lobbyStore.get(roomId);
+  if (!m) return [];
+  return [...m.entries()].map(([participantId, enqueuedAt]) => ({ participantId, enqueuedAt }));
+}
+export function enqueueLobby(roomId: string, participantId: string, now?: number): void {
+  let m = lobbyStore.get(roomId);
+  if (!m) { m = new Map(); lobbyStore.set(roomId, m); }
+  m.set(participantId, nowMs(now));
+}
+export function admitLobby(roomId: string, participantId: string): boolean {
+  const m = lobbyStore.get(roomId);
+  if (!m) return false;
+  return m.delete(participantId);
+}
+
+export function getHandQueue(roomId: string): string[] { return [...(handQueueStore.get(roomId) ?? [])]; }
+export function enqueueHand(roomId: string, participantId: string): void {
+  const q = handQueueStore.get(roomId) ?? [];
+  if (!q.includes(participantId)) q.push(participantId);
+  handQueueStore.set(roomId, q);
+}
+export function dequeueHand(roomId: string, participantId: string): void {
+  const q = handQueueStore.get(roomId) ?? [];
+  handQueueStore.set(roomId, q.filter((id) => id !== participantId));
+}
+
+export function createPoll(roomId: string, actorId: string, question: string, options: string[], now?: number): { id: string; question: string; options: string[] } {
+  const id = randomId();
+  let m = pollStore.get(roomId);
+  if (!m) { m = new Map(); pollStore.set(roomId, m); }
+  m.set(id, { id, question, options, votes: new Map(), createdBy: actorId, createdAt: nowMs(now) });
+  return { id, question, options };
+}
+export function votePoll(roomId: string, pollId: string, participantId: string, option: string): boolean {
+  const m = pollStore.get(roomId)?.get(pollId);
+  if (!m) return false;
+  if (!m.options.includes(option)) return false;
+  m.votes.set(participantId, option);
+  return true;
+}
+export function listPolls(roomId: string): Array<{ id: string; question: string; options: string[]; votes: Record<string, string> }> {
+  const m = pollStore.get(roomId);
+  if (!m) return [];
+  return [...m.values()].map((p) => ({ id: p.id, question: p.question, options: p.options, votes: Object.fromEntries(p.votes) }));
+}
 
 export async function moderateRoom(
   store: Store,
@@ -199,8 +279,8 @@ export async function moderateRoom(
   actorId: string,
   action: ModerationAction,
   targetId?: string,
-  opts: { now?: number } = {},
-): Promise<{ room: Room; kicked?: string }> {
+  opts: { now?: number; banTtlMs?: number } = {},
+): Promise<{ room: Room; kicked?: string; banned?: string }> {
   const room = await requireRoom(store, roomId);
   const policy = getRoomPolicy(room);
   const isModerator =
@@ -232,6 +312,27 @@ export async function moderateRoom(
       if (!target) throw errors.participantNotFound(roomId, targetId);
       return { room };
     }
+    case 'ban': {
+      if (!targetId) throw errors.invalidRequest('ban requires targetId');
+      const t = nowMs(opts.now);
+      const expiresAt = opts.banTtlMs ? t + opts.banTtlMs : undefined;
+      let m = banStore.get(roomId);
+      if (!m) { m = new Map(); banStore.set(roomId, m); }
+      m.set(targetId, { participantId: targetId, bannedAt: t, ...(expiresAt ? { expiresAt } : {}) });
+      // Also kick if present
+      const existing = await store.getParticipant(roomId, targetId);
+      if (existing) {
+        await store.deleteParticipant(roomId, targetId);
+      }
+      const updatedRoom: Room = { ...room, updatedAt: t };
+      await store.putRoom(updatedRoom);
+      return { room: updatedRoom, kicked: targetId, banned: targetId };
+    }
+    case 'unban': {
+      if (!targetId) throw errors.invalidRequest('unban requires targetId');
+      banStore.get(roomId)?.delete(targetId);
+      return { room };
+    }
     default:
       throw errors.invalidRequest(`Unknown moderation action: ${action}`);
   }
@@ -245,12 +346,16 @@ export async function joinRoom(
 ): Promise<JoinResult> {
   const room = await requireRoom(store, roomId);
   if (room.state === 'closed') throw errors.roomClosed(roomId);
+  if (isBanned(roomId, input.participantId, opts.now)) throw errors.forbidden(`Participant ${input.participantId} is banned from room ${roomId}`);
   const policy = getRoomPolicy(room);
-  // locked rooms: only admins/moderators may join (new participants)
+  // locked rooms: only admins/moderators may join (new participants) — enqueue to lobby otherwise
   const existing = await store.getParticipant(roomId, input.participantId);
   if (policy.locked && !existing) {
     const isPrivileged = opts.actorRole === 'admin' || opts.isModerator === true;
-    if (!isPrivileged) throw errors.forbidden(`Room ${roomId} is locked`);
+    if (!isPrivileged) {
+      enqueueLobby(roomId, input.participantId, opts.now);
+      throw errors.forbidden(`Room ${roomId} is locked - added to lobby`);
+    }
   }
 
   if (existing && !opts.upsert) throw errors.participantAlreadyJoined(roomId, input.participantId);
