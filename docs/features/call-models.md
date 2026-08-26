@@ -115,9 +115,9 @@ Per peer (N participants):
 each remote gets its own encoding. SVC layer drops also require an SFU to be
 useful. See `docs/features/scaling.md` §3.)
 
-### 3.2 When the mesh breaks down
+### 3.2 When the mesh breaks down — WebRTC peer-to-peer hard limit, not a `vidcall` code limit
 
-The mesh fails at roughly **4–6 video participants**, and the reasons stack:
+The mesh fails at roughly **4–6 video participants** due to WebRTC peer-to-peer physics, not a `vidcall` implementation ceiling. `vidcall` core is `platform RTCPeerConnection` with `zero runtime deps` (`docs/architecture.md` D1) and `PeerConnectionManager` perfect negotiation — the `N−1` cost is inherent to mesh. `Room` is topology-agnostic (`packages/core/src/media/media-transport.ts:47`) and delegates to `MeshMediaTransport` (`packages/core/src/media/mesh-transport.ts`) or `SfuMediaTransport` (`packages/core/src/media/sfu-transport.ts`); the limit moves with the topology, not the data structure. Reasons stack:
 
 1. **Uplink bandwidth.** At 1.5 Mbps per remote, a 6-person call needs
    ~7.5 Mbps upload. Typical home upload is 5–20 Mbps; mobile upload is often
@@ -135,8 +135,9 @@ The mesh fails at roughly **4–6 video participants**, and the reasons stack:
    exchanges per change (mitigated by `replaceTrack` in `ControlsManager` —
    see `docs/features/controls.md` §4).
 
-**Rule of thumb:** mesh for **2–4 video** participants; more for
-**audio-only** rooms (Opus is ~50 kbps per participant); SFU beyond that.
+**Rule of thumb:** mesh for **2–4 video** participants; more for **audio-only** rooms (Opus is ~50 kbps per participant); SFU beyond that. **Configurable in lib:** `TopologyController` (`packages/core/src/media/topology.ts:11`) `Topology mesh|sfu|auto` default `autoThreshold 4`; override via `room.setTopology('mesh'|'sfu'|'auto')` (`packages/core/src/room.ts`). Raising the threshold does not remove the peer-to-peer bandwidth/CPU/decode physics below — `AdaptiveQualityController` (`packages/quality/src/adaptive-quality-controller.ts:115`) will still downgrade to `360p15` / `audio-only` on `RTT>400ms` / `loss>0.05` / `qualityLimitationReason:cpu`.
+
+**Solution within lib (no code fork):** keep `Room` API identical (`publish`, `track` events, `room.controls`) and switch media plane: `new Room({..., topology:'auto'})` auto migrates `mesh→sfu` at threshold via `TopologyController.maybeMigrate` (`packages/core/src/media/topology.ts:39`) re-publishing tracks through `SfuSession` (`packages/sfu-gateway/src/sfu-gateway.ts:146`) with 1 uplink `uplink≈1×camera_bitrate` (`scaling.md` §1.2). Deploy one SFU (`docs/features/scaling.md` §2 `MediasoupAdapter` reference) and same signaling backend continues. See `docs/features/scaling.md` §1–§3 for `simulcast svc` layer selection and `docs/media.md` for `MediaTransport` seam.
 
 ### 3.3 Mesh is the zero-ops default
 

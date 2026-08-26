@@ -1,6 +1,7 @@
 # vidcall — Backend Adapter Limits
 
 > Per-backend ceiling for signaling. Mirrors `plans/04-transport-signaling-scale.md` §5 and `docs/architecture.md` D4.
+> Mesh video `N>4` limit is **WebRTC peer-to-peer hard limit** ( `N−1` uplinks/encodes/decodes, `iOS ≤4 <video>` WebKit bug 179363) not a `vidcall` code cap — solution within lib is `TopologyController` `packages/core/src/media/topology.ts:39` `autoThreshold 4` `mesh→sfu` via `SfuMediaTransport` `packages/core/src/media/sfu-transport.ts:1`; see `docs/features/call-models.md` §3.2 and `docs/features/scaling.md` §1.
 
 | Backend | Ordering | Max payload | Rate note | Use WS relay? |
 |---------|----------|-------------|-----------|---------------|

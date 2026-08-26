@@ -16,9 +16,7 @@ vidcall scales in four independent planes:
 
 ### 1.1 When to migrate
 
-`docs/features/call-models.md` §3.2 shows the mesh breaking down at 4–6 video
-participants (uplink bandwidth, decode count, encode count, renegotiation
-storms). Operational signals that it is time:
+`docs/features/call-models.md` §3.2 shows the mesh breaking down at 4–6 video participants due to **WebRTC peer-to-peer hard limits** (uplink `N−1` bandwidth, `N−1` encodes/decodes, `iOS Safari ≤4 <video>` WebKit bug 179363, renegotiation storms) — not a `vidcall` code/data-structure cap (`docs/architecture.md` D1 `zero deps` on platform `RTCPeerConnection`; `Room` delegates to `MediaTransport` `packages/core/src/media/media-transport.ts:47`). **Solve within lib:** `TopologyController` `packages/core/src/media/topology.ts:11` `autoThreshold 4` auto `mesh→sfu` via `maybeMigrate` `topology.ts:39`; same `Room` API, one uplink after migration. Operational signals that it is time:
 
 - `AdaptiveQualityController` reports sustained `network` downgrades on
   typical participants (bitrate tiers pinned at 360p15 / audio-only).
@@ -38,8 +36,9 @@ storms). Operational signals that it is time:
 | Media server     | none          | yes (mediasoup/LiveKit/Janus/…)             |
 | Signaling        | unchanged     | **unchanged** (same envelope, `sfu` type)   |
 
-The client API (`Room`, `publish`, `track` events, `room.controls`) is the
-same; only the media-plane implementation behind it changes.
+The client API (`Room`, `publish`, `track` events, `room.controls`) is the same; only the media-plane implementation behind it changes (`MeshMediaTransport` `packages/core/src/media/mesh-transport.ts` → `SfuMediaTransport` `packages/core/src/media/sfu-transport.ts` via `SfuSession` `packages/sfu-gateway/src/sfu-gateway.ts:146`).
+
+> **Not a tool limit:** `room.setTopology('mesh'|'sfu'|'auto')` (`packages/core/src/room.ts`) lets you raise the threshold, but peer-to-peer physics remains; `AdaptiveQualityController` (`packages/quality/src/adaptive-quality-controller.ts:115`) still caps to `audio-only` under pressure. Fix is topology switch, not code fork — see `call-models.md` §3.2.
 
 ### 1.3 How to migrate
 
