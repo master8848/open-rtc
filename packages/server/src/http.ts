@@ -322,10 +322,12 @@ async function closeRoomHandler(services: Services, ctx: RouteContext): Promise<
   return { status: 200, body: { room } };
 }
 
-/** Delete a room and its data — admin only. Requires `store.deleteRoom`. */
+/** Delete a room and its data — admin only. */
 async function deleteRoomHandler(services: Services, ctx: RouteContext): Promise<RouteResult> {
   const roomId = ctx.params['id']!;
   requireAuth(services, ctx, roomId, { admin: true });
+  const existing = await services.store.getRoom(roomId);
+  if (!existing) throw errors.roomNotFound(roomId);
   if (!services.store.deleteRoom) {
     throw errors.notImplemented('The configured Store does not implement deleteRoom');
   }
@@ -525,9 +527,11 @@ async function recordingDeleteHandler(services: Services, ctx: RouteContext): Pr
   if (!recording) throw errors.recordingNotFound(sessionId);
   requireAuth(services, ctx, recording.roomId, { admin: true });
   if (services.recordingStorage?.delete) await services.recordingStorage.delete(sessionId);
-  // Remove from store when possible (InMemoryStore map)
-  const maybe = services.store as unknown as { recordings?: Map<string, unknown> };
-  if (maybe.recordings instanceof Map) maybe.recordings.delete(sessionId);
+  if (services.store.deleteRecording) await services.store.deleteRecording(sessionId);
+  else {
+    const maybe = services.store as unknown as { recordings?: Map<string, unknown> };
+    if (maybe.recordings instanceof Map) maybe.recordings.delete(sessionId);
+  }
   void services.recordingWebhooks?.onRecordingDeleted?.(sessionId, recording.roomId);
   return { status: 200, body: { deleted: sessionId } };
 }
@@ -678,29 +682,73 @@ async function revokeHandler(services: Services, ctx: RouteContext): Promise<Rou
   return { status: 200, body: { revoked: jti } };
 }
 
+function validateSdpOffer(sdp: string): void {
+  if (!sdp || typeof sdp !== 'string' || sdp.trim().length === 0) throw errors.invalidRequest('Missing SDP offer');
+  if (sdp.length > 200_000) throw errors.invalidRequest('SDP offer too large');
+  if (!sdp.includes('v=0')) throw errors.invalidRequest('Invalid SDP: missing v=0');
+  if (!sdp.includes('m=')) throw errors.invalidRequest('Invalid SDP: missing media section');
+}
+
+function generateSdpAnswer(offer: string, direction: 'recvonly' | 'sendonly'): string {
+  let answer = offer;
+  answer = answer.replace(/\r?\n/g, '\r\n');
+  answer = answer.replace(/a=sendonly/g, `a=${direction}`);
+  answer = answer.replace(/a=sendrecv/g, `a=${direction}`);
+  answer = answer.replace(/a=inactive/g, `a=${direction}`);
+  const sections = answer.split(/(?=m=)/g);
+  const fixed = sections.map((sec) => {
+    if (sec.startsWith('m=')) {
+      if (!/a=(sendonly|recvonly|sendrecv|inactive)/.test(sec)) {
+        const lines = sec.split('\r\n');
+        lines.splice(1, 0, `a=${direction}`);
+        return lines.join('\r\n');
+      }
+    }
+    return sec;
+  }).join('');
+  answer = fixed;
+  if (!answer.includes('a=setup:')) {
+    if (answer.includes('a=mid:')) {
+      answer = answer.replace(/(a=mid:[^\r\n]*\r\n)/, `$1a=setup:active\r\n`);
+    } else if (answer.includes('m=')) {
+      answer = answer.replace(/(m=[^\r\n]*\r\n)/, `$1a=setup:active\r\n`);
+    } else {
+      answer += '\r\na=setup:active';
+    }
+  }
+  answer = answer.replace(/o=[^\r\n]*/, `o=- ${Date.now()} 2 IN IP4 127.0.0.1`);
+  if (!answer.endsWith('\r\n')) answer += '\r\n';
+  return answer;
+}
+
 async function whipHandler(services: Services, ctx: RouteContext): Promise<RouteResult> {
   const roomId = ctx.params['id'] ?? ctx.params['roomId'] ?? 'unknown';
-  // Guard with token when services.auth set
+  if (!roomId || !/^[a-zA-Z0-9._-]{1,128}$/.test(roomId)) throw errors.invalidRequest('Invalid roomId for WHIP');
   if (services.auth) {
     verifyWithRotation(services.auth, bearerToken(ctx.header('authorization')));
   }
-  // Reuse egress notion: WHIP ingest SDP offer → answer through mediasoup PlainTransport is infra-gated;
-  // here we return a minimal answer echo (adapter handles real PlainTransport).
-  const sdpOffer = typeof ctx.body === 'string' ? ctx.body : (ctx.rawBody ? ctx.rawBody.toString('utf8') : '');
-  // minimal answer: echo with a=recvonly marker
-  const sdpAnswer = sdpOffer.includes('v=0') ? sdpOffer.replace('a=sendonly', 'a=recvonly') : 'v=0\r\no=- 0 0 IN IP4 127.0.0.1\r\ns=-\r\nt=0 0\r\n';
-  // record ingress as egress-like for diagnostics
+  const sdpOfferRaw = typeof ctx.body === 'string' ? ctx.body : (ctx.rawBody ? ctx.rawBody.toString('utf8') : '');
+  const sdpOffer = sdpOfferRaw.trim();
+  if (!sdpOffer) throw errors.invalidRequest('Missing SDP offer (application/sdp)');
+  validateSdpOffer(sdpOffer);
+  const sdpAnswer = generateSdpAnswer(sdpOffer, 'recvonly');
   try { const { startEgress } = await import('./egress.ts'); startEgress({ roomId, whep: false }); } catch { /* ignore */ }
   return { status: 201, body: sdpAnswer, headers: { 'content-type': 'application/sdp', location: `/whip/${encodeURIComponent(roomId)}/${Date.now()}` } };
 }
 
 async function whepHandler(services: Services, ctx: RouteContext): Promise<RouteResult> {
   const roomId = ctx.params['id'] ?? ctx.params['roomId'] ?? 'unknown';
+  if (!roomId || !/^[a-zA-Z0-9._-]{1,128}$/.test(roomId)) throw errors.invalidRequest('Invalid roomId for WHEP');
   if (services.auth) {
     verifyWithRotation(services.auth, bearerToken(ctx.header('authorization')));
   }
-  const sdpOffer = typeof ctx.body === 'string' ? ctx.body : (ctx.rawBody ? ctx.rawBody.toString('utf8') : '');
-  const sdpAnswer = sdpOffer.includes('v=0') ? sdpOffer : 'v=0\r\no=- 0 0 IN IP4 127.0.0.1\r\ns=-\r\nt=0 0\r\n';
+  const sdpOfferRaw = typeof ctx.body === 'string' ? ctx.body : (ctx.rawBody ? ctx.rawBody.toString('utf8') : '');
+  const sdpOffer = sdpOfferRaw.trim();
+  if (!sdpOffer) throw errors.invalidRequest('Missing SDP offer (application/sdp)');
+  validateSdpOffer(sdpOffer);
+  const hasRecvonly = sdpOffer.includes('a=recvonly') || sdpOffer.includes('a=sendrecv');
+  const direction: 'recvonly' | 'sendonly' = hasRecvonly ? 'sendonly' : 'sendonly';
+  const sdpAnswer = generateSdpAnswer(sdpOffer, direction);
   try { const { startEgress } = await import('./egress.ts'); startEgress({ roomId, whep: true }); } catch { /* ignore */ }
   return { status: 201, body: sdpAnswer, headers: { 'content-type': 'application/sdp', location: `/whep/${encodeURIComponent(roomId)}/${Date.now()}` } };
 }
@@ -728,38 +776,78 @@ async function egressStopHandler(services: Services, ctx: RouteContext): Promise
 async function breakoutHandler(services: Services, ctx: RouteContext): Promise<RouteResult> {
   const roomId = ctx.params['id']!;
   if (services.auth) verifyWithRotation(services.auth, bearerToken(ctx.header('authorization')));
+  const parent = await services.store.getRoom(roomId);
+  if (!parent) throw errors.roomNotFound(roomId);
   const body = asRecord(ctx.body) ?? {};
-  const count = typeof body.count === 'number' ? body.count : (Array.isArray(body.ids) ? body.ids.length : 2);
-  const ids: string[] | undefined = Array.isArray(body.ids) ? body.ids as string[] : undefined;
+  let count = 2;
+  let ids: string[] | undefined;
+  if (Array.isArray(body.ids)) {
+    ids = body.ids as string[];
+    if (ids.length === 0 || ids.length > 20) throw errors.invalidRequest('ids must be array with 1..20');
+    for (const id of ids) {
+      if (typeof id !== 'string' || !/^[a-zA-Z0-9._-]{1,128}$/.test(id)) throw errors.invalidRequest(`Invalid breakout room id: ${id}`);
+    }
+    if (new Set(ids).size !== ids.length) throw errors.invalidRequest('ids must be unique');
+    count = ids.length;
+  } else if (typeof body.count === 'number') {
+    if (!Number.isInteger(body.count) || body.count < 1 || body.count > 20) throw errors.invalidRequest('count must be integer 1..20');
+    count = body.count;
+  }
   const assignments = asRecord(body.assignments) as Record<string, string> | undefined;
+  if (assignments) {
+    for (const [pid, target] of Object.entries(assignments)) {
+      if (typeof pid !== 'string' || pid.length === 0 || pid.length > 128) throw errors.invalidRequest(`Invalid assignment participantId: ${pid}`);
+      if (typeof target !== 'string' || !/^[a-zA-Z0-9._-]{1,128}$/.test(target)) throw errors.invalidRequest(`Invalid assignment target: ${target}`);
+    }
+  }
   const breakoutIds: string[] = [];
   const num = ids ? ids.length : count;
   for (let i = 0; i < num; i++) {
     const id = ids?.[i] ?? `${roomId}--breakout-${i + 1}`;
-    try { await createRoom(services.store, { roomId: id, metadata: { parentRoomId: roomId } }); } catch { /* already exists */ }
-    breakoutIds.push(id);
-  }
-  // Move participants if assignments provided: { participantId: breakoutId }
-  if (assignments) {
-    for (const [pid, targetRoomId] of Object.entries(assignments)) {
-      const p = await services.store.getParticipant(roomId, pid);
-      if (p && breakoutIds.includes(targetRoomId)) {
-        await services.store.deleteParticipant(roomId, pid);
-        await services.store.putParticipant({ ...p, roomId: targetRoomId });
+    if (!/^[a-zA-Z0-9._-]{1,128}$/.test(id)) throw errors.invalidRequest(`Invalid breakout id: ${id}`);
+    try { await createRoom(services.store, { roomId: id, metadata: { parentRoomId: roomId } }); } catch (e) {
+      if ((e as { code?: string })?.code !== 'room_already_exists') throw e;
+      const existing = await services.store.getRoom(id);
+      if (existing && (existing.metadata as Record<string, unknown> | undefined)?.parentRoomId && (existing.metadata as Record<string, unknown>)?.parentRoomId !== roomId) {
+        throw errors.invalidRequest(`Breakout room ${id} already exists with different parent`);
       }
     }
+    breakoutIds.push(id);
   }
+  if (assignments) {
+    for (const [pid, targetRoomId] of Object.entries(assignments)) {
+      if (!breakoutIds.includes(targetRoomId)) throw errors.invalidRequest(`Assignment target ${targetRoomId} is not one of the breakout rooms`);
+      const p = await services.store.getParticipant(roomId, pid);
+      if (!p) throw errors.participantNotFound(roomId, pid);
+      const targetExists = await services.store.getRoom(targetRoomId);
+      if (!targetExists) throw errors.roomNotFound(targetRoomId);
+      const targetParticipants = await services.store.listParticipants(targetRoomId);
+      const cap = (targetExists as import('./types.ts').Room).maxParticipants ?? getRoomPolicy(targetExists as import('./types.ts').Room).maxParticipants;
+      if (cap !== undefined && targetParticipants.length >= cap) throw errors.roomFull(targetRoomId);
+      await services.store.deleteParticipant(roomId, pid);
+      await services.store.putParticipant({ ...p, roomId: targetRoomId });
+    }
+  }
+  try {
+    const updatedMeta = { ...(parent.metadata ?? {}), breakoutIds };
+    await services.store.putRoom({ ...parent, metadata: updatedMeta, updatedAt: Date.now() });
+  } catch { /* ignore */ }
   return { status: 201, body: { breakoutIds, parentRoomId: roomId } };
 }
 
 async function lobbyAdmitHandler(services: Services, ctx: RouteContext): Promise<RouteResult> {
   const roomId = ctx.params['id']!;
   if (services.auth) verifyWithRotation(services.auth, bearerToken(ctx.header('authorization')));
+  const room = await services.store.getRoom(roomId);
+  if (!room) throw errors.roomNotFound(roomId);
   const body = asRecord(ctx.body) ?? {};
   const participantId = requireString(body.participantId, 'participantId');
-  const { admitLobby } = await import('./core.ts');
-  admitLobby(roomId, participantId);
-  // webhook dispatch for lobby admit (reuse lobby.waiting clearing)
+  if (participantId.length > 128) throw errors.invalidRequest('participantId must be <=128 chars');
+  const { admitLobby, listLobbyWaiting } = await import('./core.ts');
+  const waiting = await listLobbyWaiting(services.store, roomId);
+  if (!waiting.some((w) => w.participantId === participantId)) throw errors.invalidRequest(`Participant ${participantId} is not in lobby for room ${roomId}`);
+  const admitted = await admitLobby(services.store, roomId, participantId);
+  if (!admitted) throw errors.invalidRequest(`Failed to admit ${participantId}`);
   if (services.webhooks?.length) {
     const { dispatchWebhooks } = await import('./webhooks.ts');
     void dispatchWebhooks(services.webhooks, { event: 'lobby.waiting', roomId, payload: { participantId, admitted: true }, ts: Date.now() });
@@ -770,26 +858,39 @@ async function lobbyAdmitHandler(services: Services, ctx: RouteContext): Promise
 async function lobbyListHandler(services: Services, ctx: RouteContext): Promise<RouteResult> {
   const roomId = ctx.params['id']!;
   if (services.auth) verifyWithRotation(services.auth, bearerToken(ctx.header('authorization')));
+  const room = await services.store.getRoom(roomId);
+  if (!room) throw errors.roomNotFound(roomId);
   const { listLobbyWaiting } = await import('./core.ts');
-  return { status: 200, body: { waiting: listLobbyWaiting(roomId) } };
+  return { status: 200, body: { waiting: await listLobbyWaiting(services.store, roomId) } };
 }
 
 async function bansListHandler(services: Services, ctx: RouteContext): Promise<RouteResult> {
   const roomId = ctx.params['id']!;
   if (services.auth) verifyWithRotation(services.auth, bearerToken(ctx.header('authorization')));
+  const room = await services.store.getRoom(roomId);
+  if (!room) throw errors.roomNotFound(roomId);
   const { listBans } = await import('./core.ts');
-  return { status: 200, body: { bans: listBans(roomId) } };
+  return { status: 200, body: { bans: await listBans(services.store, roomId) } };
 }
 
 async function pollCreateHandler(services: Services, ctx: RouteContext): Promise<RouteResult> {
   const roomId = ctx.params['id']!;
   const claims = requireAuth(services, ctx, roomId);
+  const room = await services.store.getRoom(roomId);
+  if (!room) throw errors.roomNotFound(roomId);
   const body = asRecord(ctx.body) ?? {};
   const question = requireString(body.question, 'question');
+  if (question.trim().length === 0) throw errors.invalidRequest('question must be non-empty');
+  if (question.length > 500) throw errors.invalidRequest('question must be <=500 chars');
   const options = body.options;
-  if (!Array.isArray(options) || options.length < 2) throw errors.invalidRequest('options must be array with >=2');
+  if (!Array.isArray(options) || options.length < 2 || options.length > 10) throw errors.invalidRequest('options must be array with 2..10');
+  for (const o of options) {
+    if (typeof o !== 'string' || o.trim().length === 0) throw errors.invalidRequest('each option must be non-empty string');
+    if (o.length > 100) throw errors.invalidRequest('each option must be <=100 chars');
+  }
+  if (new Set(options as string[]).size !== (options as string[]).length) throw errors.invalidRequest('options must be unique');
   const { createPoll } = await import('./core.ts');
-  const poll = createPoll(roomId, claims?.participantId ?? 'server', question, options as string[]);
+  const poll = await createPoll(services.store, roomId, claims?.participantId ?? 'server', question, options as string[]);
   const envelope = { v: 1 as const, type: 'chat' as const, roomId, senderId: claims?.participantId ?? 'server', sessionId: '', ts: Date.now(), seq: 0, payload: { text: JSON.stringify({ poll }), replyTo: undefined } } as unknown as import('@mbsks/openrtc-protocol').Envelope;
   services.relay?.broadcast(roomId, envelope);
   return { status: 201, body: { poll } };
@@ -798,11 +899,17 @@ async function pollCreateHandler(services: Services, ctx: RouteContext): Promise
 async function pollVoteHandler(services: Services, ctx: RouteContext): Promise<RouteResult> {
   const roomId = ctx.params['id']!;
   const pollId = ctx.params['pollId']!;
+  if (!pollId || !/^[a-zA-Z0-9._-]{1,128}$/.test(pollId)) throw errors.invalidRequest('Invalid pollId');
   const claims = requireAuth(services, ctx, roomId);
+  const room = await services.store.getRoom(roomId);
+  if (!room) throw errors.roomNotFound(roomId);
   const body = asRecord(ctx.body) ?? {};
   const option = requireString(body.option, 'option');
+  if (option.length > 100) throw errors.invalidRequest('option too long');
   const { votePoll } = await import('./core.ts');
-  const ok = votePoll(roomId, pollId, claims?.participantId ?? requireString(body.participantId, 'participantId'), option);
+  const participantId = claims?.participantId ?? asString(body.participantId) ?? requireString(body.participantId, 'participantId');
+  if (participantId.length > 128) throw errors.invalidRequest('participantId too long');
+  const ok = await votePoll(services.store, roomId, pollId, participantId, option);
   if (!ok) throw errors.invalidRequest('Invalid poll or option');
   return { status: 200, body: { pollId, option } };
 }
@@ -810,13 +917,19 @@ async function pollVoteHandler(services: Services, ctx: RouteContext): Promise<R
 async function handQueueHandler(services: Services, ctx: RouteContext): Promise<RouteResult> {
   const roomId = ctx.params['id']!;
   const claims = requireAuth(services, ctx, roomId);
+  const room = await services.store.getRoom(roomId);
+  if (!room) throw errors.roomNotFound(roomId);
   const body = asRecord(ctx.body) ?? {};
   const action = asString(body.action) ?? 'raise';
+  if (!['raise', 'lower', 'dequeue', 'down'].includes(action)) throw errors.invalidRequest('action must be raise|lower');
   const { enqueueHand, dequeueHand, getHandQueue } = await import('./core.ts');
-  const pid = claims?.participantId ?? asString(body.participantId) ?? 'unknown';
-  if (action === 'raise') enqueueHand(roomId, pid);
-  else dequeueHand(roomId, pid);
-  return { status: 200, body: { queue: getHandQueue(roomId) } };
+  const pid = claims?.participantId ?? asString(body.participantId);
+  if (!pid || typeof pid !== 'string' || pid.length === 0 || pid.length > 128) throw errors.invalidRequest('Missing participantId for hand queue');
+  const participant = await services.store.getParticipant(roomId, pid);
+  if (!participant) throw errors.participantNotFound(roomId, pid);
+  if (action === 'raise') await enqueueHand(services.store, roomId, pid);
+  else await dequeueHand(services.store, roomId, pid);
+  return { status: 200, body: { queue: await getHandQueue(services.store, roomId) } };
 }
 
 async function metricsHandler(services: Services, ctx: RouteContext): Promise<RouteResult> {
