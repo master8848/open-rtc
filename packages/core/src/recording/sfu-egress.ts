@@ -29,12 +29,24 @@ export class FfmpegEgressWorker {
     let proc: unknown = null;
     let cleanup: (() => void) | undefined;
     // Try spawn ffmpeg when available; otherwise placeholder (CI without binary).
+    let ffmpegMissing = false;
+    let ffmpegError: string | null = null;
     try {
       const { spawn } = await import('node:child_process');
       const args = ['-loglevel', 'error', '-i', 'pipe:0', '-c:v', 'libx264', '-preset', 'veryfast', '-c:a', 'aac', '-f', 'mp4', 'pipe:1'];
       if (opts.rtmpUrl) args.push('-f', 'flv', opts.rtmpUrl);
-      const p = spawn(this.ffmpegPath, args, { stdio: ['pipe', 'pipe', 'pipe'] }) as unknown as { stdin: { write(b: Buffer): void; end(): void }; stdout: { on(e: string, cb: (c: Buffer) => void): void }; on(e: string, cb: () => void): void; kill(): void };
+      const p = spawn(this.ffmpegPath, args, { stdio: ['pipe', 'pipe', 'pipe'] }) as unknown as { stdin: { write(b: Buffer): void; end(): void }; stdout: { on(e: string, cb: (c: Buffer) => void): void }; stderr?: { on(e: string, cb: (c: Buffer) => void): void }; on(e: string, cb: (arg?: unknown) => void): void; kill(): void };
       proc = p;
+      p.on('error', (err: unknown) => {
+        const msg = err instanceof Error ? err.message : String(err);
+        const code = (err as { code?: string })?.code;
+        if (code === 'ENOENT') {
+          ffmpegMissing = true;
+          ffmpegError = `ffmpeg not found at "${this.ffmpegPath}" (ENOENT) — install ffmpeg or set ffmpegPath, using placeholder chunk`;
+        } else {
+          ffmpegError = `ffmpeg spawn failed: ${msg}`;
+        }
+      });
       p.stdout.on('data', (chunk: Buffer) => {
         const buf = Buffer.from(chunk);
         bytes += buf.length;
@@ -46,8 +58,22 @@ export class FfmpegEgressWorker {
           try { (p.stdin as unknown as { write(b: Buffer): void }).write(buf); } catch { /* ignore */ }
         });
       }
-    } catch {
+      // stderr diagnostics for ffmpeg failures (e.g. bad args)
+      p.stderr?.on?.('data', (c: Buffer) => { ffmpegError = c.toString('utf8').trim().slice(0, 500); });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      const code = (err as { code?: string })?.code;
+      if (code === 'ENOENT' || msg.includes('ENOENT')) {
+        ffmpegMissing = true;
+        ffmpegError = `ffmpeg not found at "${this.ffmpegPath}" (ENOENT) — install ffmpeg or set ffmpegPath, using placeholder chunk`;
+      } else {
+        ffmpegError = `ffmpeg spawn failed: ${msg}`;
+      }
       proc = null;
+    }
+    if (ffmpegMissing || ffmpegError) {
+      // Surface clear diagnostics; still allow placeholder lifecycle in CI.
+      try { console.warn(`[sfu-egress] ${ffmpegError}`); } catch { /* ignore */ }
     }
     this.active = { proc, idx: 0, bytes: 0, stopped: false, onChunk: opts.onChunk, ...(cleanup ? { cleanup } : {}) };
     const self = this;
