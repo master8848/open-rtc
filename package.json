@@ -31,27 +31,33 @@
     "verify:budgets": "node scripts/verify-budgets.mjs",
     "verify:docs": "bun run verify:links && node scripts/verify-budgets.mjs",
     "llms:generate": "node scripts/llms-generate.mjs",
-    "test:types": "echo 'test:types placeholder — add .test-d.tsx with expectTypeOf; CI matrix expands to TS 5.5-5.9 (see docs/testing.md CI)'",
-    "test:build": "bun run build && (bunx --bun publint --pack 2>&1 || npx --yes publint --pack 2>&1 || echo 'publint not installed — expected: publint --pack green (exports types/import/require/development + ./package.json per plans/05:34)') && (bunx --bun @arethetypeswrong/cli --pack 2>&1 || npx --yes @arethetypeswrong/cli --pack 2>&1 || echo 'attw not installed — expected: attw --pack clean (types: dist/index.d.ts, no src leak)')",
-    "size": "bunx --bun size-limit 2>&1 || npx --yes size-limit 2>&1 || (echo 'size-limit not installed — budget core <15kB gz per .size-limit.json (plans/05:111); run: bun add -d size-limit @size-limit/preset-small-lib && bun run size' && ls -lh packages/core/dist 2>/dev/null || echo 'no dist yet')",
+    "test:types": "tsc -p tsconfig.test.json --noEmit",
+    "test:build": "bun run build && publint --pack && attw --pack",
+    "size": "size-limit",
     "size:core": "bun run size",
     "publint": "publint --pack",
     "attw": "attw --pack",
-    "check:sherif": "echo 'sherif placeholder — npx sherif@latest when adopted (workspace dep hygiene)'",
-    "check:knip": "echo 'knip placeholder — npx knip --dependencies when adopted (unused exports/deps)'",
-    "check:zizmor": "echo 'zizmor placeholder — zizmor .github/workflows when adopted (workflow audit)'",
+    "check:sherif": "sherif",
+    "check:knip": "knip",
+    "check:zizmor": "zizmor .github/workflows",
     "check:quality": "bun run check:sherif && bun run check:knip && bun run check:zizmor",
-    "affected": "echo 'affected placeholder — nx affected / turbo run build --filter=... stub for bun workspaces; currently bun run build builds all'",
+    "affected": "bun run build",
     "changeset:dry-run": "changeset status --verbose 2>&1 | head -n 80; echo 'dry-run gate: changeset status (plans/07-roadmap.md:77 version --dry-run intent)'"
   },
   "engines": {
     "node": ">=18.18"
   },
   "devDependencies": {
+    "@arethetypeswrong/cli": "^0.18.3",
     "@changesets/cli": "3.0.0",
+    "@size-limit/preset-small-lib": "^11.1.2",
     "@types/node": "22.20.1",
+    "knip": "^5.72.0",
     "oxfmt": "0.63.0",
     "oxlint": "1.78.0",
+    "publint": "^0.3.12",
+    "sherif": "^1.4.1",
+    "size-limit": "^11.1.2",
     "typescript": "7.0.2"
   }
 }
