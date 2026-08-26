@@ -14,7 +14,7 @@ E2EE: `packages/core/src/e2ee.ts` `SFrameProcessor` encrypts raw bytes with AES-
 
 TURN: `packages/server/src/turn.ts` `issueTurnCredentials` (`packages/server/src/turn.ts:38`) mints coturn REST `username=expiry:participantId`, `credential=HMAC-SHA1(username, secret)` base64; `toIceServers` (`packages/server/src/turn.ts:63`) maps to `RTCIceServer`. Server endpoint `GET /turn/credentials` is bearer-guarded; client fetches lazily before first `RTCPeerConnection` and caches until `expiry-60s`. See `packages/server/README.md` for `turn.secret`/`turn.urls`/`ttlSec` and coturn `static-auth-secret`.
 
-Client: `new Room({ auth: { token, onTokenExpired } })` refreshes at `exp-120s`; WS 4401 surfaces as `room.emit('auth:error')` with one retry. `caps` gate `publish`/`subscribe`/`record`/`moderate` without overloading `role`.
+Client: `new Room({ auth: { token, onTokenExpired } })` refreshes at `exp-120s`; WS 4401 surfaces as `room.emit('auth:error')` with one retry. `caps` gate `publish`/`subscribe`/`record`/`moderate` without overloading `role`. Consent UX: recording requires `caps.record` (`packages/server/src/http.ts:548` `POST /rooms/:roomId/recordings/start` checks `caps.record` + `RoomPolicy.allowRecording`) and UI must surface a visible indicator + obtain participant consent before `room.recording.startRecording`.
 
 Operator vars: `VIDCALL_SECRET`, `VIDCALL_ADMIN_TOKEN`, `VIDCALL_TURN_SECRET`, `VIDCALL_TURN_URLS` consumed by `packages/server/src/services.ts` helpers and `examples/server`. Rotation: set `previousSecrets` for grace window, then promote.
 

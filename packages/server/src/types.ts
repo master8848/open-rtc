@@ -102,6 +102,8 @@ export interface RecordingSession {
   manifest?: import('./recording.ts').FinalizeManifest;
   /** Epoch ms when this recording expires (TTL). */
   expiresAt?: number;
+  /** Transcript sidecar URL (when STT is enabled for this session). */
+  transcriptUrl?: string;
   /** App-defined metadata (uploader identity, mime type, ...). */
   metadata?: Record<string, unknown>;
 }

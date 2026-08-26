@@ -17,4 +17,5 @@ export * from './sfu-gateway.ts';
 export * from './sfu-router.ts';
 export * from './mediasoup-adapter.ts';
 export * from './sdp.ts';
+export * from './transcription-worker.ts';
 export { TypedEmitter, type EventMap } from './events.ts';

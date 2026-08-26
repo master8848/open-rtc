@@ -306,6 +306,13 @@ async function handleMessage(
     hub.broadcast(envelope.roomId, delivery.envelope, {
       exceptSenderId: envelope.senderId,
     });
+    if (delivery.envelope.type === 'transcript' && services.webhooks?.length) {
+      const payload = delivery.envelope.payload as { isFinal?: boolean } | undefined;
+      const evt = payload?.isFinal === false ? 'transcript.interim' : 'transcript.final';
+      const { dispatchWebhooks } = await import('./webhooks.ts');
+      void dispatchWebhooks(services.webhooks, { event: evt as never, roomId: delivery.envelope.roomId, payload: delivery.envelope.payload, ts: Date.now() });
+      void dispatchWebhooks(services.webhooks, { event: 'transcript' as never, roomId: delivery.envelope.roomId, payload: delivery.envelope.payload, ts: Date.now() });
+    }
   } catch (err) {
     sendJson(socket, errorEnvelope(envelope.roomId, errCode(err), errMessage(err)));
   }

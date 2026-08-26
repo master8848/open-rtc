@@ -313,6 +313,14 @@ async function signalHandler(services: Services, ctx: RouteContext): Promise<Rou
   services.relay?.broadcast(roomId, delivery.envelope, {
     exceptSenderId: delivery.envelope.senderId,
   });
+  if ((delivery.envelope as { type?: string }).type === 'transcript' && services.webhooks?.length) {
+    const payload = (delivery.envelope as { payload?: { isFinal?: boolean } }).payload;
+    const evt = payload?.isFinal === false ? 'transcript.interim' : 'transcript.final';
+    const { dispatchWebhooks } = await import('./webhooks.ts');
+    void dispatchWebhooks(services.webhooks, { event: evt as never, roomId, payload: delivery.envelope.payload, ts: Date.now() });
+    // also legacy generic
+    void dispatchWebhooks(services.webhooks, { event: 'transcript' as never, roomId, payload: delivery.envelope.payload, ts: Date.now() });
+  }
   return {
     status: 200,
     body: {
@@ -482,14 +490,29 @@ async function finalizeHandler(services: Services, ctx: RouteContext): Promise<R
   const recordingSession = await services.store.getRecording(sessionId);
   if (!recordingSession) throw errors.recordingNotFound(sessionId);
   requireAuth(services, ctx, recordingSession.roomId);
-  const storage = await services.recordingStorage.finalize(sessionId);
+  const storage = await services.recordingStorage.finalize(sessionId, {
+    ...(recordingSession.encrypted ? { encrypted: true as const } : {}),
+    ...(recordingSession.keyId ? { keyId: recordingSession.keyId } : {}),
+    ...(recordingSession.mimeType ? { mimeType: recordingSession.mimeType } : {}),
+    ...(recordingSession.mode ? { mode: recordingSession.mode } : {}),
+  });
   const recording = await stopRecording(services.store, sessionId);
-  // Enrich recording with manifest metadata if storage reports encrypted/keyId
+  // Enrich recording with manifest metadata + encrypted/keyId surfaced in manifest.encrypted/keyId (recording.ts:35)
   const manifestLike = storage as unknown as { encrypted?: boolean; keyId?: string; manifestUrl?: string };
-  if (manifestLike.encrypted) recording.encrypted = true;
-  if (manifestLike.keyId) (recording as unknown as Record<string, unknown>).keyId = manifestLike.keyId;
+  if (recordingSession.encrypted) recording.encrypted = true;
+  if (recordingSession.keyId) (recording as unknown as Record<string, unknown>).keyId = recordingSession.keyId;
   if (manifestLike.manifestUrl) (recording as unknown as Record<string, unknown>).manifestUrl = manifestLike.manifestUrl;
+  // Attach manifest to session for GET /manifest
+  (recording as unknown as Record<string, unknown>).manifest = { sessionId, chunks: (storage as unknown as { chunks: number }).chunks, bytes: (storage as unknown as { bytes: number }).bytes, finalizedAt: Date.now(), ...(recording.encrypted ? { encrypted: true as const } : {}), ...(recording.keyId ? { keyId: recording.keyId } : {}) };
+  // Sidecar transcriptUrl when STT was enabled
+  if ((recordingSession as unknown as { transcriptUrl?: string }).transcriptUrl) {
+    (recording as unknown as Record<string, unknown>).transcriptUrl = (recordingSession as unknown as { transcriptUrl: string }).transcriptUrl;
+  }
   void services.recordingWebhooks?.onRecordingFinalized?.(recording);
+  if (services.webhooks?.length) {
+    const { dispatchWebhooks } = await import('./webhooks.ts');
+    void dispatchWebhooks(services.webhooks, { event: 'recording.finalized', roomId: recording.roomId, payload: { sessionId, ...storage }, ts: Date.now() });
+  }
   return { status: 200, body: { recording, storage } };
 }
 

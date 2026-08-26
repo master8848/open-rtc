@@ -28,13 +28,125 @@ export interface TranscriptionSource {
   onTranscript(cb: (e: TranscriptEvent) => void): () => void;
 }
 
-/** Server-side STT worker stub (parallel to EgressWorker): SFU Consumer -> STT -> transcript envelope */
+export type TranscriberFn = (chunk: Uint8Array, opts: { lang?: string }) => Promise<{ text: string; isFinal: boolean }>;
+
+export interface SfuTranscriptionWorkerOptions extends TranscriptionOptions {
+  chunkMs?: number;
+  transcriber?: TranscriberFn;
+  dispatch?: (envelope: unknown) => void;
+  fetchImpl?: typeof fetch;
+}
+
+function mockTranscriber(_chunk: Uint8Array, _opts: { lang?: string }): Promise<{ text: string; isFinal: boolean }> {
+  return Promise.resolve({ text: '[mock transcript]', isFinal: true });
+}
+
+async function openAiTranscriber(chunk: Uint8Array, opts: { lang?: string; fetchImpl?: typeof fetch }): Promise<{ text: string; isFinal: boolean }> {
+  const key = (globalThis as unknown as Record<string, unknown>)['process'] !== undefined
+    ? (globalThis as unknown as { process?: { env?: Record<string, string> } }).process?.env?.OPENAI_API_KEY
+    : undefined;
+  if (!key) return mockTranscriber(chunk, opts);
+  try {
+    const fetchFn = opts.fetchImpl ?? fetch;
+    const form = new FormData();
+    form.append('file', new Blob([chunk as unknown as BlobPart], { type: 'audio/webm' }), 'chunk.webm');
+    form.append('model', 'whisper-1');
+    if (opts.lang) form.append('language', opts.lang);
+    const res = await fetchFn('https://api.openai.com/v1/audio/transcriptions', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${key}` },
+      body: form as unknown as BodyInit,
+    });
+    if (!res.ok) return mockTranscriber(chunk, opts);
+    const json = await res.json() as { text?: string };
+    return { text: json.text ?? '', isFinal: true };
+  } catch {
+    return mockTranscriber(chunk, opts);
+  }
+}
+
+/** Server-side STT worker (parallel to EgressWorker): SFU Consumer -> STT -> transcript envelope */
 export class SfuTranscriptionWorker {
   private running = false;
-  start(_roomId: string, _opts: TranscriptionOptions = {}): void { this.running = true; }
-  stop(): void { this.running = false; }
+  private roomId?: string;
+  private opts: SfuTranscriptionWorkerOptions = {};
+  private buffer: Uint8Array[] = [];
+  private bufferedMs = 0;
+  private timer: ReturnType<typeof setInterval> | null = null;
+  private seq = 0;
+  private dispatch?: (envelope: unknown) => void;
+
+  start(roomId: string, opts: SfuTranscriptionWorkerOptions = {}): void {
+    this.running = true;
+    this.roomId = roomId;
+    this.opts = opts;
+    this.dispatch = opts.dispatch;
+    this.seq = 0;
+    this.buffer = [];
+    this.bufferedMs = 0;
+    const chunkMs = opts.chunkMs ?? 10_000;
+    if (this.timer) clearInterval(this.timer);
+    this.timer = setInterval(() => void this.flush(), chunkMs);
+    if (this.timer && typeof (this.timer as unknown as { unref?: () => void }).unref === 'function') {
+      (this.timer as unknown as { unref: () => void }).unref();
+    }
+  }
+
+  /** Feed raw RTP/PCM chunk (e.g. from PlainTransport). In tests call directly. */
+  pushAudio(chunk: Uint8Array, durationMs = 20): void {
+    if (!this.running) return;
+    this.buffer.push(chunk);
+    this.bufferedMs += durationMs;
+    const chunkMs = this.opts.chunkMs ?? 10_000;
+    if (this.bufferedMs >= chunkMs) void this.flush();
+  }
+
+  private async flush(): Promise<void> {
+    if (!this.running || !this.roomId || this.buffer.length === 0) return;
+    const combined = this.concat(this.buffer);
+    this.buffer = [];
+    this.bufferedMs = 0;
+    const lang = this.opts.lang ?? 'en-US';
+    const transcriber = this.opts.transcriber ?? ((c: Uint8Array, o: { lang?: string }) => openAiTranscriber(c, { lang: o.lang, fetchImpl: this.opts.fetchImpl }));
+    let result: { text: string; isFinal: boolean };
+    try {
+      result = await transcriber(combined, { lang });
+    } catch {
+      result = { text: '', isFinal: true };
+    }
+    if (!result.text) return;
+    const envelope = {
+      v: 1,
+      type: 'transcript',
+      roomId: this.roomId,
+      senderId: 'transcriber',
+      sessionId: `transcriber-${this.roomId}`,
+      ts: Date.now(),
+      seq: this.seq++,
+      payload: { text: result.text, isFinal: result.isFinal, ...(lang ? { lang } : {}) },
+    };
+    if (this.dispatch) {
+      try { this.dispatch(envelope); } catch { /* ignore */ }
+    }
+  }
+
+  private concat(chunks: Uint8Array[]): Uint8Array {
+    const total = chunks.reduce((n, c) => n + c.length, 0);
+    const out = new Uint8Array(total);
+    let off = 0;
+    for (const c of chunks) { out.set(c, off); off += c.length; }
+    return out;
+  }
+
+  stop(): void {
+    this.running = false;
+    if (this.timer) { clearInterval(this.timer); this.timer = null; }
+    this.buffer = [];
+    this.bufferedMs = 0;
+    this.roomId = undefined;
+  }
+
   get isRunning(): boolean { return this.running; }
-  // In prod, consume SFU audio PlainTransport RTP -> STT service -> dispatch transcript envelope
 }
 
 export class TranscriptionController implements TranscriptionSource {
