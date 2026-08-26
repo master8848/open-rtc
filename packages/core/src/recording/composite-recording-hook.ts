@@ -24,6 +24,8 @@ import type {
   RecordingErrorEvent,
   RecordingHook,
   RecordingHookEventMap,
+  RecordingMediaMode,
+  RecordingSaveTarget,
   RecordingStartedEvent,
   RecordingStoppedEvent,
   RecordingState,
@@ -60,6 +62,10 @@ export interface CompositeRecordingOptions {
   remoteStreams?: Array<RecordingRemoteStream | MediaStream> | null;
   /** Full stream control; when set, `localStream`/`remoteStreams` are ignored. */
   streams?: CompositeRecordingStreamOptions[];
+  /** Media content mode: 'audio+video' (default) vs 'audio-only' (video tracks stripped). */
+  mediaMode?: RecordingMediaMode;
+  /** Save target reservation: 'server' (default) stores via uploader, 'browser' future local download. */
+  saveTarget?: RecordingSaveTarget;
   /** `dataavailable` timeslice in ms for every recorder (default 1000). */
   timesliceMs?: number;
   /** Create in-memory object URLs for each final stream Blob. */
@@ -82,6 +88,21 @@ export interface RecordingStreamInfo {
 export interface CompositeRecordingStartedEvent extends RecordingStartedEvent {
   /** One entry per started recorder. */
   streams: RecordingStreamInfo[];
+}
+
+function filterStreamForMediaMode(stream: MediaStream, mediaMode?: RecordingMediaMode): MediaStream {
+  if (mediaMode !== 'audio-only') return stream;
+  // Create a new stream containing only audio tracks; video tracks are dropped.
+  const audioTracks = typeof stream.getAudioTracks === 'function' ? stream.getAudioTracks() : [];
+  // Preserve original stream when no filtering needed (no video or no audio helper)
+  const videoTracks = typeof stream.getVideoTracks === 'function' ? stream.getVideoTracks() : [];
+  if (videoTracks.length === 0) return stream;
+  if (audioTracks.length === 0) {
+    // Audio-only requested but source has no audio – return empty audio stream
+    // to make the lack explicit rather than silently recording video.
+    return new MediaStream([]);
+  }
+  return new MediaStream(audioTracks);
 }
 
 export interface CompositeRecordingStoppedEvent extends RecordingStoppedEvent {
@@ -107,6 +128,10 @@ export class CompositeRecordingHook
   private remoteSeq = 0;
   /** Shared timeline origin captured when the composite started. */
   private origin = 0;
+  private readonly defaultMediaMode: RecordingMediaMode;
+  private readonly defaultSaveTarget: RecordingSaveTarget;
+  private activeMediaMode: RecordingMediaMode = 'audio+video';
+  private activeSaveTarget: RecordingSaveTarget = 'server';
 
   constructor(options: CompositeRecordingOptions = {}) {
     super();
@@ -115,6 +140,8 @@ export class CompositeRecordingHook
     this.now = options.now ?? (() => Date.now());
     this.mediaRecorderCtor = options.mediaRecorderCtor ?? undefined;
     this.supported = options.supported ?? detectMediaRecorderSupport(this.mediaRecorderCtor);
+    this.defaultMediaMode = options.mediaMode ?? 'audio+video';
+    this.defaultSaveTarget = options.saveTarget ?? 'server';
   }
 
   getState(): RecordingState {
@@ -144,7 +171,11 @@ export class CompositeRecordingHook
       throw new RecordingUnavailableError();
     }
 
-    const descriptors = this.buildDescriptors(options);
+    const effectiveMediaMode = options.mediaMode ?? this.defaultMediaMode;
+    const effectiveSaveTarget = options.saveTarget ?? this.defaultSaveTarget;
+    this.activeMediaMode = effectiveMediaMode;
+    this.activeSaveTarget = effectiveSaveTarget;
+    const descriptors = this.buildDescriptors(options, effectiveMediaMode);
     if (descriptors.length === 0) {
       throw new Error('CompositeRecordingHook: no streams to record');
     }
@@ -189,7 +220,7 @@ export class CompositeRecordingHook
       throw err;
     }
 
-    const event: CompositeRecordingStartedEvent = { startedAtMs: timeOrigin, streams: started };
+    const event: CompositeRecordingStartedEvent = { startedAtMs: timeOrigin, streams: started, mediaMode: effectiveMediaMode, saveTarget: effectiveSaveTarget };
     this.emit('recording:started', event);
     return event;
   }
@@ -222,6 +253,8 @@ export class CompositeRecordingHook
       durationMs: Math.max(0, ...results.map((r) => r.durationMs)),
       startedAtMs: this.origin,
       stoppedAtMs,
+      mediaMode: this.activeMediaMode,
+      saveTarget: this.activeSaveTarget,
     };
     this.emit('recording:stopped', event);
     return event;
@@ -271,8 +304,9 @@ export class CompositeRecordingHook
       );
     }
     const id = `remote:${participantId ?? stream.id ?? `stream-${this.remoteSeq++}`}`;
+    const filtered = filterStreamForMediaMode(stream, this.defaultMediaMode);
     const hook = new MediaRecorderRecordingHook({
-      stream,
+      stream: filtered,
       streamId: id,
       label: participantId,
       kind: 'remote',
@@ -303,13 +337,16 @@ export class CompositeRecordingHook
 
   // ------------------------------------------------------------- internals
 
-  private buildDescriptors(options: CompositeRecordingOptions): CompositeRecordingStreamOptions[] {
-    if (options.streams && options.streams.length > 0) return options.streams;
+  private buildDescriptors(options: CompositeRecordingOptions, mediaMode?: RecordingMediaMode): CompositeRecordingStreamOptions[] {
+    const effectiveMode = mediaMode ?? options.mediaMode ?? this.defaultMediaMode;
+    if (options.streams && options.streams.length > 0) {
+      return options.streams.map((s) => ({ ...s, stream: filterStreamForMediaMode(s.stream, effectiveMode) }));
+    }
     const descriptors: CompositeRecordingStreamOptions[] = [];
     if (options.localStream) {
       descriptors.push({
         id: 'local',
-        stream: options.localStream,
+        stream: filterStreamForMediaMode(options.localStream, effectiveMode),
         kind: 'local',
         label: 'Local',
       });
@@ -318,15 +355,15 @@ export class CompositeRecordingHook
       if ('participantId' in remote) {
         descriptors.push({
           id: `remote:${remote.participantId}`,
-          stream: remote.stream,
+          stream: filterStreamForMediaMode(remote.stream, effectiveMode),
           kind: 'remote',
           label: remote.label ?? remote.participantId,
         });
       } else {
-        const stream = remote;
+        const stream = remote as MediaStream;
         descriptors.push({
           id: `remote:${stream.id || `stream-${this.remoteSeq++}`}`,
-          stream,
+          stream: filterStreamForMediaMode(stream, effectiveMode),
           kind: 'remote',
           label: 'Remote',
         });

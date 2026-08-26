@@ -26,7 +26,9 @@ import type {
   RecordingEgressOptions,
   RecordingHookEventMap,
   RecordingLayout,
+  RecordingMediaMode,
   RecordingMode,
+  RecordingSaveTarget,
   RecordingStartedEvent,
   RecordingStoppedEvent,
   RecordingState,
@@ -42,6 +44,10 @@ export interface RoomRecordingOptions {
   localStream?: MediaStream;
   /** Remote participant streams to record as 'remote:<participantId>'. (client mode) */
   remoteStreams?: Array<RecordingRemoteStream | MediaStream>;
+  /** Media content mode: 'audio+video' (default) embeds both, 'audio-only' strips video tracks. */
+  mediaMode?: RecordingMediaMode;
+  /** Save target: 'server' (default) uploads to RecordingStorage, 'browser' reserved for future local save. */
+  saveTarget?: RecordingSaveTarget;
   mimeType?: string;
   encryption?: { key: CryptoKey; keyId?: string } | false;
   layout?: RecordingLayout;
@@ -81,6 +87,8 @@ export class RoomRecordingFacade extends TypedEmitter<RecordingHookEventMap> {
   private encryptionKey?: CryptoKey;
   private encryptionKeyId?: string;
   private activeMode: RecordingMode = 'client';
+  private activeMediaMode: RecordingMediaMode = 'audio+video';
+  private activeSaveTarget: RecordingSaveTarget = 'server';
 
   constructor(options: RoomRecordingFacadeOptions) {
     super();
@@ -95,11 +103,11 @@ export class RoomRecordingFacade extends TypedEmitter<RecordingHookEventMap> {
       mediaRecorderCtor: options.mediaRecorderCtor,
     });
     this.hook.on('recording:started', (event) => {
-      const enriched = { ...event, mode: this.activeMode, sessionId: this.sessionId } as typeof event & { mode?: RecordingMode; sessionId: string };
+      const enriched = { ...event, mode: this.activeMode, mediaMode: this.activeMediaMode, saveTarget: this.activeSaveTarget, sessionId: this.sessionId } as typeof event & { mode?: RecordingMode; mediaMode?: RecordingMediaMode; saveTarget?: RecordingSaveTarget; sessionId: string };
       this.emit('recording:started', enriched);
     });
     this.hook.on('recording:stopped', (event) => {
-      const enriched: RecordingStoppedEvent = { ...event, mode: this.activeMode, ...(this.encryptionKey ? { encrypted: true as const, keyId: this.encryptionKeyId } : {}) } as RecordingStoppedEvent;
+      const enriched: RecordingStoppedEvent = { ...event, mode: this.activeMode, mediaMode: this.activeMediaMode, saveTarget: this.activeSaveTarget, ...(this.encryptionKey ? { encrypted: true as const, keyId: this.encryptionKeyId } : {}) } as RecordingStoppedEvent;
       this.emit('recording:stopped', enriched);
       void this.finalizeUpload(enriched);
     });
@@ -115,9 +123,11 @@ export class RoomRecordingFacade extends TypedEmitter<RecordingHookEventMap> {
    * When `mode` is sfu-* the call is behind feature flag `sfuEnabled`; otherwise falls back to client path.
    * When `encryption:{key}` is set chunks are AES-GCM encrypted before upload and `recording:stopped` carries encrypted+keyId.
    */
-  async startRecording(options: RoomRecordingOptions = {}): Promise<RecordingStartedEvent & { mode?: RecordingMode; sessionId: string }> {
+  async startRecording(options: RoomRecordingOptions = {}): Promise<RecordingStartedEvent & { mode?: RecordingMode; mediaMode?: RecordingMediaMode; saveTarget?: RecordingSaveTarget; sessionId: string }> {
     this.activeUploader = options.uploader ?? this.defaultUploader;
     this.activeMode = options.mode ?? 'client';
+    this.activeMediaMode = options.mediaMode ?? 'audio+video';
+    this.activeSaveTarget = options.saveTarget ?? 'server';
     if (options.encryption && typeof options.encryption === 'object' && options.encryption.key) {
       this.encryptionKey = options.encryption.key as CryptoKey;
       this.encryptionKeyId = (options.encryption as { keyId?: string }).keyId;
@@ -139,25 +149,27 @@ export class RoomRecordingFacade extends TypedEmitter<RecordingHookEventMap> {
         this.emit('recording:error', { error: err, code: 'sfu-egress-disabled' });
         throw err;
       }
-      const started: RecordingStartedEvent & { mode?: RecordingMode; sessionId: string } = { startedAtMs: options.now?.() ?? Date.now(), mode: this.activeMode, sessionId: this.sessionId };
+      const started: RecordingStartedEvent & { mode?: RecordingMode; mediaMode?: RecordingMediaMode; saveTarget?: RecordingSaveTarget; sessionId: string } = { startedAtMs: options.now?.() ?? Date.now(), mode: this.activeMode, mediaMode: this.activeMediaMode, saveTarget: this.activeSaveTarget, sessionId: this.sessionId };
       this.emit('recording:started', started);
       return started;
     }
     const started = await this.hook.start({
       localStream: options.localStream,
       remoteStreams: options.remoteStreams,
+      mediaMode: this.activeMediaMode,
+      saveTarget: this.activeSaveTarget,
       timesliceMs: options.timesliceMs,
       createObjectUrl: options.createObjectUrl,
       now: options.now,
     });
     // facade's started listener already emitted enriched; return enriched shape for caller
-    return { ...started, mode: this.activeMode, sessionId: this.sessionId } as RecordingStartedEvent & { mode?: RecordingMode; sessionId: string };
+    return { ...started, mode: this.activeMode, mediaMode: this.activeMediaMode, saveTarget: this.activeSaveTarget, sessionId: this.sessionId } as RecordingStartedEvent & { mode?: RecordingMode; mediaMode?: RecordingMediaMode; saveTarget?: RecordingSaveTarget; sessionId: string };
   }
 
   /** Stop all recorders; resolves with the aggregate report (undefined if idle). Enriched with manifest.encrypted+keyId and mode. */
   async stopRecording(): Promise<RecordingStoppedEvent | undefined> {
     if (this.activeMode !== 'client') {
-      const ev: RecordingStoppedEvent = { chunkCount: 0, bytes: 0, startedAtMs: Date.now(), stoppedAtMs: Date.now(), durationMs: 0, mode: this.activeMode, ...(this.encryptionKey ? { encrypted: true as const, keyId: this.encryptionKeyId } : {}) } as RecordingStoppedEvent;
+      const ev: RecordingStoppedEvent = { chunkCount: 0, bytes: 0, startedAtMs: Date.now(), stoppedAtMs: Date.now(), durationMs: 0, mode: this.activeMode, mediaMode: this.activeMediaMode, saveTarget: this.activeSaveTarget, ...(this.encryptionKey ? { encrypted: true as const, keyId: this.encryptionKeyId } : {}) } as RecordingStoppedEvent;
       this.emit('recording:stopped', ev);
       void this.finalizeUpload(ev);
       return ev;
@@ -165,7 +177,7 @@ export class RoomRecordingFacade extends TypedEmitter<RecordingHookEventMap> {
     const ev = await this.hook.stop();
     if (!ev) return undefined;
     // hook listener already emitted enriched + finalize; return enriched for caller without double-emit
-    return { ...ev, mode: this.activeMode, ...(this.encryptionKey ? { encrypted: true as const, keyId: this.encryptionKeyId } : {}) } as RecordingStoppedEvent;
+    return { ...ev, mode: this.activeMode, mediaMode: this.activeMediaMode, saveTarget: this.activeSaveTarget, ...(this.encryptionKey ? { encrypted: true as const, keyId: this.encryptionKeyId } : {}) } as RecordingStoppedEvent;
   }
 
   /** Unified status (plan: idle|recording|finalizing). */
@@ -206,6 +218,7 @@ export class RoomRecordingFacade extends TypedEmitter<RecordingHookEventMap> {
   // ------------------------------------------------------------- internals
 
   private async uploadChunk(chunk: RecordingChunk): Promise<void> {
+    if (this.activeSaveTarget === 'browser') return; // reserved: browser save bypasses server upload
     const uploader = this.activeUploader ?? this.defaultUploader;
     if (!uploader) return;
     let toUpload = chunk;
@@ -236,6 +249,7 @@ export class RoomRecordingFacade extends TypedEmitter<RecordingHookEventMap> {
   }
 
   private async finalizeUpload(result: RecordingStoppedEvent): Promise<void> {
+    if (this.activeSaveTarget === 'browser') return; // reserved
     const uploader = this.activeUploader ?? this.defaultUploader;
     if (!uploader) return;
     try {

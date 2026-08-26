@@ -71,6 +71,10 @@ export interface StartRecordingOptions {
   sessionId?: string;
   metadata?: Record<string, unknown>;
   mode?: 'client' | 'sfu-selective' | 'sfu-composite';
+  /** Media content mode: 'audio-only' strips video tracks, 'audio+video' (default) keeps both. */
+  mediaMode?: 'audio-only' | 'audio+video';
+  /** Save target: 'server' (default) vs 'browser' (reserved future). */
+  saveTarget?: 'server' | 'browser';
   mimeType?: string;
   encrypted?: boolean;
   keyId?: string;
@@ -523,6 +527,8 @@ export async function startRecording(
     startedAt: t,
     status: 'recording',
     ...(opts.mode ? { mode: opts.mode } : {}),
+    ...(opts.mediaMode ? { mediaMode: opts.mediaMode } : {}),
+    ...(opts.saveTarget ? { saveTarget: opts.saveTarget } : {}),
     ...(opts.mimeType ? { mimeType: opts.mimeType } : {}),
     ...(opts.encrypted ? { encrypted: true as const } : {}),
     ...(opts.keyId ? { keyId: opts.keyId } : {}),

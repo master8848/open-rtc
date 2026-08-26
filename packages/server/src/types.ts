@@ -90,6 +90,10 @@ export interface RecordingSession {
   status: RecordingStatus;
   /** Recording mode (unified surface: client | sfu-selective | sfu-composite). */
   mode?: 'client' | 'sfu-selective' | 'sfu-composite';
+  /** Media content mode: 'audio-only' vs 'audio+video' (video tracks stripped when audio-only). */
+  mediaMode?: 'audio-only' | 'audio+video';
+  /** Save target: 'server' (default, persisted in RecordingStorage) vs 'browser' (future local download). */
+  saveTarget?: 'server' | 'browser';
   /** MIME type for the session (e.g. video/webm;codecs=vp8,opus). */
   mimeType?: string;
   /** True when this session's bytes are ciphertext (E2EE mode; key never stored). */

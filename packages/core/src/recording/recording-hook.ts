@@ -39,6 +39,10 @@ export interface RecordingStartedEvent {
   /** Human-readable stream label (e.g. participant display name). */
   label?: string;
   kind?: RecordingStreamKind;
+  /** Media content mode for the session. */
+  mediaMode?: RecordingMediaMode;
+  /** Save target (server persistence vs browser download reservation). */
+  saveTarget?: RecordingSaveTarget;
 }
 
 /** One timeslice of encoded media from a recorder. */
@@ -58,6 +62,12 @@ export interface RecordingChunk {
 
 /** Recording mode (unified surface per 02-recording.md). */
 export type RecordingMode = 'client' | 'sfu-selective' | 'sfu-composite';
+
+/** Media content mode: whether video tracks are included. */
+export type RecordingMediaMode = 'audio-only' | 'audio+video';
+
+/** Where recording bytes are persisted. 'browser' is reserved for future local-download flow. */
+export type RecordingSaveTarget = 'server' | 'browser';
 
 /** Layout for SFU composite egress. */
 export type RecordingLayout = 'grid' | 'spotlight' | { custom: Record<string, unknown> };
@@ -91,6 +101,10 @@ export interface RecordingStoppedEvent {
   manifestUrl?: string;
   /** Recording mode for the session. */
   mode?: RecordingMode;
+  /** Media content mode for the session. */
+  mediaMode?: RecordingMediaMode;
+  /** Save target for the session. */
+  saveTarget?: RecordingSaveTarget;
 }
 
 /** Emitted when a recorder or upload fails. */
@@ -118,6 +132,10 @@ export interface RecordingStartOptions {
    * from different streams line up on the same timeline.
    */
   timeOrigin?: number;
+  /** Media content mode; 'audio-only' strips video tracks before recording. */
+  mediaMode?: RecordingMediaMode;
+  /** Save target reservation; 'server' (default) vs 'browser' (future opt-in). */
+  saveTarget?: RecordingSaveTarget;
 }
 
 /** Engine-agnostic recording hook contract (D6). */

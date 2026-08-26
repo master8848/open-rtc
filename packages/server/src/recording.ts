@@ -25,11 +25,15 @@ export interface RecordingStorage {
   /** Append one chunk (index is client-supplied, 0-based). Sequential enforcement: gaps reject. */
   saveChunk(sessionId: string, chunk: Buffer, index: number): Promise<void>;
   /** Seal the session; returns byte/chunk totals. */
-  finalize(sessionId: string, opts?: { encrypted?: boolean; keyId?: string; mimeType?: string; mode?: string }): Promise<{ chunks: number; bytes: number }>;
+  finalize(sessionId: string, opts?: { encrypted?: boolean; keyId?: string; mimeType?: string; mode?: string; mediaMode?: string; saveTarget?: string }): Promise<{ chunks: number; bytes: number }>;
   /** Stream the concatenated chunks in order. */
   getStream(sessionId: string): Promise<Readable>;
   /** Remove a session's bytes (optional; used by cleanup tooling). */
   delete?(sessionId: string): Promise<void>;
+  /** Transcript sidecar: store/fetch transcript artifact for the session (e.g. STT JSON/VTT). */
+  saveTranscript?(sessionId: string, data: Buffer | string, opts?: { contentType?: string }): Promise<void>;
+  getTranscript?(sessionId: string): Promise<Buffer | null>;
+  getTranscriptStream?(sessionId: string): Promise<Readable | null>;
 }
 
 export interface FinalizeManifest {
@@ -44,6 +48,13 @@ export interface FinalizeManifest {
   /** MIME type / mode surfaced for clients. */
   mimeType?: string;
   mode?: string;
+  /** Media content mode: 'audio-only' vs 'audio+video'. */
+  mediaMode?: string;
+  /** Save target reservation: 'server' (default) vs 'browser' (future). */
+  saveTarget?: string;
+  /** Transcript sidecar presence marker (when STT persisted alongside). */
+  transcriptUrl?: string;
+  transcriptContentType?: string;
 }
 
 /** For encrypted sessions: keyId is fetched separately, key never persisted. */
@@ -90,7 +101,7 @@ export class DiskRecordingStorage implements RecordingStorage {
     await fs.writeFile(chunkPath(dir, index), chunk);
   }
 
-  async finalize(sessionId: string, opts?: { encrypted?: boolean; keyId?: string; mimeType?: string; mode?: string }): Promise<{ chunks: number; bytes: number }> {
+  async finalize(sessionId: string, opts?: { encrypted?: boolean; keyId?: string; mimeType?: string; mode?: string; mediaMode?: string; saveTarget?: string }): Promise<{ chunks: number; bytes: number }> {
     const dir = this.sessionDir(sessionId);
     let entries;
     try {
@@ -104,6 +115,7 @@ export class DiskRecordingStorage implements RecordingStorage {
       const st = await fs.stat(path.join(dir, e));
       return acc + st.size;
     }, Promise.resolve(0));
+    const hasTranscript = await fs.access(transcriptPath(dir)).then(() => true).catch(() => false);
     const manifest: FinalizeManifest = {
       sessionId,
       chunks: chunkEntries.length,
@@ -113,6 +125,9 @@ export class DiskRecordingStorage implements RecordingStorage {
       ...(opts?.keyId ? { keyId: opts.keyId } : {}),
       ...(opts?.mimeType ? { mimeType: opts.mimeType } : {}),
       ...(opts?.mode ? { mode: opts.mode } : {}),
+      ...(opts?.mediaMode ? { mediaMode: opts.mediaMode } : {}),
+      ...(opts?.saveTarget ? { saveTarget: opts.saveTarget } : {}),
+      ...(hasTranscript ? { transcriptUrl: `transcript.json` } : {}),
     };
     await fs.writeFile(path.join(dir, 'manifest.json'), JSON.stringify(manifest, null, 2));
     return { chunks: manifest.chunks, bytes: manifest.bytes };
@@ -144,6 +159,31 @@ export class DiskRecordingStorage implements RecordingStorage {
   async delete(sessionId: string): Promise<void> {
     await fs.rm(this.sessionDir(sessionId), { recursive: true, force: true });
   }
+
+  async saveTranscript(sessionId: string, data: Buffer | string, opts?: { contentType?: string }): Promise<void> {
+    const dir = this.sessionDir(sessionId);
+    await fs.mkdir(dir, { recursive: true });
+    await fs.writeFile(transcriptPath(dir), typeof data === 'string' ? Buffer.from(data) : data);
+    if (opts?.contentType) {
+      await fs.writeFile(path.join(dir, 'transcript.meta.json'), JSON.stringify({ contentType: opts.contentType }));
+    }
+  }
+
+  async getTranscript(sessionId: string): Promise<Buffer | null> {
+    try {
+      return await fs.readFile(transcriptPath(this.sessionDir(sessionId)));
+    } catch { return null; }
+  }
+
+  async getTranscriptStream(sessionId: string): Promise<Readable | null> {
+    const buf = await this.getTranscript(sessionId);
+    if (!buf) return null;
+    return Readable.from(buf);
+  }
+}
+
+function transcriptPath(dir: string): string {
+  return path.join(dir, 'transcript.json');
 }
 
 function chunkPath(dir: string, index: number): string {
@@ -201,12 +241,12 @@ export class S3RecordingStorage implements RecordingStorage {
     };
   }
 
-  /** Object key for a chunk / manifest. */
-  keyFor(sessionId: string, kind: 'chunk' | 'manifest', index?: number): string {
+  /** Object key for a chunk / manifest / transcript sidecar. */
+  keyFor(sessionId: string, kind: 'chunk' | 'manifest' | 'transcript', index?: number): string {
     const base = [this.opts.prefix, safeSegment(sessionId)].filter(Boolean).join('/');
-    return kind === 'manifest'
-      ? `${base}/manifest.json`
-      : `${base}/chunk-${String(index).padStart(6, '0')}`;
+    if (kind === 'manifest') return `${base}/manifest.json`;
+    if (kind === 'transcript') return `${base}/transcript.json`;
+    return `${base}/chunk-${String(index).padStart(6, '0')}`;
   }
 
   private objectUrl(key: string): string {
@@ -241,7 +281,7 @@ export class S3RecordingStorage implements RecordingStorage {
     }
   }
 
-  async finalize(sessionId: string, opts?: { encrypted?: boolean; keyId?: string; mimeType?: string; mode?: string }): Promise<{ chunks: number; bytes: number }> {
+  async finalize(sessionId: string, opts?: { encrypted?: boolean; keyId?: string; mimeType?: string; mode?: string; mediaMode?: string; saveTarget?: string }): Promise<{ chunks: number; bytes: number }> {
     // Discover chunk count by HEAD-requesting until we miss (bounded).
     let chunks = 0;
     let bytes = 0;
@@ -256,7 +296,13 @@ export class S3RecordingStorage implements RecordingStorage {
     if (chunks === 0) {
       throw errors.recordingStorageError(`No chunks stored for recording ${sessionId}`);
     }
-    const manifest: FinalizeManifest = { sessionId, chunks, bytes, finalizedAt: Date.now(), ...(opts?.encrypted ? { encrypted: true as const } : {}), ...(opts?.keyId ? { keyId: opts.keyId } : {}), ...(opts?.mimeType ? { mimeType: opts.mimeType } : {}), ...(opts?.mode ? { mode: opts.mode } : {}) };
+    // Check transcript sidecar presence without requiring extra config.
+    let transcriptUrl: string | undefined;
+    try {
+      const tr = await this.head(this.keyFor(sessionId, 'transcript'));
+      if (tr.ok) transcriptUrl = 'transcript.json';
+    } catch { /* ignore */ }
+    const manifest: FinalizeManifest = { sessionId, chunks, bytes, finalizedAt: Date.now(), ...(opts?.encrypted ? { encrypted: true as const } : {}), ...(opts?.keyId ? { keyId: opts.keyId } : {}), ...(opts?.mimeType ? { mimeType: opts.mimeType } : {}), ...(opts?.mode ? { mode: opts.mode } : {}), ...(opts?.mediaMode ? { mediaMode: opts.mediaMode } : {}), ...(opts?.saveTarget ? { saveTarget: opts.saveTarget } : {}), ...(transcriptUrl ? { transcriptUrl } : {}) };
     const key = this.keyFor(sessionId, 'manifest');
     const { headers } = signV4({
       method: 'PUT',
@@ -331,14 +377,49 @@ export class S3RecordingStorage implements RecordingStorage {
   }
 
   async delete(sessionId: string): Promise<void> {
-    // Best-effort: delete manifest + chunks we can find (bounded scan).
+    // Best-effort: delete manifest + chunks + transcript we can find (bounded scan).
     await this.del(this.keyFor(sessionId, 'manifest'));
+    await this.del(this.keyFor(sessionId, 'transcript'));
     for (let i = 0; i < 10_000; i++) {
       const key = this.keyFor(sessionId, 'chunk', i);
       const res = await this.head(key);
       if (!res.ok) break;
       await this.del(key);
     }
+  }
+
+  async saveTranscript(sessionId: string, data: Buffer | string, opts?: { contentType?: string }): Promise<void> {
+    const key = this.keyFor(sessionId, 'transcript');
+    const body = typeof data === 'string' ? Buffer.from(data) : data;
+    const { headers } = signV4({
+      method: 'PUT',
+      url: this.objectUrl(key),
+      body: body as Buffer,
+      accessKeyId: this.opts.accessKeyId,
+      secretAccessKey: this.opts.secretAccessKey,
+      region: this.opts.region,
+      service: 's3',
+      headers: { 'content-type': opts?.contentType ?? 'application/json' },
+    });
+    const res = await this.opts.fetchImpl!(this.objectUrl(key), {
+      method: 'PUT',
+      headers,
+      body: (typeof data === 'string' ? data : new Uint8Array(body)) as unknown as BodyInit,
+    });
+    if (!res.ok) throw errors.recordingStorageError(`S3 transcript put failed (${res.status})`, await res.text());
+  }
+
+  async getTranscript(sessionId: string): Promise<Buffer | null> {
+    const key = this.keyFor(sessionId, 'transcript');
+    const res = await this.get(key);
+    if (!res.ok) return null;
+    return Buffer.from(await res.arrayBuffer());
+  }
+
+  async getTranscriptStream(sessionId: string): Promise<Readable | null> {
+    const buf = await this.getTranscript(sessionId);
+    if (!buf) return null;
+    return Readable.from(buf);
   }
 
   private async del(key: string): Promise<void> {
