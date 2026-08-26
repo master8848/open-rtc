@@ -674,32 +674,7 @@ export class Room extends TypedEmitter<RoomEventMap> implements RoomQualityHost 
       ?? this.config.sfuGateway
       ?? (this.config.topology?.sfu?.gateway as unknown as SfuGatewayLike | undefined);
     const useCustomMedia = this.config.mediaTransport ?? null;
-    const buildMesh = (): MediaTransport =>
-      new MeshMediaTransport({
-        roomId: this.roomId,
-        transport: this.transport,
-        selfId: this.config.selfId,
-        sessionId: this.sessionId,
-        local: this.local,
-        remotes: this.remoteById,
-        orderBuffer: this.buffer,
-        peerFactory: this.config.rtc?.peerFactory ?? this.config.peerFactory,
-        iceServers: this.config.rtc?.iceServers ?? this.config.iceServers,
-        polite: this.config.rtc?.polite ?? this.config.polite,
-        autoRestartIce: this.config.rtc?.autoRestartIce ?? this.config.autoRestartIce,
-        dataChannelName: this.config.rtc?.dataChannelName ?? this.config.dataChannelName,
-        getNextSeq: () => this.nextSeq(),
-        quality: this.quality,
-        processorChain: this.processorChain,
-        resolveIceServers: () => this.resolveIceServers(),
-        e2eeSetupPeer: async (pc) => {
-          if (this.e2eeProcessor?.supported) {
-            try { await this.e2eeProcessor.setupPeerConnection(pc); } catch (e) { this.debug('e2ee:setup-failed', e); }
-          }
-        },
-        debug: this.debug,
-        emit: (event: string, ...args: unknown[]) => (this as unknown as { emit: (e: string, ...a: unknown[]) => void }).emit(event, ...args),
-      });
+    const buildMesh = (): MediaTransport => this.createMeshTransport();
     if (useCustomMedia) {
       this.media = useCustomMedia;
     } else if (
@@ -990,35 +965,49 @@ export class Room extends TypedEmitter<RoomEventMap> implements RoomQualityHost 
     return sampler.sample();
   }
 
+  private createMeshTransport(): MeshMediaTransport {
+    return new MeshMediaTransport({
+      roomId: this.roomId,
+      transport: this.transport,
+      selfId: this.config.selfId,
+      sessionId: this.sessionId,
+      local: this.local,
+      remotes: this.remoteById,
+      orderBuffer: this.buffer,
+      peerFactory: this.config.rtc?.peerFactory ?? this.config.peerFactory,
+      iceServers: this.config.rtc?.iceServers ?? this.config.iceServers,
+      polite: this.config.rtc?.polite ?? this.config.polite,
+      autoRestartIce: this.config.rtc?.autoRestartIce ?? this.config.autoRestartIce,
+      dataChannelName: this.config.rtc?.dataChannelName ?? this.config.dataChannelName,
+      getNextSeq: () => this.nextSeq(),
+      quality: this.quality,
+      processorChain: this.processorChain,
+      resolveIceServers: () => this.resolveIceServers(),
+      e2eeSetupPeer: async (pc) => {
+        if (this.e2eeProcessor?.supported) {
+          try { await this.e2eeProcessor.setupPeerConnection(pc); } catch (e) { this.debug('e2ee:setup-failed', e); }
+        }
+      },
+      debug: this.debug,
+      emit: (event: string, ...args: unknown[]) => (this as unknown as { emit: (e: string, ...a: unknown[]) => void }).emit(event, ...args),
+    });
+  }
+
   private async switchMediaTransport(kind: 'mesh' | 'sfu'): Promise<void> {
     const old = this.media;
     const from = old.kind;
     await old.close();
-    const rtcPeerFactory = this.config.rtc?.peerFactory ?? this.config.peerFactory;
-    const rtcIceServers = this.config.rtc?.iceServers ?? this.config.iceServers;
-    const rtcPolite = this.config.rtc?.polite ?? this.config.polite;
-    const rtcAutoRestartIce = this.config.rtc?.autoRestartIce ?? this.config.autoRestartIce;
-    const rtcDataChannelName = this.config.rtc?.dataChannelName ?? this.config.dataChannelName;
     if (kind === 'sfu') {
       const gw = (this.config.sfu?.gateway ?? this.config.sfuGateway ?? this.config.topology?.sfu?.gateway) as unknown as SfuGatewayLike | undefined;
       if (!gw) {
         this.debug('topology:sfu-no-gateway', 'no sfuGateway configured; staying mesh');
-        this.media = new MeshMediaTransport({
-          roomId: this.roomId, transport: this.transport, selfId: this.config.selfId, sessionId: this.sessionId,
-          local: this.local, remotes: this.remoteById, orderBuffer: this.buffer,
-          peerFactory: rtcPeerFactory, iceServers: rtcIceServers, polite: rtcPolite,
-          autoRestartIce: rtcAutoRestartIce, dataChannelName: rtcDataChannelName,
-          getNextSeq: () => this.nextSeq(), quality: this.quality, processorChain: this.processorChain,
-          resolveIceServers: () => this.resolveIceServers(),
-          e2eeSetupPeer: async (pc) => { if (this.e2eeProcessor?.supported) try { await this.e2eeProcessor.setupPeerConnection(pc); } catch (e) { this.debug('e2ee:setup-failed', e); } },
-          debug: this.debug, emit: (e: string, ...a: unknown[]) => (this as unknown as { emit: (ev: string, ...args: unknown[]) => void }).emit(e, ...a),
-        });
+        this.media = this.createMeshTransport();
         return;
       }
       const sfu = new SfuMediaTransport({
         roomId: this.roomId, selfId: this.config.selfId, sessionId: this.sessionId,
         gateway: gw, transport: this.transport, processorChain: this.processorChain,
-        peerFactory: rtcPeerFactory, getNextSeq: () => this.nextSeq(), debug: this.debug,
+        peerFactory: this.config.rtc?.peerFactory ?? this.config.peerFactory, getNextSeq: () => this.nextSeq(), debug: this.debug,
         emit: (e: string, ...a: unknown[]) => (this as unknown as { emit: (ev: string, ...args: unknown[]) => void }).emit(e, ...a),
         localPublications: () => [...this.local.publications],
         addRemoteTrack: (pid, track, kind) => this.handleRemoteSfuTrack(pid, track, kind),
@@ -1028,16 +1017,7 @@ export class Room extends TypedEmitter<RoomEventMap> implements RoomQualityHost 
       this.media.onTrack(() => {});
       if (from !== kind) (this as any).emit('topology-changed', { from, to: kind });
     } else {
-      this.media = new MeshMediaTransport({
-        roomId: this.roomId, transport: this.transport, selfId: this.config.selfId, sessionId: this.sessionId,
-        local: this.local, remotes: this.remoteById, orderBuffer: this.buffer,
-        peerFactory: rtcPeerFactory, iceServers: rtcIceServers, polite: rtcPolite,
-        autoRestartIce: rtcAutoRestartIce, dataChannelName: rtcDataChannelName,
-        getNextSeq: () => this.nextSeq(), quality: this.quality, processorChain: this.processorChain,
-        resolveIceServers: () => this.resolveIceServers(),
-        e2eeSetupPeer: async (pc) => { if (this.e2eeProcessor?.supported) try { await this.e2eeProcessor.setupPeerConnection(pc); } catch (e) { this.debug('e2ee:setup-failed', e); } },
-        debug: this.debug, emit: (e: string, ...a: unknown[]) => (this as unknown as { emit: (ev: string, ...args: unknown[]) => void }).emit(e, ...a),
-      });
+      this.media = this.createMeshTransport();
       if (from !== kind) (this as any).emit('topology-changed', { from, to: kind });
     }
   }
