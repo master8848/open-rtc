@@ -100,6 +100,10 @@ export interface Services {
   recordingTtlMs?: number;
   webhooks?: import('./webhooks.ts').WebhookConfig[];
   push?: import('./push.ts').PushService;
+  /** Optional plugins attached to this service set (extensibility). */
+  plugins?: import('./plugin.ts').ServerPlugin[];
+  /** Index signature for plugin-augmented fields. */
+  [key: string]: unknown;
 }
 
 /** Build a `Services` object (convenience factory). */
@@ -116,6 +120,8 @@ export function createServices(partial: {
   recordingTtlMs?: number;
   webhooks?: import('./webhooks.ts').WebhookConfig[];
   push?: import('./push.ts').PushService;
+  plugins?: import('./plugin.ts').ServerPlugin[];
+  [key: string]: unknown;
 }): Services {
-  return { ...partial };
+  return { ...partial } as Services;
 }

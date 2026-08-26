@@ -900,8 +900,9 @@ export const routes: readonly Route[] = [
 export function matchRoute(
   method: string,
   path: string,
+  routeSet: readonly Route[] = routes,
 ): { route: Route; params: Record<string, string> } | null {
-  for (const route of routes) {
+  for (const route of routeSet) {
     if (route.method !== method) continue;
     const params = matchPattern(route.pattern, path);
     if (params) return { route, params };
@@ -932,9 +933,13 @@ export function matchPattern(pattern: string, path: string): Record<string, stri
 }
 
 /** Run one request through the shared router. Errors map to JSON. */
-export async function dispatch(services: Services, ctx: RouteContext): Promise<RouteResult> {
+export async function dispatch(
+  services: Services,
+  ctx: RouteContext,
+  routeSet: readonly Route[] = routes,
+): Promise<RouteResult> {
   try {
-    const matched = matchRoute(ctx.method, ctx.path);
+    const matched = matchRoute(ctx.method, ctx.path, routeSet);
     if (!matched)
       return {
         status: 404,
@@ -956,6 +961,14 @@ export async function dispatch(services: Services, ctx: RouteContext): Promise<R
   }
 }
 
+/**
+ * Create a route set extending the default with extra routes.
+ * Keeps backward compat: `routes` remains the default export.
+ */
+export function withRoutes(extra: readonly Route[]): readonly Route[] {
+  return [...routes, ...extra];
+}
+
 // ---------------------------------------------------------------------------
 // node:http server
 // ---------------------------------------------------------------------------
@@ -965,13 +978,16 @@ export interface NodeServerOptions {
   maxBodyBytes?: number;
   /** Clock override (tests). */
   now?: () => number;
+  /** Injected routes (plugins); defaults to core `routes` for backward compat. */
+  routes?: readonly Route[];
 }
 
 /** Build a standalone `node:http` server hosting the full REST API. */
 export function createNodeServer(services: Services, opts: NodeServerOptions = {}): http.Server {
   const maxBodyBytes = opts.maxBodyBytes ?? 64 * 1024 * 1024;
+  const routeSet = opts.routes ?? routes;
   return http.createServer((req, res) => {
-    void handleNodeRequest(services, req, res, maxBodyBytes);
+    void handleNodeRequest(services, req, res, maxBodyBytes, routeSet);
   });
 }
 
@@ -980,9 +996,10 @@ async function handleNodeRequest(
   req: http.IncomingMessage,
   res: http.ServerResponse,
   maxBodyBytes: number,
+  routeSet: readonly Route[] = routes,
 ): Promise<void> {
   try {
-    await respond(services, req, res, maxBodyBytes);
+    await respond(services, req, res, maxBodyBytes, routeSet);
   } catch (err) {
     // Never let a request rejection crash the process (e.g. oversized body,
     // malformed stream): answer with the error envelope instead.
@@ -1005,6 +1022,7 @@ async function respond(
   req: http.IncomingMessage,
   res: http.ServerResponse,
   maxBodyBytes: number,
+  routeSet: readonly Route[] = routes,
 ): Promise<void> {
   const url = new URL(req.url ?? '/', 'http://localhost');
   const rawBody = await readBody(req, maxBodyBytes);
@@ -1043,7 +1061,7 @@ async function respond(
   };
   const result = malformedJson
     ? { status: 400, body: { error: { code: 'invalid_request', message: 'Malformed JSON body' } } }
-    : await dispatch(services, ctx);
+    : await dispatch(services, ctx, routeSet);
   // For SDP responses, send body as-is with no-store to avoid caching signaling.
   const isSdpResponse = result.headers?.['content-type'] === 'application/sdp';
   if (isSdpResponse) {
